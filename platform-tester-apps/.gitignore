@@ -1,0 +1,2 @@
+shared-test-utils/protos/*.proto.*
+test-user-creds.json

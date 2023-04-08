@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <link rel="icon" href="./assets/logo.png">
+    <link rel="stylesheet" href="./jasmine/jasmine.css">
+    <title>Tests of platform</title>
+  </head>
+  <body>
+
+    <h2>Service with GUI</h2>
+    <h3>serving many connections</h3>
+	 
+    <div id="test-out"></div>
+
+    <div>
+      <button onclick="w3n.testStand.exitAll()">Exit All</button>
+    </div>
+
+    <!-- load test specs -->
+    <script type="module" src="./scripts/long-dialog-service.js"></script>
+
+  </body>
+</html>

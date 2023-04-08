@@ -1,0 +1,72 @@
+appId: io.privacysafe.os
+productName: PrivacySafe
+copyright: Copyright © 2017 - 2023, 3NSoft, Inc.
+
+linux:
+  category: Utility
+  packageCategory: Utility
+  icon:  ./packing/icons/linux/256x256.png
+  artifactName: PrivacySafe-${arch}.${ext}
+
+win:
+  # category: Utility
+  # packageCategory: Utility
+  icon:  ./packing/icons/windows/256x256.ico
+  artifactName: PrivacySafe-${arch}.${ext}
+nsis:
+  artifactName: PrivacySafe-Setup-${arch}.${ext}
+
+mac:
+  category: public.app-category.productivity
+  icon: ./packing/icons/mac/logo.icns
+  artifactName: PrivacySafe-${arch}.${ext}
+
+directories:
+  app: ./build/app
+  output: ./dist/app
+
+asarUnpack:
+  # node's worker_threads can read only unpacked plain files, hence unpack
+
+  # cryptor-worker sets path for workers, depending on own location
+  - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/cryptor-worker.js
+  - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\cryptor-worker.js
+
+  # cryptor js worker from core files (uncomment when using it)
+  # - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/worker-js.js
+  # - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\worker-js.js
+  # - node_modules/core-3nweb-client-lib/build/lib-common/exceptions/error.js
+  # - node_modules\core-3nweb-client-lib\build\lib-common\exceptions\error.js
+  # - node_modules/ecma-nacl/**/*
+  # - node_modules\ecma-nacl\**\*
+
+  # cryptor wasm worker from core files
+  - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/worker-wasm.js
+  - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\worker-wasm.js
+  - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/wasm-mp1-modules.js
+  - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\wasm-mp1-modules.js
+  - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/cryptor.wasm
+  - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\cryptor.wasm
+
+  # app unzipper worker files
+  - apps/installer/unzip-worker.js
+  - apps\installer\unzip-worker.js
+  - node_modules/adm-zip/**/*
+  - node_modules\adm-zip\**\*
+
+  # bundled apps are also read by unzipper
+  - bundled-apps/**/*
+  - bundled-apps\**\*
+
+  # packed icons not seen on mac
+  - icons/**/*
+  - icons\**\*
+
+  # runtimes should stay unpacked, as opening process is generic to platform
+  - runtimes/**/*
+  - runtimes\**\*
+
+  # preloads for runtimes
+  - runtime-deno/preload.bundle.js
+  - runtime-deno\preload.bundle.js
+

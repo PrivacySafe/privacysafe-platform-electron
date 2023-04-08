@@ -1,0 +1,10 @@
+{
+	"launcher-app": "launcher.3nweb.computer",
+	"startup-app": "startup.3nweb.computer",
+	"signup-url": "https://3nweb.net/signup/",
+	"platform-name": "3NWeb",
+	"bundled-apps": [],
+	"data-dir-name": ".3NWeb",
+	"electron-updates-base-url": "https://3nweb.com/downloads/PrivacySafe/electron-updates/",
+	"bundle-base-url": "https://3nweb.com/downloads/PrivacySafe"
+}

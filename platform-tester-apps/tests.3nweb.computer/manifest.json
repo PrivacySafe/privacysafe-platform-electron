@@ -1,0 +1,121 @@
+{
+	"name": "3NWeb platform tester",
+	
+	"appDomain": "tests.3nweb.computer",
+
+	"version": "0.1.0",
+
+	"components": {
+		
+		"/index.html": {
+			"startedBy": "user",
+			"runtime": "web-gui",
+			"capsRequested": {
+				"apps": "all",
+				"appRPC": {
+					"serviceComponents": [ "OneShotDialog" ]
+				},
+				"mail": {
+					"receivingFrom": "all",
+					"sendingTo": "all"
+				},
+				"storage": {
+					"appFS": [
+						{
+							"domain": "tests.3nweb.computer",
+							"storage": "synced-n-local"
+						}, {
+							"domain": "sub-app-1.tests.3nweb.computer",
+							"storage": "synced-n-local"
+						}, {
+							"domain": "sub-app-2.tests.3nweb.computer",
+							"storage": "synced-n-local"
+						}
+					],
+					"userFS": "all",
+					"sysFS": "all"
+				},
+				"mailerid": true,
+				"logout": "all",
+				"log": "all",
+				"shell": {
+					"userNotifications": true
+				},
+				"connectivity": "check"
+			}
+		},
+
+		"/one-shot-dialog.html": {
+			"startedBy": {
+				"thisAppComponents": "*"
+			},
+			"runtime": "web-gui",
+			"service": "OneShotDialog",
+			"childOfGUICaller": true,
+			"forOneConnectionOnly": true,
+			"capsRequested": {
+				"mailerid": true,
+				"storage": {
+					"appFS": "default"
+				}
+			},
+			"windowOpts": {
+				"modal": true,
+				"useContentSize": true,
+				"width": 400,
+				"height": 300
+			}
+		},
+
+		"/long-dialog.html": {
+			"startedBy": {
+				"thisAppComponents": "*"
+			},
+			"runtime": "web-gui",
+			"service": "LongDialog",
+			"childOfGUICaller": true,
+			"capsRequested": {
+				"mailerid": true,
+				"storage": {
+					"appFS": "default"
+				}
+			},
+			"windowOpts": {
+				"useContentSize": true,
+				"width": 400,
+				"height": 300
+			}
+		},
+
+		"/service-in-deno.js": {
+			"startedBy": {
+				"thisAppComponents": "*"
+			},
+			"runtime": "deno",
+			"service": "ServiceInDeno",
+			"forOneConnectionOnly": true,
+			"capsRequested": {
+				"mailerid": true,
+				"storage": {
+					"appFS": "default"
+				}
+			}
+		},
+
+		"/long-service-in-deno.js": {
+			"startedBy": {
+				"thisAppComponents": "*"
+			},
+			"runtime": "deno",
+			"service": "LongServiceInDeno",
+			"capsRequested": {
+				"mailerid": true,
+				"storage": {
+					"appFS": "default"
+				}
+			}
+		}
+
+	}
+
+}
