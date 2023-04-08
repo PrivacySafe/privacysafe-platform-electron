@@ -1,0 +1,3 @@
+Content of this folder comes from zip at https://github.com/denoland/deno/releases/download/v1.32.3/deno-x86_64-pc-windows-msvc.zip
+Sha512 hashes are
+9e786081718a0faff0b6db29d65ff441e18ccb157692c2ac40a7377e8d0dbeda3b4976d19b0978cb93ecb56425761dabf638739d3d561423da4220d57ef0f5c8  deno.exe

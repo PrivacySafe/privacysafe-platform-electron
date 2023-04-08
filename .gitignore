@@ -9,5 +9,4 @@
 /npm-debug.log
 /test-*
 /.history
-/packing/runtimes/
 /ts-code/protos/*.proto.*

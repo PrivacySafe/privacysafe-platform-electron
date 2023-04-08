@@ -1,0 +1,3 @@
+Content of this folder comes from zip at https://github.com/denoland/deno/releases/download/v1.32.3/deno-x86_64-apple-darwin.zip
+Sha512 hashes are
+028eb66eb5e2e5867b8c2b2b8d7a4cafb104d68dd9a0b0d3a53fc684774f9b03794d3b493f3847a3bdc4b31255248ef1d2d92bf4924694751ffcb83a1ee055e0  deno

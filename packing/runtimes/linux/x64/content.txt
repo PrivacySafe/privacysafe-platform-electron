@@ -1,0 +1,3 @@
+Content of this folder comes from zip at https://github.com/denoland/deno/releases/download/v1.32.3/deno-x86_64-unknown-linux-gnu.zip
+Sha512 hashes are
+a8847ee20029ffccf55028af77c7f7aacdebca227f5b1bbfb1399c5ade9ac61ae1518deac7cea55f501af9382fda3918a8dd5bab0b3dee903de93ef7146d2172  deno
