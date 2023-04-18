@@ -19,7 +19,7 @@
  * This script starts electron framework and sets up main process.
  */
 
-import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli } from './process-args';
+import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli, SOCKS5_PROXY } from './process-args';
 import { app, dialog } from 'electron';
 import { InitProc } from './init-proc';
 import { registerAllProtocolShemas } from "./electron/protocols";
@@ -40,6 +40,10 @@ EventEmitter.defaultMaxListeners = 100;
 // in our own data and use relative paths whenever it is necessary.
 mkdirSync(utilDir, { recursive: true });
 process.chdir(utilDir);
+
+if (SOCKS5_PROXY) {
+	app.commandLine.appendSwitch('proxy-server', `socks5://${SOCKS5_PROXY}`);
+}
 
 function setupAndStartMainInstance(): InitProc {
 

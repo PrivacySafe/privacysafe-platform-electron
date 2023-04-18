@@ -31,8 +31,9 @@ then
 	dst_dir="$packing_dir/runtimes/$platform/$arch"
 	mkdir -p "$dst_dir"
 	content_file="content.txt"
+	echo "Downloading only info about $runtime for $platform on $arch cpu"
 	curl -L "$url/$content_file" --output "$dst_dir/$content_file" || exit $?
-	exit 1
+	exit 0
 fi
 
 if [ "$runtime" == "deno" ]

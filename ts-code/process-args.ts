@@ -126,6 +126,12 @@ const platformArgDefs: ArgDef[] = [
 		typeLabel: '{underline <deno binary>}',
 		description: `Custom binary for components that start in Deno runtime.`
 	},
+	{
+		name: 'socks5-proxy',
+		type: String,
+		typeLabel: '{underline <address:port>}',
+		description: `SOCKS5 proxy to use for connectivity.`
+	},
 	// {
 	// 	name: 'single-user',
 	// 	alias: 's',
@@ -167,6 +173,8 @@ export const PLATFORM_CALL_CMD = parsedCliArgs['platform-cmd'] as string|undefin
 export const SKIP_APP_ERR_DIALOG_FLAG = !!parsedCliArgs['skip-app-error-dialog'];
 
 export const CUSTOM_DENO_RUNTIME = parsedCliArgs['runtime-deno'] as string|undefined;
+
+export const SOCKS5_PROXY = parsedCliArgs['socks5-proxy'] as string|undefined;
 
 export const CUSTOM_SIGNUP_URL =  parsedCliArgs['signup-url'] as string|undefined;
 
