@@ -128,7 +128,8 @@ export class TestStand {
 		this.devApps = parseApps(conf, confFile);
 		this.devSites = parseSites(conf, confFile);
 		this.devStartupApp = parseStartupApp(conf, confFile);
-		if ((this.devApps.size === 0) && this.devStartupApp
+		if ((this.devApps.size === 0)
+		&& !this.devStartupApp
 		&& (this.devSites.size === 0)) {
 			throw new Error(`At least one test app or site should be set in test stand configuration.`);
 		}
