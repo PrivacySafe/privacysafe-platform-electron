@@ -54,7 +54,7 @@ export function setupSecondUserRPCTestReactions(): void {
 }
 
 async function callGetUserIdSrv(srv: string): Promise<string> {
-	const connection = await w3n.appRPC!(srv);
+	const connection = await w3n.rpc!.thisApp!(srv);
 	const r = await connection.makeRequestReplyCall('getUserId', undefined);
 	await connection.close();
 	return strFromBytes(r!.bytes!);

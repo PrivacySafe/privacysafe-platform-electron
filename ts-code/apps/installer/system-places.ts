@@ -138,6 +138,10 @@ export class SystemPlaces {
 	async getAppIcon(id: string): Promise<ReadonlyFile> {
 
 		// XXX
+		//  - read path from manifest's component's icon field
+		//  - return file for current API
+		//  - if file not found, return icon of a default component,
+		//  - if deafult component has no icon, we should return some other.
 
 		throw new Error("Method not implemented.");
 	}

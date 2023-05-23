@@ -193,7 +193,7 @@ function prepareWindowOpts(
 
 	opts.webPreferences = {
 		sandbox: true,
-		contextIsolation: true,
+		contextIsolation: false,
 		nodeIntegration: false,
 		devTools,
 		session,

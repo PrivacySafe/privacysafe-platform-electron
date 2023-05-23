@@ -15,9 +15,10 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-type AppRPCFn = NonNullable<web3n.caps.W3N['appRPC']>;
-type OtherAppsRPCFn = NonNullable<web3n.caps.W3N['otherAppsRPC']>;
-type ExposeServiceFn = NonNullable<web3n.caps.W3N['exposeService']>;
+type RPC = NonNullable<web3n.rpc.RPC>;
+type AppRPCFn = NonNullable<RPC['thisApp']>;
+type OtherAppsRPCFn = NonNullable<RPC['otherAppsRPC']>;
+type ExposeServiceFn = NonNullable<RPC['exposeService']>;
 type ClientSideConnection = web3n.rpc.client.RPCConnection;
 type ServiceSideConnection = web3n.rpc.service.IncomingConnection;
 
@@ -38,7 +39,19 @@ export class RPCLogger {
 		console.log(msg, ...objsToLog);
 	}
 
-	wrapAppRPC(fn: AppRPCFn): AppRPCFn {
+	wrapRPC(cap: RPC): RPC {
+		const rpcWrap: RPC = {};
+		if (cap.thisApp) {
+			rpcWrap.thisApp = this.wrapAppRPC(cap.thisApp);
+		} else if (cap.otherAppsRPC) {
+			rpcWrap.otherAppsRPC = this.wrapOtherAppsRPC(cap.otherAppsRPC);
+		} else if (cap.exposeService) {
+			rpcWrap.exposeService = this.wrapExposeService(cap.exposeService);
+		}
+		return rpcWrap;
+	}
+
+	private wrapAppRPC(fn: AppRPCFn): AppRPCFn {
 		return async (service) => {
 			try {
 				const conn = await fn(service);
@@ -54,7 +67,7 @@ export class RPCLogger {
 		};
 	}
 
-	wrapOtherAppsRPC(fn: OtherAppsRPCFn): OtherAppsRPCFn {
+	private wrapOtherAppsRPC(fn: OtherAppsRPCFn): OtherAppsRPCFn {
 		return async (serviceApp, service) => {
 			try {
 				const conn = await fn(serviceApp, service);
@@ -131,7 +144,7 @@ export class RPCLogger {
 		return wrap;	
 	}
 
-	wrapExposeService(fn: ExposeServiceFn): ExposeServiceFn {
+	private wrapExposeService(fn: ExposeServiceFn): ExposeServiceFn {
 		return (service, obs) => {
 			this.log(`RPC: ${this.appDomain}${this.entrypoint} exposes service ${service}`);
 			const logPrefix = `RPC: ${this.appDomain}${this.entrypoint}, service ${service}`;

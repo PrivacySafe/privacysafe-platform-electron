@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2022 3NSoft Inc.
+ Copyright (C) 2021 - 2023 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -30,9 +30,10 @@ declare const w3n: web3n.testing.CommonW3N;
 		await import('./tests/mailerid.js');
 		await import('./tests/storage.js');
 		await import('./tests/asmail.js');
-		await import('./tests/rpc/appRPC.js');
+		await import('./tests/rpc/thisApp.js');
 		await import('./tests/apps.js');
 		await import('./tests/services/fs-usage.js');
+		await import('./tests/rpc/transferable-objects.js');
 		await import('./tests/shell.js');
 	} else {
 		(window as any).skipW3NTests = true;

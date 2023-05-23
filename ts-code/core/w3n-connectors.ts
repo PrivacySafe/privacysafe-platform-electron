@@ -16,20 +16,13 @@
 */
 
 import { Subject, Unsubscribable } from "rxjs";
-import { Envelope, ObjectsConnector, exposeStartupW3N, exposeW3N, ExposedObj, ExposedServices } from 'core-3nweb-client-lib/build/ipc';
+import { Envelope, ObjectsConnector, exposeStartupW3N, exposeW3N } from 'core-3nweb-client-lib/build/ipc';
 import { ipcMain, WebContents } from 'electron';
 import { IPC_CORE_SIDE, IPC_CLIENT_SIDE, IPC_SYNCED_W3N_LIST } from "../ipc-with-core/electron-ipc";
-import { exposeFileDialogsCAP } from "../shell/file-dialogs/file-dialogs-cap-ipc";
 import { closeSelf } from "../init-proc/close-cap-ipc";
-import { exposeAppsOpenerCAP } from '../apps/opener-cap-ipc';
 import { base64, toBuffer } from "../lib-common/buffer-utils";
 import { exposeLogoutCAP } from "../init-proc/logout-cap-ipc";
-import { exposeAppsDownloaderCAP } from "../apps/downloader/apps-downloader-cap-ipc";
-import { exposeAppsInstallerCAP } from "../apps/installer/apps-installer-cap-ipc";
-import { exposePlatformDownloaderCAP } from "../apps/platform/platform-downloader-cap-ipc";
 import { exposeStartupTestStandCAP, exposeTestStandCAP } from "../test-stand/test-stand-cap-ipc";
-import { appRPC, otherAppsRPC } from "../rpc/rpc-caps-ipc";
-import { exposeService } from "../rpc/expose-service-cap-ipc";
 import { bytes as randomBytes, stringOfB64UrlSafeChars } from "../lib-common/random-node";
 import { createServer, Server, Socket } from "net";
 import { EnvelopesBuffer, makeSocketIPCException, MsgOnCoreSide, readMsgOnCoreSide, toAuthReplyChunk, toListObjReply, SocketConnectInfo, toChunksForSending, MAX_MSG_SIZE, MAX_NONACK_WRITES, MAX_NONACK_READS, ACK_CHUNK } from "../ipc-with-core/socket-ipc";
@@ -39,13 +32,13 @@ import { assert } from "../lib-common/assert";
 import { defer, Deferred, SingleProc } from "../lib-common/processes";
 import { DenoLikeSocket } from "../lib-common/deno-like-socket";
 import { getPortPromise } from "portfinder";
-import { exposeUserNotificationsCAP } from "../shell/user-notifications/user-notifications-cap-ipc";
 import { exposeConnectivityCAP } from "../connectivity/connectivity-cap-ipc";
+import { exposeAppsCAP } from "../apps/ipc-core-side";
+import { exposeShellCAPs } from "../shell/ipc-core-side";
+import { exposeRpcCAP } from "../rpc/ipc-core-side";
 
 type StartupW3N = web3n.startup.W3N;
 type W3N = web3n.caps.W3N;
-type Apps = web3n.apps.Apps;
-type ShellCAPs = web3n.shell.ShellCAPs;
 
 
 export class ElectronIPCConnectors {
@@ -130,45 +123,9 @@ const extraCAPs = Object.freeze({
 	logout: exposeLogoutCAP,
 	testStand: exposeTestStandCAP,
 	shell: exposeShellCAPs,
-	appRPC: appRPC.expose,
-	otherAppsRPC: otherAppsRPC.expose,
-	exposeService: exposeService.expose,
+	rpc: exposeRpcCAP,
 	connectivity: exposeConnectivityCAP,
 });
-
-function exposeAppsCAP(
-	cap: Apps, expServices: ExposedServices
-): ExposedObj<Apps> {
-	const wrap: ExposedObj<Apps> = {};
-	if (cap.opener) {
-		wrap.opener = exposeAppsOpenerCAP(cap.opener, expServices);
-	}
-	if (cap.downloader) {
-		wrap.downloader = exposeAppsDownloaderCAP(cap.downloader);
-	}
-	if (cap.installer) {
-		wrap.installer = exposeAppsInstallerCAP(cap.installer);
-	}
-	if (cap.platform) {
-		wrap.platform = exposePlatformDownloaderCAP(cap.platform);
-	}
-	return wrap;
-}
-
-function exposeShellCAPs(
-	cap: ShellCAPs, expServices: ExposedServices
-): ExposedObj<ShellCAPs> {
-	const wrap: ExposedObj<ShellCAPs> = {};
-	if (cap.fileDialogs) {
-		wrap.fileDialogs = exposeFileDialogsCAP(cap.fileDialogs, expServices);
-	}
-	if (cap.userNotifications) {
-		wrap.userNotifications = exposeUserNotificationsCAP(
-			cap.userNotifications
-		);
-	}
-	return wrap;
-}
 
 const IPC_TOKEN_LEN = 30;
 const STR_TOKEN_PART = 6;

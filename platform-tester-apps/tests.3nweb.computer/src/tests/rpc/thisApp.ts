@@ -29,14 +29,14 @@ type RPCConnection = web3n.rpc.client.RPCConnection;
 
 const timeout = 15000;
 
-describe(`appRPC`, () => {
+describe(`rpc.thisApp`, () => {
 
 	it(`app manifest requests the cap, and it is expected`, async () => {
-		expect(typeof w3n.appRPC).toBe('function');
+		expect(typeof w3n.rpc!.thisApp).toBe('function');
 	});
 
 	it(`connects to service with GUI`, async () => {
-		await w3n.appRPC!(`unknown_service`).then(
+		await w3n.rpc!.thisApp!(`unknown_service`).then(
 			() => fail(`should throw when connecting to unknown service`),
 			(exc: RPCException) => {
 				expect(exc.runtimeException).toBeTrue();
@@ -45,12 +45,12 @@ describe(`appRPC`, () => {
 			}
 		);
 
-		const connection = await w3n.appRPC!(guiSrvInThisApp);
+		const connection = await w3n.rpc!.thisApp!(guiSrvInThisApp);
 		await connection.close();
 	}, timeout);
 
 	it(`connects to service without GUI`, async () => {
-		await w3n.appRPC!(`unknown_service`).then(
+		await w3n.rpc!.thisApp!(`unknown_service`).then(
 			() => fail(`should throw when connecting to unknown service`),
 			(exc: RPCException) => {
 				expect(exc.runtimeException).toBeTrue();
@@ -59,7 +59,7 @@ describe(`appRPC`, () => {
 			}
 		);
 
-		const connection = await w3n.appRPC!(nonGuiSrvInThisApp);
+		const connection = await w3n.rpc!.thisApp!(nonGuiSrvInThisApp);
 		await connection.close();
 	}, timeout);
 
@@ -85,7 +85,8 @@ async function testCallWithArgsAndResult(
 ): Promise<void> {
 	const initValue = new Uint8Array(10);
 	const r = await connection.makeRequestReplyCall(
-		'addToBytes', { bytes: initValue });
+		'addToBytes', { bytes: initValue }
+	);
 	expect(typeof r).toBe('object');
 	const replyBytes = r!.bytes!;
 	for (let i=0; i<initValue.length; i+=1) {
@@ -99,7 +100,7 @@ describe(`RPCConnection to GUI service single connection`, () => {
 	let connection: RPCConnection = undefined as any;
 
 	beforeEach(async () => {
-		connection = await w3n.appRPC!(guiSrvInThisApp);
+		connection = await w3n.rpc!.thisApp!(guiSrvInThisApp);
 	}, timeout);
 
 	afterEach(async () => {
@@ -124,13 +125,13 @@ describe(`RPCConnection to GUI service for many connections`, () => {
 	let connection3: RPCConnection = undefined as any;
 
 	beforeAll(async () => {
-		connection1 = await w3n.appRPC!(guiLongSrvInThisApp);
+		connection1 = await w3n.rpc!.thisApp!(guiLongSrvInThisApp);
 	}, timeout);
 
 	beforeEach(async () => {
 		await Promise.all([
-			w3n.appRPC!(guiLongSrvInThisApp).then(c => { connection2 = c; }),
-			w3n.appRPC!(guiLongSrvInThisApp).then(c => { connection3 = c; })
+			w3n.rpc!.thisApp!(guiLongSrvInThisApp).then(c => { connection2 = c; }),
+			w3n.rpc!.thisApp!(guiLongSrvInThisApp).then(c => { connection3 = c; })
 		]);
 	}, timeout);
 
@@ -164,7 +165,7 @@ describe(`RPCConnection to non-GUI service for single connection`, () => {
 	let connection: RPCConnection = undefined as any;
 
 	beforeAll(async () => {
-		connection = await w3n.appRPC!(nonGuiSrvInThisApp);
+		connection = await w3n.rpc!.thisApp!(nonGuiSrvInThisApp);
 	}, timeout);
 
 	afterAll(async () => {
@@ -189,13 +190,13 @@ describe(`RPCConnection to non-GUI service for many connections`, () => {
 	let connection3: RPCConnection = undefined as any;
 
 	beforeAll(async () => {
-		connection1 = await w3n.appRPC!(longNonGuiSrvInThisApp);
+		connection1 = await w3n.rpc!.thisApp!(longNonGuiSrvInThisApp);
 	}, timeout);
 
 	beforeEach(async () => {
 		await Promise.all([
-			w3n.appRPC!(longNonGuiSrvInThisApp).then(c => { connection2 = c; }),
-			w3n.appRPC!(longNonGuiSrvInThisApp).then(c => { connection3 = c; })
+			w3n.rpc!.thisApp!(longNonGuiSrvInThisApp).then(c => { connection2 = c; }),
+			w3n.rpc!.thisApp!(longNonGuiSrvInThisApp).then(c => { connection3 = c; })
 		]);
 	}, timeout);
 
@@ -243,8 +244,8 @@ describe(`service in both users run simultaneously, non-interacting,`, () => {
 
 	beforeAll(async () => {
 		sndUserId = await w3n.testStand.idOfTestUser(2);
-		guiSrvConnection = await w3n.appRPC!(guiSrvInThisApp);
-		nonGUISrvConnection = await w3n.appRPC!(nonGuiSrvInThisApp);
+		guiSrvConnection = await w3n.rpc!.thisApp!(guiSrvInThisApp);
+		nonGUISrvConnection = await w3n.rpc!.thisApp!(nonGuiSrvInThisApp);
 	}, timeout);
 
 	afterAll(async () => {
@@ -272,8 +273,8 @@ describe(`long-running service in both users simultaneously`, () => {
 
 	beforeAll(async () => {
 		sndUserId = await w3n.testStand.idOfTestUser(2);
-		guiSrvConnection = await w3n.appRPC!(guiLongSrvInThisApp);
-		nonGUISrvConnection = await w3n.appRPC!(longNonGuiSrvInThisApp);
+		guiSrvConnection = await w3n.rpc!.thisApp!(guiLongSrvInThisApp);
+		nonGUISrvConnection = await w3n.rpc!.thisApp!(longNonGuiSrvInThisApp);
 	}, timeout);
 
 	afterAll(async () => {

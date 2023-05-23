@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2022 3NSoft Inc.
+ Copyright (C) 2020 - 2023 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,150 +15,87 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ObjectsConnector, Caller, makeW3Nclient, promiseW3Nclient } from 'core-3nweb-client-lib/build/ipc';
-import { makeFileDialogs } from "../shell/file-dialogs/file-dialogs-cap-ipc";
+import { ObjectsConnector, makeW3Nclient, promiseW3Nclient } from 'core-3nweb-client-lib/build/ipc';
 import { closeSelf } from "../init-proc/close-cap-ipc";
-import { makeAppsOpenerCaller } from '../apps/opener-cap-ipc';
 import { makeLogoutCaller } from "../init-proc/logout-cap-ipc";
-import { makeAppsDownloaderCaller } from "../apps/downloader/apps-downloader-cap-ipc";
-import { makeAppsInstallerCaller } from "../apps/installer/apps-installer-cap-ipc";
-import { makePlatformDownloaderCaller } from "../apps/platform/platform-downloader-cap-ipc";
 import { makeTestStandCaller } from "../test-stand/test-stand-cap-ipc";
-import { appRPC, otherAppsRPC } from "../rpc/rpc-caps-ipc";
-import { exposeService } from "../rpc/expose-service-cap-ipc";
-import { makeUserNotifications } from '../shell/user-notifications/user-notifications-cap-ipc';
 import { makeConnectivity } from '../connectivity/connectivity-cap-ipc';
+import { makeAppsCaller, promiseAppsCaller } from '../apps/ipc-client-side';
+import { makeShellCaller, promiseShellCaller } from '../shell/ipc-client-side';
+import { makeRpcCaller, promiseRpcCaller } from '../rpc/ipc-client-side';
 
 type W3N = web3n.caps.W3N;
-type Apps = web3n.apps.Apps;
-type ShellCAPs = web3n.shell.ShellCAPs;
 
 export function makeClientSideW3N(clientSide: ObjectsConnector): W3N {
 	const clientW3N = makeW3Nclient<web3n.testing.CommonW3N>(
-		clientSide.caller, {
+		clientSide.caller,
+		{
 			closeSelf: closeSelf.makeClient,
 			apps: makeAppsCaller,
 			logout: makeLogoutCaller,
 			testStand: makeTestStandCaller,
 			shell: makeShellCaller,
-			appRPC: appRPC.makeClient,
-			otherAppsRPC: otherAppsRPC.makeClient,
-			exposeService: exposeService.makeClient,
+			rpc: makeRpcCaller,
 			connectivity: makeConnectivity,
-		});
+		}
+	);
+	addDeprecatedItems(clientW3N);
 	return clientW3N;
 }
 
-function makeAppsCaller(caller: Caller, objPath: string[]): Apps {
-	if (!caller.listObj) { throw new Error(
-		`Caller here expects to have method 'listObj'`); }
-	const lstAppsCAP = caller.listObj(objPath) as (keyof Apps)[];
-	const opener = lstAppsCAP.includes('opener');
-	const downloader = lstAppsCAP.includes('downloader');
-	const installer = lstAppsCAP.includes('installer');
-	const platform = lstAppsCAP.includes('platform');
-	const apps: Apps = {};
-	if (opener) {
-		apps.opener = makeAppsOpenerCaller(caller, objPath.concat('opener'));
-	}
-	if (downloader) {
-		apps.downloader = makeAppsDownloaderCaller(
-			caller, objPath.concat('downloader'));
-	}
-	if (installer) {
-		apps.installer = makeAppsInstallerCaller(
-			caller, objPath.concat('installer'));
-	}
-	if (platform) {
-		apps.platform = makePlatformDownloaderCaller(
-			caller, objPath.concat('platform'));
-	}
-	return apps;
-}
-
-function makeShellCaller(caller: Caller, objPath: string[]): ShellCAPs {
-	if (!caller.listObj) { throw new Error(
-		`Caller here expects to have method 'listObj'`); }
-	const shellCAPs = caller.listObj(objPath) as (keyof ShellCAPs)[];
-	const shell: ShellCAPs = {};
-	if (shellCAPs.includes('fileDialogs')) {
-		const dialogsPath = objPath.concat('fileDialogs');
-		const exposedFns = caller.listObj(dialogsPath) as (
-			keyof NonNullable<ShellCAPs['fileDialogs']>)[];
-		shell.fileDialogs = makeFileDialogs(caller, dialogsPath, exposedFns);
-	}
-	if (shellCAPs.includes('userNotifications')) {
-		const notifPath = objPath.concat('userNotifications');
-		shell.userNotifications = makeUserNotifications(caller, notifPath);
-	}
-	return shell;
-}
-
-export function promiseClientSideW3N(
+export async function promiseClientSideW3N(
 	clientSide: ObjectsConnector
 ): Promise<W3N> {
-	return promiseW3Nclient<web3n.testing.CommonW3N>(
-		clientSide.caller, {
+	const clientW3N = await promiseW3Nclient<web3n.testing.CommonW3N>(
+		clientSide.caller,
+		{
 			closeSelf: closeSelf.makeClient,
 			apps: promiseAppsCaller,
 			logout: makeLogoutCaller,
 			testStand: makeTestStandCaller,
 			shell: promiseShellCaller,
-			appRPC: appRPC.makeClient,
-			otherAppsRPC: otherAppsRPC.makeClient,
-			exposeService: exposeService.makeClient,
+			rpc: promiseRpcCaller,
 			connectivity: makeConnectivity,
-		});
+		}
+	);
+	addDeprecatedItems(clientW3N);
+	return clientW3N;
 }
 
-async function promiseAppsCaller(
-	caller: Caller, objPath: string[]
-): Promise<Apps> {
-	if (!caller.listObjAsync) { throw new Error(
-		`Caller here expects to have method 'listObjAsync'`); }
-	const lstAppsCAP = (await caller.listObjAsync(objPath)) as (keyof Apps)[];
-	const opener = lstAppsCAP.includes('opener');
-	const downloader = lstAppsCAP.includes('downloader');
-	const installer = lstAppsCAP.includes('installer');
-	const platform = lstAppsCAP.includes('platform');
-	const apps: Apps = {};
-	if (opener) {
-		apps.opener = makeAppsOpenerCaller(caller, objPath.concat('opener'));
+function addDeprecatedItems(clientW3N: web3n.testing.CommonW3N): void {
+	try {
+		if (clientW3N.rpc?.thisApp) {
+			(clientW3N as any).appRPC = wrapExistingFn(
+				clientW3N.rpc.thisApp,
+				`Deprecations warning:\nUse w3n.rpc.thisApp instead of w3n.appRPC.`
+			);
+		}
+		if (clientW3N.rpc?.otherAppsRPC) {
+			(clientW3N as any).otherAppsRPC = wrapExistingFn(
+				clientW3N.rpc.otherAppsRPC,
+				`Deprecations warning:\nUse w3n.rpc.otherAppsRPC instead of w3n.otherAppsRPC.`
+			);
+		}
+		if (clientW3N.rpc?.exposeService) {
+			(clientW3N as any).exposeService = wrapExistingFn(
+				clientW3N.rpc.exposeService,
+				`Deprecations warning:\nUse w3n.rpc.exposeService instead of w3n.exposeService.`
+			);
+		}
+	} catch (err) {
+		console.error(`\n@ deprecation part:\n`, err);
 	}
-	if (downloader) {
-		apps.downloader = makeAppsDownloaderCaller(
-			caller, objPath.concat('downloader'));
-	}
-	if (installer) {
-		apps.installer = makeAppsInstallerCaller(
-			caller, objPath.concat('installer'));
-	}
-	if (platform) {
-		apps.platform = makePlatformDownloaderCaller(
-			caller, objPath.concat('platform'));
-	}
-	return apps;
 }
 
-async function promiseShellCaller(
-	caller: Caller, objPath: string[]
-): Promise<ShellCAPs> {
-	if (!caller.listObjAsync) { throw new Error(
-		`Caller here expects to have method 'listObjAsync'`); }
-	const shellCAPs = (await caller.listObjAsync(objPath)) as (
-		keyof ShellCAPs)[];
-	const shell: ShellCAPs = {};
-	if (shellCAPs.includes('fileDialogs')) {
-		const dialogsPath = objPath.concat('fileDialogs');
-		const exposedFns = (await caller.listObjAsync(dialogsPath)
-			) as (keyof NonNullable<ShellCAPs['fileDialogs']>)[];
-		shell.fileDialogs = makeFileDialogs(caller, dialogsPath, exposedFns);
-	}
-	if (shellCAPs.includes('userNotifications')) {
-		const notifPath = objPath.concat('userNotifications');
-		shell.userNotifications = makeUserNotifications(caller, notifPath);
-	}
-	return shell;
+function wrapExistingFn<F extends Function>(fn: F, warnMsg: string): F {
+	let showWarning = true;
+	return function(...args: any[]) {
+		if (showWarning) {
+			console.warn(warnMsg);
+			showWarning = false;
+		}
+		return fn.apply(undefined, args);
+	} as Function as F;
 }
 
 

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022 - 2023 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,29 +15,20 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedFn, Caller, ExposedObj, checkRefObjTypeIs, ExposedServices, EnvelopeBody } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedFn, Caller, ExposedObj, checkRefObjTypeIs, ExposedServices } from 'core-3nweb-client-lib/build/ipc';
 import { Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ObjectReference, objRefType, ProtoType } from '../ipc-with-core/protobuf-msg';
 import { rpc as pb } from '../protos/rpc.proto';
+import { SerialFormOfPassedData, datumFromSerialFormOnClientSide, datumFromSerialFormOnCoreSide, datumToSerialFormOnClientSide, datumType, packDatumOnCoreSide, unpackDatumOnClientSide } from './passed-datum';
 
 type AppRPC = web3n.rpc.client.AppRPC;
 type OtherAppsRPC = web3n.rpc.client.OtherAppsRPC;
 type RPCConnection = web3n.rpc.client.RPCConnection;
 type PassedDatum = web3n.rpc.PassedDatum;
 
-const datumType = ProtoType.for<PassedDatum>(pb.PassedDatum);
 
-export function packDatum(datum: PassedDatum|undefined): EnvelopeBody {
-	return (datum ? datumType.pack(datum) : undefined);
-}
-
-export function unpackDatum(buf: EnvelopeBody): PassedDatum|undefined {
-	return (buf ? datumType.unpack(buf) : undefined);
-}
-
-
-export namespace appRPC {
+export namespace thisAppRPC {
 
 	const reqType = ProtoType.for<{ service: string; }>(pb.AppRPCRequestBody);
 
@@ -70,7 +61,9 @@ export namespace otherAppsRPC {
 		appDomain: string, service: string;
 	}>(pb.OtherAppsRPCRequestBody);
 
-	export function expose(fn: OtherAppsRPC, expServices: ExposedServices): ExposedFn {
+	export function expose(
+		fn: OtherAppsRPC, expServices: ExposedServices
+	): ExposedFn {
 		return buf => {
 			const { appDomain, service } = reqType.unpack(buf);
 			const promise = fn(appDomain, service)
@@ -93,6 +86,7 @@ export namespace otherAppsRPC {
 
 }
 
+
 namespace rpcConnection {
 
 	export function expose(
@@ -101,9 +95,9 @@ namespace rpcConnection {
 		const exp: ExposedObj<RPCConnection> = {
 			close: close.wrapService(c.close),
 			makeRequestReplyCall: makeRequestReplyCall.wrapService(
-				c.makeRequestReplyCall),
+				c.makeRequestReplyCall, expServices),
 			startObservableCall: startObservableCall.wrapService(
-				c.startObservableCall)
+				c.startObservableCall, expServices)
 		};
 		return expServices.exposeDroppableService('RPCConnection', exp, c);
 	}
@@ -121,8 +115,9 @@ namespace rpcConnection {
 	}
 
 	const callStartType = ProtoType.for<{
-		method: string; req?: PassedDatum;
+		method: string; req?: SerialFormOfPassedData;
 	}>(pb.CallStartRequestBody);
+
 
 	namespace close {
 
@@ -144,15 +139,18 @@ namespace rpcConnection {
 	}
 	Object.freeze(close);
 
+
 	namespace makeRequestReplyCall {
 
 		export function wrapService(
-			fn: RPCConnection['makeRequestReplyCall']
+			fn: RPCConnection['makeRequestReplyCall'], expServices: ExposedServices
 		): ExposedFn {
 			return buf => {
 				const { method, req } = callStartType.unpack(buf);
-				const promise = fn(method, req)
-				.then(packDatum);
+				const promise = fn(
+					method, datumFromSerialFormOnCoreSide(req, expServices)
+				)
+				.then(d => packDatumOnCoreSide(d, expServices));
 				return { promise };
 			};
 		}
@@ -162,27 +160,33 @@ namespace rpcConnection {
 		): RPCConnection['makeRequestReplyCall'] {
 			const path = objPath.concat('makeRequestReplyCall');
 			return async (method, req) => {
-				const reqBuf = callStartType.pack({ method, req });
+				const reqBuf = callStartType.pack({
+					method, req: datumToSerialFormOnClientSide(req, caller)
+				});
 				const repBuf = await caller.startPromiseCall(path, reqBuf);
-				return unpackDatum(repBuf);
+				return unpackDatumOnClientSide(repBuf, caller);
 			};
 		}
 
 	}
 	Object.freeze(makeRequestReplyCall);
 
+
 	namespace startObservableCall {
 
 		export function wrapService(
-			fn: RPCConnection['startObservableCall']
+			fn: RPCConnection['startObservableCall'], expServices: ExposedServices
 		): ExposedFn {
 			return buf => {
 				const { method, req } = callStartType.unpack(buf);
 				const s = new Subject<PassedDatum>();
-				const obs = s.asObservable().pipe(
-					map(packDatum)
+				const obs = s.asObservable()
+				.pipe(
+					map(d => packDatumOnCoreSide(d, expServices))
 				);
-				const onCancel = fn(method, req, s);
+				const onCancel = fn(
+					method, datumFromSerialFormOnCoreSide(req, expServices), s
+				);
 				return { obs, onCancel };
 			};
 		}
@@ -198,7 +202,7 @@ namespace rpcConnection {
 				s.subscribe({
 					next: buf => {
 						if (obs.next) {
-							obs.next(unpackDatum(buf));
+							obs.next(unpackDatumOnClientSide(buf, caller));
 						}
 					},
 					complete: obs.complete,

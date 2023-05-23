@@ -1,6 +1,8 @@
 syntax = "proto3";
 
 import "common.proto";
+import "file.proto";
+import "fs.proto";
 
 package rpc;
 
@@ -17,6 +19,19 @@ message AppRPCRequestBody {
 message OtherAppsRPCRequestBody {
 	string app_domain = 1;
 	string service = 2;
+}
+
+
+// ==== allocateProxyFor capability ====
+// Reply body is common.ObjectReference's of an allocated proxy.
+message AllocateProxyRequestBody {
+	message Member {
+		bool is_obj = 1;
+		string name = 2;
+		repeated Member members = 3;
+	}
+	uint32 obj_ref = 1;
+	repeated Member members = 2;
 }
 
 
@@ -38,8 +53,13 @@ message CallStartRequestBody {
 }
 
 message PassedDatum {
+	message PassedObj {
+		common.ObjectReference ref = 1;
+		fs.FS fs = 2;
+		file.File file = 3;
+	}
 	bytes bytes = 1;
-	repeated common.ObjectReference transferables = 2;
+	repeated PassedObj passed_objs = 2;
 }
 
 

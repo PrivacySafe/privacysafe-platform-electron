@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022 - 2023 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -21,6 +21,7 @@ type IncomingConnection = web3n.rpc.service.IncomingConnection;
 type CallStart = web3n.rpc.service.CallStart;
 type PassedDatum = web3n.rpc.PassedDatum;
 type WritableFS = web3n.files.WritableFS;
+type WritableFile = web3n.files.WritableFile;
 
 export class Service {
 
@@ -103,6 +104,16 @@ export class Service {
 				await this.connection.send({
 					callNum, callStatus: 'end', data
 				});
+			} else if ((method as keyof Service) === 'readAndPassFile') {
+				const reply = await this.readAndPassFile(data!);
+				await this.connection.send({
+					callNum, callStatus: 'end', data: reply
+				});
+			} else if ((method as keyof Service) === 'readAndPassFS') {
+				const reply = await this.readAndPassFS(data!);
+				await this.connection.send({
+					callNum, callStatus: 'end', data: reply
+				});
 			} else {
 				await this.connection.send({
 					callNum, callStatus: 'error', err: `Method ${method} not found`
@@ -179,6 +190,35 @@ export class Service {
 	public async getUserId(): Promise<PassedDatum> {
 		const userId = await w3n.mailerid!.getUserId();
 		return { bytes: strToBytes(userId) };
+	}
+
+	public async readAndPassFile(
+		{ passedByReference }: PassedDatum
+	): Promise<PassedDatum> {
+		const file = passedByReference![0] as WritableFile;
+		if (file !== passedByReference![1]) {
+			throw new Error(`Duplicate reference should produce same file object`);
+		}
+		const txtContent = await file.readTxt();
+		return {
+			bytes: strToBytes(txtContent),
+			passedByReference: [ file, passedByReference![1] ]
+		};
+	}
+
+	public async readAndPassFS(
+		{ bytes, passedByReference }: PassedDatum
+	): Promise<PassedDatum> {
+		const fs = passedByReference![0] as WritableFS;
+		if (fs !== passedByReference![1]) {
+			throw new Error(`Duplicate reference should produce same fs object`);
+		}
+		const filePath = strFromBytes(bytes!);
+		const txtContent = await fs.readTxtFile(filePath);
+		return {
+			bytes: strToBytes(txtContent),
+			passedByReference: [ fs, passedByReference![1] ]
+		};
 	}
 
 }

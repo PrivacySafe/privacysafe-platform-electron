@@ -25,7 +25,7 @@ addMsgToPage(`Long service's window`);
 // we start listening with a time gap to test initially buffered calls
 setTimeout(() => {
 
-	w3n.exposeService!(guiLongSrvInThisApp, {
+	w3n.rpc!.exposeService!(guiLongSrvInThisApp, {
 
 		next: async connection => {
 			const syncFS = await w3n.storage!.getAppSyncedFS();

@@ -16,8 +16,8 @@
 */
 
 import { makeStartupW3N } from './renderer-side-wrap';
-import { contextBridge } from 'electron';
+// import { contextBridge } from 'electron';
 
-global['runningInIsolatedContext'] = true;
+// contextBridge.exposeInMainWorld('w3n', makeStartupW3N());
 
-contextBridge.exposeInMainWorld('w3n', makeStartupW3N());
+(window as any).w3n = makeStartupW3N();

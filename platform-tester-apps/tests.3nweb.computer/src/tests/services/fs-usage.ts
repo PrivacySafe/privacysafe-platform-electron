@@ -88,7 +88,7 @@ function fsUsage(srvName: string): void {
 	let localFS: WritableFS = undefined as any;
 
 	beforeAll(async () => {
-		connection = await w3n.appRPC!(srvName);
+		connection = await w3n.rpc!.thisApp!(srvName);
 		syncFS = await w3n.storage!.getAppSyncedFS();
 		localFS = await w3n.storage!.getAppLocalFS();
 	}, timeout);

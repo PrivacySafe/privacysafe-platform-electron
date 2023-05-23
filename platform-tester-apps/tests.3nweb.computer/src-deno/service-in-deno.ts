@@ -29,7 +29,7 @@ setTimeout(async () => {
 	const syncFS = await w3n.storage!.getAppSyncedFS();
 	const localFS = await w3n.storage!.getAppLocalFS();
 
-	const stopListening = w3n.exposeService!(nonGuiSrvInThisApp, {
+	const stopListening = w3n.rpc!.exposeService!(nonGuiSrvInThisApp, {
 
 		next: async connection => {
 			Service.singleton = new Service(connection, syncFS, localFS);

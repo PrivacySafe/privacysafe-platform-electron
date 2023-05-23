@@ -16,8 +16,15 @@
 */
 
 import { makeW3N } from './renderer-side-wrap';
-import { contextBridge } from 'electron';
+// import { contextBridge } from 'electron';
 
-global['runningInIsolatedContext'] = true;
+// XXX
+// w3n is created in this isolated place with imports and signals from core.
+// Can we have connector created in main world, getting messages from this
+// isolated one.
+// Creation of weakref inside main world will let it work properly.
+// Weakref breaks across context boundary.
 
-contextBridge.exposeInMainWorld('w3n', makeW3N());
+// contextBridge.exposeInMainWorld('w3n', makeW3N());
+
+(window as any).w3n = makeW3N();

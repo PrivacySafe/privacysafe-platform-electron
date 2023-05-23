@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022 - 2023 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -21,6 +21,7 @@ import { map } from 'rxjs/operators';
 import { errFromMsg, errToMsg, ObjectReference, objRefType } from '../ipc-with-core/protobuf-msg';
 import { ProtoType } from '../ipc-with-core/protobuf-msg';
 import { rpc as pb } from '../protos/rpc.proto';
+import { datumFromSerialFormOnClientSide, datumFromSerialFormOnCoreSide, datumToSerialFormOnClientSide, datumToSerialFormOnCoreSide } from './passed-datum';
 
 type ExposeService = web3n.rpc.service.ExposeService;
 type IncomingConnection = web3n.rpc.service.IncomingConnection;
@@ -79,11 +80,7 @@ namespace connection {
 	export function expose(
 		c: IncomingConnection, expServices: ExposedServices
 	): ObjectReference<'IncomingConnection'> {
-		const exp: ExposedObj<IncomingConnection> = {
-			close: close.wrapService(c.close),
-			send: send.wrapService(c.send),
-			watch: watch.wrapService(c.watch)
-		};
+		const exp = makeExposedObjForIncomingConnection(c, expServices);
 		return expServices.exposeDroppableService('IncomingConnection', exp, c);
 	}
 
@@ -97,6 +94,17 @@ namespace connection {
 			watch: watch.makeCaller(caller, ref.path)
 		};
 	}
+
+	function makeExposedObjForIncomingConnection(
+		c: IncomingConnection, expServices: ExposedServices
+	): ExposedObj<IncomingConnection> {
+		return {
+			close: close.wrapService(c.close),
+			send: send.wrapService(c.send, expServices),
+			watch: watch.wrapService(c.watch, expServices)
+		};
+	}
+
 
 	namespace close {
 
@@ -118,13 +126,16 @@ namespace connection {
 	}
 	Object.freeze(close);
 
+
 	namespace send {
 
 		const msgType = ProtoType.for<OutgoingMsg>(pb.OutgoingMsg);
 
-		export function wrapService(fn: IncomingConnection['send']): ExposedFn {
+		export function wrapService(
+			fn: IncomingConnection['send'], expServices: ExposedServices
+		): ExposedFn {
 			return buf => {
-				const msg = unpackMsg(buf);
+				const msg = unpackMsg(buf, expServices);
 				const promise = fn(msg);
 				return { promise };
 			};
@@ -135,20 +146,26 @@ namespace connection {
 		): IncomingConnection['send'] {
 			const path = objPath.concat('send');
 			return msg => caller
-			.startPromiseCall(path, packMsg(msg)) as Promise<undefined>;
+			.startPromiseCall(path, packMsg(msg, caller)) as Promise<undefined>;
 		}
 
-		function packMsg(msg: OutgoingMsg): Buffer {
+		function packMsg(msg: OutgoingMsg, caller: Caller): Buffer {
 			if (msg.err) {
 				(msg as any).err = errToMsg(msg.err);
+			} else {
+				msg.data = datumToSerialFormOnClientSide(msg.data, caller);
 			}
 			return msgType.pack(msg);
 		}
 
-		function unpackMsg(buf: EnvelopeBody): OutgoingMsg {
+		function unpackMsg(
+			buf: EnvelopeBody, expServices: ExposedServices
+		): OutgoingMsg {
 			const msg = msgType.unpack(buf);
 			if (msg.err) {
 				(msg as any).err = errFromMsg(msg.err);
+			} else {
+				msg.data = datumFromSerialFormOnCoreSide(msg.data, expServices);
 			}
 			return msg;
 		}
@@ -156,15 +173,25 @@ namespace connection {
 	}
 	Object.freeze(send);
 
+
 	namespace watch {
 
 		const msgType = ProtoType.for<IncomingMsg>(pb.IncomingMsg);
 
-		export function wrapService(fn: IncomingConnection['watch']): ExposedFn {
+		export function wrapService(
+			fn: IncomingConnection['watch'], expServices: ExposedServices
+		): ExposedFn {
 			return () => {
 				const s = new Subject<IncomingMsg>();
 				const obs = s.asObservable().pipe(
-					map(msg => msgType.pack(msg))
+					map(msg => {
+						if (msg.msgType === 'start') {
+							msg.data = datumToSerialFormOnCoreSide(
+								msg.data, expServices
+							);
+						}
+						return msgType.pack(msg);
+					})
 				);
 				const onCancel = fn(s);
 				return { obs, onCancel };
@@ -181,7 +208,13 @@ namespace connection {
 				s.subscribe({
 					next: buf => {
 						if (obs.next) {
-							obs.next(msgType.unpack(buf));
+							const msg = msgType.unpack(buf);
+							if (msg.msgType === 'start') {
+								msg.data = datumFromSerialFormOnClientSide(
+									msg.data, caller
+								);
+							}
+							obs.next(msg);
 						}
 					},
 					complete: obs.complete,

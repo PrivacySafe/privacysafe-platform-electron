@@ -25,7 +25,7 @@ addMsgToPage(`Service's window`);
 // we start listening with a time gap to test initially buffered calls
 setTimeout(() => {
 
-	const stopListening = w3n.exposeService!(guiSrvInThisApp, {
+	const stopListening = w3n.rpc!.exposeService!(guiSrvInThisApp, {
 
 		next: async connection => {
 			const syncFS = await w3n.storage!.getAppSyncedFS();

@@ -177,21 +177,18 @@ class Driver implements CoreDriver {
 		const baseW3N = this.core.makeCAPsForApp(appDomain, capsReq);
 		const closeSelf = this.closeSelfCAP();
 		const shell = this.shellCAPs(appDomain, component, capsReq);
-		const exposeService = exposeServiceCAP(
-			appDomain, componentDef as GUIServiceComponent|ServiceComponent);
-		const appRPC = makeAppRPC(this.rpcClientSide, capsReq);
-		const otherAppsRPC = makeOtherAppsRPC(this.rpcClientSide, capsReq);
+		const rpc = makeRpcCAP(
+			this.rpcClientSide, appDomain, componentDef, capsReq
+		);
 		const close = () => {
 			shell?.close();
-			exposeService?.close();
+			rpc?.close();
 			baseW3N.close();
 		};
 		const setApp: AppSetter = app => {
 			closeSelf.setApp(app);
 			shell?.setApp(app);
-			exposeService?.setApp(app);
-			appRPC?.setApp(app);
-			otherAppsRPC?.setApp(app);
+			rpc?.setApp(app);
 		};
 		const w3n: W3N = {
 			log: baseW3N.caps.log,
@@ -202,9 +199,7 @@ class Driver implements CoreDriver {
 			apps: makeAppsCAP(this.appsCapFns, appDomain, capsReq),
 			logout: makeLogoutCAP(this.logout, appDomain, capsReq),
 			shell: shell?.cap,
-			appRPC: appRPC?.cap,
-			otherAppsRPC: otherAppsRPC?.cap,
-			exposeService: exposeService?.cap,
+			rpc: rpc?.cap,
 			connectivity: connectivityCAP(capsReq.connectivity),
 		};
 		return { w3n, close, setApp };
@@ -277,10 +272,12 @@ Object.freeze(Driver.prototype);
 Object.freeze(Driver);
 
 
+type RPC = NonNullable<W3N['rpc']>;
+
 function makeAppRPC(
 	rpcClientSide: ClientSideConnector, capsReq: RequestedCAPs
 ): {
-	cap: NonNullable<W3N['appRPC']>; setApp: AppSetter;
+	cap: NonNullable<RPC['thisApp']>; setApp: AppSetter;
 }|undefined {
 	if (!capsReq.appRPC) { return; }
 	if (capsReq.appRPC.serviceComponents.length === 0) { return; }
@@ -296,7 +293,7 @@ function makeAppRPC(
 function makeOtherAppsRPC(
 	rpcClientSide: ClientSideConnector, capsReq: RequestedCAPs
 ): {
-	cap: NonNullable<W3N['otherAppsRPC']>; setApp: AppSetter;
+	cap: NonNullable<RPC['otherAppsRPC']>; setApp: AppSetter;
 }|undefined {
 	if (!capsReq.otherAppsRPC) { return; }
 	if (capsReq.otherAppsRPC.callable.length === 0) { return; }
@@ -306,6 +303,36 @@ function makeOtherAppsRPC(
 		setApp: app => {
 			caller = app;
 		},
+	};
+}
+
+function makeRpcCAP(
+	rpcClientSide: ClientSideConnector,
+	appDomain: string, componentDef: AppComponent, capsReq: RequestedCAPs
+): {
+	cap: RPC; setApp: AppSetter; close: () => void;
+}|undefined {
+	const exposeService = exposeServiceCAP(
+		appDomain, componentDef as GUIServiceComponent|ServiceComponent
+	);
+	const appRPC = makeAppRPC(rpcClientSide, capsReq);
+	const otherAppsRPC = makeOtherAppsRPC(rpcClientSide, capsReq);
+	if (!exposeService && !appRPC && !otherAppsRPC) { return; }
+	const cap: RPC = {
+		thisApp: appRPC?.cap,
+		otherAppsRPC: otherAppsRPC?.cap,
+		exposeService: exposeService?.cap,
+	};
+	return {
+		cap,
+		setApp: app => {
+			exposeService?.setApp(app);
+			appRPC?.setApp(app);
+			otherAppsRPC?.setApp(app);
+		},
+		close: () => {
+			exposeService?.close();
+		}
 	};
 }
 
@@ -366,7 +393,8 @@ function exposeServiceCAP(
 	for (const srvName of expectedSrvs) {
 		connectors[srvName] = new ServiceConnector(
 			appDomain, srvName,
-			componentDef.startedBy, !!componentDef.forOneConnectionOnly);
+			componentDef.startedBy, !!componentDef.forOneConnectionOnly
+		);
 	}
 	const setApp: AppSetter = app => {
 		for (const [srvName, connector] of Object.entries(connectors)) {

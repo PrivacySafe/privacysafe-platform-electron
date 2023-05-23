@@ -26,7 +26,7 @@ const longNonGuiSrvInThisApp = 'LongServiceInDeno';
 // we start listening with a time gap to test initially buffered calls
 setTimeout(() => {
 
-	const stopListening = w3n.exposeService!(longNonGuiSrvInThisApp, {
+	const stopListening = w3n.rpc!.exposeService!(longNonGuiSrvInThisApp, {
 
 		next: async connection => {
 			const syncFS = await w3n.storage!.getAppSyncedFS();

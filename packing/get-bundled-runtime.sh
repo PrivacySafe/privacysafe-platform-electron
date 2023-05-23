@@ -56,6 +56,7 @@ then
 	mkdir -p "$dst_dir"
 	echo "Downloading $runtime for $platform on $arch cpu"
 	curl -L "$url" --output "$dst_dir/$deno_bin" || exit $?
+	chmod +x "$dst_dir/$deno_bin"
 	# get content
 
 else

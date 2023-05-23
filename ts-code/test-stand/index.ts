@@ -283,12 +283,8 @@ export class TestStand {
 			const wrapCAPs: WrapAppCAPsAndSetup = ({ w3n, setApp, close }) => {
 				const w3nWithStand = { testStand } as web3n.testing.CommonW3N;
 				for (const cap in w3n) {
-					if ((cap === 'appRPC') && rpcLogger) {
-						w3nWithStand[cap] = rpcLogger.wrapAppRPC(w3n[cap]!);
-					} else if ((cap === 'otherAppsRPC') && rpcLogger) {
-						w3nWithStand[cap] = rpcLogger.wrapOtherAppsRPC(w3n[cap]!);
-					} else if ((cap === 'exposeService') && rpcLogger) {
-						w3nWithStand[cap] = rpcLogger.wrapExposeService(w3n[cap]!);
+					if ((cap === 'rpc') && rpcLogger) {
+						w3nWithStand[cap] = rpcLogger.wrapRPC(w3n[cap]!);
 					} else {
 						w3nWithStand[cap] = w3n[cap];
 					}

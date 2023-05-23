@@ -1,5 +1,6 @@
 appId: io.privacysafe.os
 productName: PrivacySafe
+executableName: PrivacySafe
 copyright: Copyright © 2017 - 2023, 3NSoft, Inc.
 
 linux:
