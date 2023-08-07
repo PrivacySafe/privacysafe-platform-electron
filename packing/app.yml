@@ -71,3 +71,5 @@ asarUnpack:
   - runtime-deno/preload.bundle.js
   - runtime-deno\preload.bundle.js
 
+  # packaging info file that gets after asar is created
+  - packing-info.json

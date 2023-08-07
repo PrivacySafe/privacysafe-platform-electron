@@ -1,3 +1,3 @@
-Content of this folder comes from zip at https://github.com/LukeChannings/deno-arm64/releases/download/v1.32.3/deno-linux-arm64.zip
+Content of this folder comes from zip at https://github.com/LukeChannings/deno-arm64/releases/download/v1.35.3/deno-linux-arm64.zip
 Sha512 hashes are
-bd26903b6adf38063ddd125c8ec4f6fb31cfb1b172c94868f90ef28bfbdaefc3ef829dcd39bcafbbd35388db964913478ecbc25b9466d1e752b6b17f8b0edefc  deno
+07d400a2edea2e1c89d0bb61b4ca0d43c220cff22797869ba22a1039aebac2ca9527cfccc1b7600c0ec8739c75ff4627c60e379bc0e440698363f6b15467debf  deno

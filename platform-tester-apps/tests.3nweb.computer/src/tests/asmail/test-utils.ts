@@ -34,7 +34,7 @@ export interface SetupForASMail {
 export type SpecIt = GenericSpecIt<SetupForASMail>;
 
 export function throwDeliveryErrorFrom(lastNotif: DeliveryProgress): void {
-	assert(lastNotif.allDone, `Given delivery notification is not last`);
+	assert(lastNotif.allDone === 'all-ok', `Given delivery notification is not last`);
 	for (const info of Object.values(lastNotif.recipients)) {
 		if (info.err) {
 			throw errWithCause(

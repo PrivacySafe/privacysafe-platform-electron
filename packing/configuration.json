@@ -5,9 +5,9 @@
 	"platform-name": "PrivacySafe",
 	"bundled-apps": [
 		"installer.app.privacysafe.io",
-		"inbox.app.privacysafe.io",
 		"files.app.privacysafe.io",
 		"chat.app.privacysafe.io",
+		"inbox.app.privacysafe.io",
 		"contacts.app.privacysafe.io"
 	],
 	"data-dir-name": ".PrivacySafe",

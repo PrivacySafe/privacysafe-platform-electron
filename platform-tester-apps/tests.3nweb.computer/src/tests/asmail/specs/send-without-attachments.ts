@@ -62,7 +62,7 @@ it.func = async function(s) {
 	expect(notifs.length).toBeGreaterThan(0);
 	const lastInfo = notifs[notifs.length-1];
 	expect(typeof lastInfo).toBe('object');
-	expect(lastInfo.allDone).toBe(true);
+	expect(lastInfo.allDone).toBe('all-ok');
 	throwDeliveryErrorFrom(lastInfo);
 	await w3n.mail!.delivery.rmMsg(idForSending);
 	expect(await w3n.mail!.delivery.currentState(idForSending)).toBeFalsy();

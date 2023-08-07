@@ -31,7 +31,12 @@ echo
 node_modules/.bin/electron-builder --publish never --config $build_conf --dir --$arch || exit $?
 if [ "$platform" == "mac" ]
 then
-	mv dist/app/mac $prepacked_dir || exit $?
+	if [ "$arch" == "arm64" ]
+	then
+		mv dist/app/mac-arm64 $prepacked_dir || exit $?
+	else
+		mv dist/app/mac $prepacked_dir || exit $?
+	fi
 elif [ "$platform" == "linux" ]
 then
 	if [ "$arch" == "arm64" ]

@@ -21,8 +21,10 @@ then
 fi
 
 build_conf="packing/app.yml"
-if [ "$platform" != "mac" ]
+if [ "$platform" = "mac" ]
 then
+	pack_info_file="$prepacked_dir/$(ls $prepacked_dir)/Contents/Resources/app.asar.unpacked/packing-info.json"
+else
 	pack_info_file="$prepacked_dir/resources/app.asar.unpacked/packing-info.json"
 fi
 
@@ -30,7 +32,7 @@ write_pack_info() {
 	local variant=$1
 	echo "{
 	\"platform\": \"$platform\",
-	\"variant\": \"$1\",
+	\"variant\": \"$variant\",
 	\"arch\": \"$arch\"
 }" > $pack_info_file
 }
@@ -42,10 +44,7 @@ build_from_prepackaged() {
 	echo "	|   Building $target for $arch"
 	echo "	================================="
 	echo
-	if [ "$platform" != "mac" ]
-	then
-		write_pack_info $target || return $?
-	fi
+	write_pack_info $target || return $?
 	node_modules/.bin/electron-builder --publish never --config $build_conf --prepackaged $prepacked_dir --$platform $target --$arch || return $?
 }
 
