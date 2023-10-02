@@ -7,10 +7,20 @@ package startup;
 
 // ==== signUp capability ====
 
+message SetSignUpServerRequestBody {
+	string service_url = 1;
+}
+
 // --- signUp.getAvailableAddresses ---
 // Reply body is common.StringArrayValue
 message GetAvailableAddressesRequestBody {
 	string name = 1;
+	common.StringValue token = 2;
+}
+
+// --- signUp.getAvailableDomians ---
+// Reply body is common.StringArrayValue
+message GetAvailableDomainsRequestBody {
 	common.StringValue token = 2;
 }
 
