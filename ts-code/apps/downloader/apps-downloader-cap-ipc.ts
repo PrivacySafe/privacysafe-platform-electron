@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2022 3NSoft Inc.
+ Copyright (C) 2021 - 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -30,7 +30,7 @@ export function exposeAppsDownloaderCAP(
 ): ExposedObj<AppsDownloader> {
 	return {
 		getAppChannels: getAppChannels.wrapService(cap.getAppChannels),
-		getAppVersionList: getAppVersionList.wrapService(cap.getAppVersionList),
+		getAppVersionFilesList: getAppVersionList.wrapService(cap.getAppVersionFilesList),
 		getLatestAppVersion: getLatestAppVersion.wrapService(
 			cap.getLatestAppVersion),
 		downloadWebApp: downloadWebApp.wrapService(cap.downloadWebApp),
@@ -42,7 +42,7 @@ export function makeAppsDownloaderCaller(
 ): AppsDownloader {
 	return {
 		getAppChannels: getAppChannels.makeCaller(caller, objPath),
-		getAppVersionList: getAppVersionList.makeCaller(caller, objPath),
+		getAppVersionFilesList: getAppVersionList.makeCaller(caller, objPath),
 		getLatestAppVersion: getLatestAppVersion.makeCaller(caller, objPath),
 		downloadWebApp: downloadWebApp.makeCaller(caller, objPath),
 	};
@@ -117,7 +117,7 @@ Object.freeze(getLatestAppVersion);
 
 namespace getAppVersionList {
 
-	export function wrapService(fn: AppsDownloader['getAppVersionList']): ExposedFn {
+	export function wrapService(fn: AppsDownloader['getAppVersionFilesList']): ExposedFn {
 		return buf => {
 			const { id, version } = requestWithAppIdAndVersionType.unpack(buf);
 			const promise = fn(id, version)
@@ -128,7 +128,7 @@ namespace getAppVersionList {
 
 	export function makeCaller(
 		caller: Caller, objPath: string[]
-	): AppsDownloader['getAppVersionList'] {
+	): AppsDownloader['getAppVersionFilesList'] {
 		const path = objPath.concat('getAppVersionList');
 		return async (id, version) => {
 			const req = requestWithAppIdAndVersionType.pack({ id, version });

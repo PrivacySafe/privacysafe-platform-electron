@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2017 - 2022 3NSoft Inc.
+ Copyright (C) 2017 - 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,22 +15,22 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, nativeImage } from 'electron';
 import { makeSessionForApp, makeSessionForDevAppFromUrl } from '../electron/session';
 import { protoSchemas } from "../electron/protocols";
 import { join } from 'path';
 import { copy as jsonCopy } from '../lib-common/json-utils';
-import { logWarning } from '../confs';
+import { logError, logWarning } from '../confs';
 import { AppCAPsAndSetup } from '../core/core-driver';
 import { addDevToolsShortcuts } from '../init-proc/devtools';
 import { Component, Service } from '.';
+import { toBuffer } from '../lib-common/buffer-utils';
+import { CmdsHandler } from '../shell/cmd-invocation';
 
 type WindowOptions = web3n.ui.WindowOptions;
 type Session = Electron.Session;
 type W3N = web3n.caps.W3N;
-
-export type RequestFilter = (url: string) => boolean;
-export type ReadonlyFS = web3n.files.ReadonlyFS;
+type ReadonlyFS = web3n.files.ReadonlyFS;
 
 export type TitleGenerator = (contentTitle: string) => string;
 
@@ -47,6 +47,7 @@ export class GUIComponent implements Component {
 	public readonly devToolsEnabled: boolean;
 	private contentTitle = '';
 	private serviceImpls: Component['services'] = undefined;
+	private cmdHandlerImpl: CmdsHandler|undefined = undefined;
 
 	protected constructor(
 		public readonly domain: string,
@@ -56,7 +57,6 @@ export class GUIComponent implements Component {
 		opts: Electron.BrowserWindowConstructorOptions,
 		protected readonly generateTitle: TitleGenerator,
 	) {
-
 		this.window = new BrowserWindow(opts);
 		this.devToolsEnabled = !!opts.webPreferences!.devTools;
 		this.setupWindow();
@@ -111,6 +111,15 @@ export class GUIComponent implements Component {
 
 	get stdErr(): NodeJS.ReadableStream {
 		throw new Error(`Capturing of web contents' console.error is not implemented`);
+	}
+
+	setCmdHandler(handler: CmdsHandler): void {
+		this.cmdHandlerImpl = handler;
+		this.setCloseListener(() => handler.complete());
+	}
+
+	get cmdsHandler(): CmdsHandler|undefined {
+		return this.cmdHandlerImpl;
 	}
 
 	close(): void {
@@ -174,6 +183,17 @@ export class GUIComponent implements Component {
 		await this.window.loadURL(url);
 	}
 
+	async setIcon(appRoot: ReadonlyFS, imgPath: string): Promise<void> {
+		try {
+			const imgBytes = await appRoot.readBytes(imgPath);
+			if (!imgBytes) { return; }
+			const img = nativeImage.createFromBuffer(toBuffer(imgBytes));
+			this.window.setIcon(img);
+		} catch (err) {
+			await logError(err, `Error in using image ${imgPath} in app ${appRoot}`);
+		}
+	}
+
 }
 Object.freeze(GUIComponent.prototype);
 Object.freeze(GUIComponent);
@@ -186,9 +206,13 @@ function prepareWindowOpts(
 ): Electron.BrowserWindowConstructorOptions {
 	// make a sanitized copy
 	const opts = copyWinOpts(winOpts);
-	
+
 	if (parent) {
 		opts.parent = parent;
+		opts.frame = true;
+		opts.fullscreenable = false;
+	} else {
+		delete opts.skipTaskbar;
 	}
 
 	opts.webPreferences = {
@@ -218,18 +242,17 @@ export function copyWinOpts(
 	const opts: Electron.BrowserWindowConstructorOptions = {};
 	if (!winOpts) { return opts; }
 	for (const optName of Object.keys(winOpts)) {
-		if (!winOptsToCopy.has(optName)) { continue; }
+		if (!winOptsToCopy.has(optName as keyof WindowOptions)) { continue; }
 		opts[optName] = jsonCopy(winOpts[optName]);
 	}
 	return opts;
 }
-const winOptsToCopy = new Set([
-	'width', 'height', 'x', 'y', 'useContentSize', 'center',
+const winOptsToCopy = new Set<keyof WindowOptions>([
+	'width', 'height', 'x', 'y', 'center',
 	'minWidth', 'minHeight', 'maxWidth', 'maxHeight',
 	'resizable', 'movable', 'minimizable', 'maximizable',
-	'skipTaskbar', 'title', 'icon', 'frame', 'modal',
-	'acceptFirstMouse', 'alwaysAboveParent',
-	'backgroundColor', 'titleBarStyle', 'thickFrame'
+	'skipTaskbar', 'frame', 'modal',
+	'rememberWindowLocation'
 ]);
 
 
@@ -247,7 +270,8 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 	}
 
 	static async makeForUrl(
-		domain: string, appUrl: string, entrypoint: string, caps: AppCAPsAndSetup,
+		domain: string, appUrl: string, entrypoint: string,
+		caps: AppCAPsAndSetup,
 		winOpts: WindowOptions|undefined, parent: GUIComponent|undefined,
 		generateTitle: TitleGenerator
 	): Promise<GUIComponent> {
@@ -258,7 +282,8 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 			session, preload, winOpts, parent?.window, true
 		);
 		const app = new DevAppInstanceFromUrl(
-			domain, parent, appUrl, entrypoint, caps, opts, generateTitle
+			domain, parent, appUrl, entrypoint, caps, opts,
+			generateTitle
 		);
 		await app.attachDevTools(session);
 		Object.seal(app);

@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "common.proto";
+
 package test_stand;
 
 // ==== testStand capability ====
@@ -26,20 +28,20 @@ message RecordRequestBody {
 // Request body is common.UInt64Value
 // Reply body is common.StringValue with json values
 
-// --- sendMsgToOtherLocalTestUser ---
+// --- sendMsgToOtherLocalTestProcess ---
 // Reply body is empty
-message SendMsgToOtherLocalTestUserRequestBody {
-	uint32 user_num = 1;
-	string app_domain = 2;
-	string app_component = 3;
+message SendMsgToOtherLocalTestProcessRequestBody {
+	common.UInt32Value user_num = 1;
+	common.StringValue app_domain = 2;
+	common.StringValue app_component = 3;
 	string msg_json = 4;
 }
 
-// --- observeMsgsFromOtherLocalTestUser ---
+// --- observeMsgsFromOtherLocalTestProcess ---
 // Its an observable call.
 // Intermediate values are common.StringValue's with json values.
-message ObserveOtherTestUserRequestBody {
-	uint32 user_num = 1;
-	string app_domain = 2;
-	string app_component = 3;
+message ObserveOtherTestProcessRequestBody {
+	common.UInt32Value user_num = 1;
+	common.StringValue app_domain = 2;
+	common.StringValue app_component = 3;
 }

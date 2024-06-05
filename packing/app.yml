@@ -1,7 +1,7 @@
 appId: io.privacysafe.os
 productName: PrivacySafe
-executableName: PrivacySafe
-copyright: Copyright © 2017 - 2023, 3NSoft, Inc.
+executableName: privacysafe
+copyright: Copyright © 2017 - 2024, 3NSoft, Inc.
 
 linux:
   category: Utility
@@ -58,6 +58,8 @@ asarUnpack:
   # bundled apps are also read by unzipper
   - bundled-apps/**/*
   - bundled-apps\**\*
+  - bundled-app-packs/**/*
+  - bundled-app-packs\**\*
 
   # packed icons not seen on mac
   - icons/**/*
@@ -73,3 +75,6 @@ asarUnpack:
 
   # packaging info file that gets after asar is created
   - packing-info.json
+
+  # bundle configuration
+  - configuration.json

@@ -2,6 +2,10 @@
 	"apps": {
 		"tests.3nweb.computer": {
 			"dir": "tests.3nweb.computer"
+		},
+		"start-by-cmd.3nweb.computer": {
+			"dir": "start-by-cmd.3nweb.computer",
+			"skipAutoLaunch": true
 		}
 	},
 	"startupApp": {

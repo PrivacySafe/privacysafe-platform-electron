@@ -18,6 +18,7 @@
 import { ExposedObj, ExposedServices } from 'core-3nweb-client-lib/build/ipc';
 import { exposeFileDialogsCAP } from "../shell/file-dialogs/file-dialogs-cap-ipc";
 import { exposeUserNotificationsCAP } from "../shell/user-notifications/user-notifications-cap-ipc";
+import { exposeGetStartedCmdCAP, exposeStartAppWithParams, exposeWatchStartCmdsCAP } from './cmd-invocation/cmds-caps-ipc';
 
 type ShellCAPs = web3n.shell.ShellCAPs;
 
@@ -31,6 +32,17 @@ export function exposeShellCAPs(
 	if (cap.userNotifications) {
 		wrap.userNotifications = exposeUserNotificationsCAP(
 			cap.userNotifications
+		);
+	}
+	if (cap.getStartedCmd) {
+		wrap.getStartedCmd = exposeGetStartedCmdCAP(cap.getStartedCmd);
+	}
+	if (cap.watchStartCmds) {
+		wrap.watchStartCmds = exposeWatchStartCmdsCAP(cap.watchStartCmds);
+	}
+	if (cap.startAppWithParams) {
+		wrap.startAppWithParams = exposeStartAppWithParams(
+			cap.startAppWithParams
 		);
 	}
 	return wrap;

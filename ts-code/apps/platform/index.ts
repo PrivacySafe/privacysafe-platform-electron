@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 3NSoft Inc.
+ Copyright (C) 2021, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -23,10 +23,9 @@ import { findPackInfo } from "../../confs";
 import { platform } from "os";
 import { PLATFORM_BUNDLE_URL } from "../../bundle-confs";
 
-type AppVersionPacks = web3n.apps.AppVersionPacks;
+type AppVersionPacks = web3n.apps.AppDistributionList;
 type PlatformDownloadProgress = web3n.apps.PlatformDownloadProgress;
 type Observer<T> = web3n.Observer<T>;
-type PlatformType = web3n.apps.PlatformType;
 type DistChannels = web3n.apps.DistChannels;
 
 
@@ -88,19 +87,13 @@ Object.freeze(PlatformDownloader.prototype);
 Object.freeze(PlatformDownloader);
 
 
-function platformUrl(platform?: PlatformType): string {
-	if (!platform) {
-		if (process.platform === 'linux') {
-			platform = 'linux';
-		} else if (process.platform === 'win32') {
-			platform = 'windows';
-		} else if (process.platform === 'darwin') {
-			platform = 'mac';
-		} else {
-			throw new Error(`At this moment no update url is set for platform ${process.platform}`);
-		}
-	}
-	return `${PLATFORM_BUNDLE_URL}/${platform}`;
+const bundleInfoFName = 'versions-in-bundle.json';
+
+interface BundleVersionsInfo {
+	bundle: string;
+	platform: string;
+	apps: { [ app: string ]: string };
+	runtimes: { [ runtime: string ]: string };
 }
 
 async function getJson<T>(url: string): Promise<T|undefined> {
@@ -111,7 +104,7 @@ async function getJson<T>(url: string): Promise<T|undefined> {
 }
 
 async function platfChannels(): Promise<DistChannels> {
-	const channels = await getJson<DistChannels>(`${platformUrl()}/channels`);
+	const channels = await getJson<DistChannels>(`${PLATFORM_BUNDLE_URL}/channels`);
 	if (channels && (typeof channels.channels === 'object')) {
 		return channels;
 	} else {
@@ -119,43 +112,50 @@ async function platfChannels(): Promise<DistChannels> {
 	}
 }
 
-function isNonEmptyStringArr(arr: string[]): boolean {
-	return (Array.isArray(arr) && (arr.length > 0)
-	&& !arr.find(s => ((typeof s !== 'string') || !s)));
-}
+// function isNonEmptyStringArr(arr: string[]): boolean {
+// 	return (Array.isArray(arr) && (arr.length > 0)
+// 	&& !arr.find(s => ((typeof s !== 'string') || !s)));
+// }
 
-async function listChannelVersions(channel: string): Promise<string[]> {
-	assert((typeof channel === 'string') && (channel.length > 0),
-		`Invalid channel: ${channel}`);
-	const versions = await getJson<string[]>(`${platformUrl()}/${channel}.list`);
-	if (versions && isNonEmptyStringArr(versions)) {
-		return versions;
-	} else {
-		throw makeDownloadExc({ noVersions: true });
-	}
-}
+// async function listChannelVersions(channel: string): Promise<string[]> {
+// 	assert((typeof channel === 'string') && (channel.length > 0),
+// 		`Invalid channel: ${channel}`);
+// 	const versions = await getJson<string[]>(`${PLATFORM_BUNDLE_URL}/${channel}.list`);
+// 	if (versions && isNonEmptyStringArr(versions)) {
+// 		return versions;
+// 	} else {
+// 		throw makeDownloadExc({ noVersions: true });
+// 	}
+// }
 
 async function channelLatestVersion(channel: string): Promise<string> {
 	assert((typeof channel === 'string') && (channel.length > 0),
 		`Invalid channel: ${channel}`);
-	const latest = await getJson<string>(`${platformUrl()}/${channel}.latest`);
-	if (latest && (typeof latest === 'string')) {
-		return latest;
+	const latest = await getJson<BundleVersionsInfo>(
+		`${PLATFORM_BUNDLE_URL}/${channel}/${bundleInfoFName}`
+	);
+	if (latest && (typeof latest.bundle === 'string')) {
+		return latest.bundle;
 	} else {
 		throw makeDownloadExc({ noVersions: true });
 	}
 }
 
 async function listVersionPacks(version: string): Promise<AppVersionPacks> {
-	assert((typeof version === 'string') && (version.length > 0),
-		`Invalid version: ${version}`);
-	const lst = await getJson<AppVersionPacks>(
-		`${platformUrl()}/${version}/list`);
-	if (lst && (typeof lst === 'object')) {
-		return lst;
-	} else {
-		throw makeDownloadExc({ noVersionVariants: true });
-	}
+
+	// XXX do we even need this in bundle?
+
+	throw new Error(`Not implement, cause this may change`);
+
+	// assert((typeof version === 'string') && (version.length > 0),
+	// 	`Invalid version: ${version}`);
+	// const lst = await getJson<AppVersionPacks>(
+	// 	`${platformUrl()}/${version}/list`);
+	// if (lst && (typeof lst === 'object')) {
+	// 	return lst;
+	// } else {
+	// 	throw makeDownloadExc({ noVersionVariants: true });
+	// }
 }
 
 export interface PlatformDownloadException extends web3n.RuntimeException {

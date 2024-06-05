@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020, 2022 3NSoft Inc.
+ Copyright (C) 2020, 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -19,6 +19,7 @@ import { Type as PBType } from 'protobufjs';
 import { makeIPCException, EnvelopeBody } from 'core-3nweb-client-lib/build/ipc';
 import { stringifyErr, errWithCause, ErrorWithCause } from '../lib-common/exceptions/error';
 import { common as pb } from '../protos/common.proto';
+import { toBuffer } from '../lib-common/buffer-utils';
 
 type RuntimeException = web3n.RuntimeException;
 
@@ -175,6 +176,29 @@ export function valOfOptJson(valObj: Value<string>|undefined): any|undefined {
 export function toOptJson(json: any): Value<string>|undefined {
 	return ((json === undefined) ?
 		undefined : toVal(JSON.stringify(json)));
+}
+
+export interface AnyValue {
+	json?: Value<string>;
+	bytes?: Value<Buffer>;
+}
+
+export function toAnyValue(value: any): AnyValue {
+	if (Buffer.isBuffer(value)) {
+		return { bytes: toVal(value) };
+	} else if (ArrayBuffer.isView(value)) {
+		return { bytes: toVal(toBuffer(value as Buffer)) };
+	} else {
+		return { json: toVal(JSON.stringify(value)) };
+	}
+}
+
+export function valOfAny(valObj: AnyValue): any {
+	if (valObj.json) {
+		return JSON.parse(valOf(valObj.json));
+	} else {
+		return valOfOpt(valObj.bytes);
+	}
 }
 
 

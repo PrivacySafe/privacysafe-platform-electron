@@ -20,6 +20,19 @@ $platform -- --data-dir="$data_dir" --allow-multi-instances --devtools --signup-
 
 test_result=$?
 
+if [ $test_result != 0 ]
+then
+	echo
+	echo Listing logs after test that returned code $test_result
+	for log in $(ls $data_dir/util/logs)
+	do
+		echo
+		echo " --- $log ---"
+		echo
+		cat $data_dir/util/logs/$log
+	done
+fi
+
 rm -rf "$data_dir"
 
 exit $test_result

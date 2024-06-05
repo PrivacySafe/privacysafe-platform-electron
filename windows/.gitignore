@@ -1,0 +1,12 @@
+/node_modules/
+/dist/
+/dist-mock/
+/build/
+/spec-server/
+/.idea/
+/.vscode/
+/3NWeb*
+/npm-debug.log
+/test-*
+/.history
+/ts-code/protos/*.proto.*

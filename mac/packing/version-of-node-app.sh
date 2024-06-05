@@ -1,0 +1,1 @@
+../../packing/version-of-node-app.sh

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2023 3NSoft Inc.
+ Copyright (C) 2020 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -18,6 +18,7 @@
 import { Caller } from 'core-3nweb-client-lib/build/ipc';
 import { makeFileDialogs } from "../shell/file-dialogs/file-dialogs-cap-ipc";
 import { makeUserNotifications } from '../shell/user-notifications/user-notifications-cap-ipc';
+import { makeGetStartedCmd, makeStartAppWithParams, makeWatchStartCmds } from './cmd-invocation/cmds-caps-ipc';
 
 type ShellCAPs = web3n.shell.ShellCAPs;
 
@@ -67,6 +68,18 @@ function makeShellFollowingListing(
 	if (shellCAPs.includes('userNotifications')) {
 		const notifPath = objPath.concat('userNotifications');
 		shell.userNotifications = makeUserNotifications(caller, notifPath);
+	}
+	if (shellCAPs.includes('getStartedCmd')) {
+		const fnPath = objPath.concat('getStartedCmd');
+		shell.getStartedCmd = makeGetStartedCmd(caller, fnPath);
+	}
+	if (shellCAPs.includes('watchStartCmds')) {
+		const fnPath = objPath.concat('watchStartCmds');
+		shell.watchStartCmds = makeWatchStartCmds(caller, fnPath);
+	}
+	if (shellCAPs.includes('startAppWithParams')) {
+		const fnPath = objPath.concat('startAppWithParams');
+		shell.startAppWithParams = makeStartAppWithParams(caller, fnPath);
 	}
 	return shell;
 

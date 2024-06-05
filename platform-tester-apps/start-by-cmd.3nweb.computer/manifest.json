@@ -1,0 +1,31 @@
+{
+	"name": "App that opens by command",
+	
+	"appDomain": "start-by-cmd.3nweb.computer",
+
+	"version": "0.1.0",
+
+	"icon": "./assets/logo.png",
+
+	"components": {
+		
+		"/index.html": {
+			"startCmds": {
+				"app-cmd-1": {
+					"otherApps": "*"
+				},
+				"app-cmd-2": {
+					"otherApps": "*"
+				}
+			},
+			"runtime": "web-gui",
+			"windowOpts": {
+				"useContentSize": true,
+				"width": 600,
+				"height": 400
+			}
+		}
+
+	}
+
+}

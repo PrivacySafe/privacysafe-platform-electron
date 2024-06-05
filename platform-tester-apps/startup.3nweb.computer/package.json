@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "rm -rf app && tsc -p src && cp -LHr public/* app/ || cp -r public/* app/"
+    "compile-ts": "rm -rf app && tsc -p src",
+    "copy-static": "cp -LHr public/* app/ || cp -r public/* app/",
+    "build": "npm run compile-ts && npm run copy-static"
   },
   "devDependencies": {
     "@types/jasmine": "^3.9.1",

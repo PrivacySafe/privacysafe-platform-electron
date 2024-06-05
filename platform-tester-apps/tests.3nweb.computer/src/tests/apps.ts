@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -27,7 +27,7 @@ describe(`apps`, () => {
 		expect(w3n.apps!.downloader).toBeDefined();
 		expect(typeof w3n.apps!.downloader!.downloadWebApp).toBe('function');
 		expect(typeof w3n.apps!.downloader!.getAppChannels).toBe('function');
-		expect(typeof w3n.apps!.downloader!.getAppVersionList).toBe('function');
+		expect(typeof w3n.apps!.downloader!.getAppVersionFilesList).toBe('function');
 		expect(typeof w3n.apps!.downloader!.getLatestAppVersion).toBe('function');
 		expect(w3n.apps!.installer).toBeDefined();
 		expect(typeof w3n.apps!.installer!.installWebApp).toBe('function');

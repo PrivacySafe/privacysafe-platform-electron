@@ -15,7 +15,7 @@ Some of the used packages may need local recompilation, like node-fuse-bindings 
 
 ### Linux
 
-The following kitchen sink is apt-ed in Ubuntu, besides node:
+The following kitchen sink is apt-ed in Ubuntu, besides node and deno:
 ```
 apt-get install -y make gcc gcc-multilib g++ g++-multilib pkg-config build-essential libfuse-dev fuse
 ```
@@ -25,6 +25,7 @@ apt-get install -y make gcc gcc-multilib g++ g++-multilib pkg-config build-essen
 Install:
 - node, minimum version 18.x. In GUI installer check option that installs chocolatery with the whole kitchen sink that also pulls in Visual Studio libraries.
 - git with included MINGW that has bash and other things for reuse of scripts on Windows.
+- deno should be placed into `bin` folder in `Git` installation. Then bash from MINGW will see it.
 - [Dokany](https://github.com/dokan-dev/dokany) to give FUSE on Windows. Ensure to check installation of files for development, else C headers won't be available.
 
 Ensure that bash is accessible in path. Adding something like `C:\Program Files\Git\bin` to `PATH` environment variable will help. Adjust path in admin console with `setx path /M ...`, else you may have repeating entries, coupled with hard 1024 char limit.
@@ -37,7 +38,7 @@ Ensure that bash is accessible in path. Adding something like `C:\Program Files\
 
 To use this repo, you need [Node.js](https://nodejs.org/), minimum version 18.x.
 
-First run
+First run, in a folder for your os, `linux`, `windows` or `mac`:
 ```
 npm ci
 ```
@@ -50,7 +51,7 @@ npm run
 ```
 will show different available tasks.
 
-When you update/change any npm dependencies, remove `node_modules` and run `npm ci` to have clean setup. Otherwise you may get non-obvious errors.
+When you update/change any npm dependencies, remove `node_modules` and run `npm ci` to have clean setup. Otherwise you may get non-obvious errors, changes may override patching done by npm's `postinstall` script(s).
 
 
 # License

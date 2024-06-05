@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 3NSoft Inc.
+ Copyright (C) 2021, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -19,18 +19,8 @@ import { doBodylessRequest } from "../../electron/request-utils";
 import { makeRuntimeException } from "../../lib-common/exceptions/runtime";
 import { assert } from "../../lib-common/assert";
 
-type AppVersionPacks = web3n.apps.AppVersionPacks;
-type PlatformType = web3n.apps.PlatformType;
+type AppDistributionList = web3n.apps.AppDistributionList;
 type DistChannels = web3n.apps.DistChannels;
-
-export function appPlatformUrl(
-	appBaseUrl: string, platform: PlatformType
-): string {
-	if (!appBaseUrl.endsWith('/')) {
-		appBaseUrl += '/';
-	}
-	return `${appBaseUrl}${platform}`;
-}
 
 export async function getJson<T>(url: string): Promise<T|undefined> {
 	const rep = await doBodylessRequest<T>({
@@ -83,11 +73,11 @@ export async function channelLatestVersion(
 
 export async function listAppVersionPacks(
 	appPlatfUrl: string, appDomain: string, version: string
-): Promise<{ listInAppVersion: AppVersionPacks; appVersionUrl: string; }> {
+): Promise<{ listInAppVersion: AppDistributionList; appVersionUrl: string; }> {
 	assert((typeof version === 'string') && (version.length > 0),
 		`Invalid version: ${version}`);
 	const appVersionUrl = `${appPlatfUrl}/${version}`;
-	const lst = await getJson<AppVersionPacks>(`${appVersionUrl}/list`);
+	const lst = await getJson<AppDistributionList>(`${appVersionUrl}/list`);
 	if (lst && (typeof lst === 'object')) {
 		return { appVersionUrl, listInAppVersion: lst };
 	} else {

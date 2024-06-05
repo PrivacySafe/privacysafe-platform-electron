@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -18,28 +18,32 @@
 import { DeviceFS, reverseDomain } from "core-3nweb-client-lib";
 import { join } from "path";
 import { appAndManifestFrom, makeAppInitExc, SystemPlaces } from "../apps/installer/system-places";
-import { BUNDLED_APPS_FOLDER, STARTUP_APP_DOMAIN } from "../bundle-confs";
-import { AppCAPsAndSetup, CoreDriver } from "../core/core-driver";
+import { BUNDLED_APPS_FOLDER, STARTUP_APP_DOMAIN, isBundledApp } from "../bundle-confs";
+import { CoreDriver } from "../core/core-driver";
 import { ElectronIPCConnectors, SocketIPCConnectors } from "../core/w3n-connectors";
 import { toCanonicalAddress } from "../lib-common/canonical-address";
 import { errWithCause } from "../lib-common/exceptions/error";
-import { entrypointOfService, MAIN_GUI_ENTRYPOINT, userStartedComponentFrom } from "../lib-common/manifest-utils";
+import { getComponentForCommand, getComponentForService, MAIN_GUI_ENTRYPOINT, userStartedComponentFrom } from "../lib-common/manifest-utils";
 import { ensureCallerAllowed, makeRPCException } from "../rpc";
 import { DevAppParams, DevAppParamsGetter, WrapAppCAPsAndSetup } from "../test-stand";
 import { DenoComponent } from "./deno-component";
 import { DevAppInstanceFromUrl, GUIComponent, TitleGenerator } from "./gui-component";
-import { ScreenGUIPlacements } from "./screen-gui-placements";
+import { ScreenGUIPlacements, startupOpts } from "../window-utils/screen-gui-placements";
+import { logWarning } from "../confs";
+import { makeRuntimeException } from "../lib-common/exceptions/runtime";
 
 type RPCConnection = web3n.rpc.client.RPCConnection;
-type GUIServiceComponent = web3n.caps.GUIServiceComponent;
-type ServiceComponent = web3n.caps.ServiceComponent;
-type UserStartedComponent = web3n.caps.UserStartedComponent;
-type CommonComponentSetting = web3n.caps.CommonComponentSetting;
+type GUISrvDef = web3n.caps.GUIServiceComponent;
+type SrvDef = web3n.caps.ServiceComponent;
+type GUIComponentDef = web3n.caps.GUIComponent;
+type CommonDef = web3n.caps.CommonComponentSetting;
 type ReadonlyFS = web3n.files.ReadonlyFS;
 type FileException = web3n.files.FileException;
+type AppManifest = web3n.caps.AppManifest;
+type CmdParams = web3n.shell.commands.CmdParams;
 
 export interface Component {
-	readonly runtime: CommonComponentSetting['runtime'];
+	readonly runtime: CommonDef['runtime'];
 	readonly domain: string;
 	readonly entrypoint: string;
 	start(): Promise<void>;
@@ -68,7 +72,10 @@ class AppComponents {
 
 	private readonly components = new Map<string, ComponentInstances>();
 
-	constructor() {
+	constructor(
+		public readonly manifest: AppManifest,
+		public readonly appRoot: ReadonlyFS
+	) {
 		Object.freeze(this);
 	}
 
@@ -108,9 +115,17 @@ class AppComponents {
 		return (this.components.size === 0);
 	}
 
-	findUserStarted(entrypoint: string): GUIComponent|undefined {
+	findUserStartedSingleton(entrypoint: string): GUIComponent|undefined {
 		const instances = this.getInstances(entrypoint);
-		if (!instances) { return; }
+		if (instances) {
+			if (!this.manifest.components) {
+				return instances.getOne() as GUIComponent;
+			} else if (this.manifest.components[entrypoint].multiInstances) {
+				return;
+			}
+		} else {
+			return;
+		}
 		const component = instances.getOne();
 		if (component.services || (component.runtime !== 'web-gui')) {
 			return;
@@ -155,13 +170,27 @@ class AppComponents {
 		return srvComponents;
 	}
 
-	serviceInstances(service: string): Service[]|undefined {
+	serviceInstancesForNewCall(service: string): Service|undefined {
 		for (const instances of this.components.values()) {
 			const services = instances.serviceInstances(service);
-			if (services) {
-				return services;
+			if (!services) { return; }
+			for (const srv of services) {
+				if (srv.canHandleCall()) {
+					return srv;
+				}
 			}
 		}
+	}
+
+	instanceToHandleCmd(cmd: string): GUIComponent|undefined {
+		for (const instances of this.components.values()) {
+			const component = instances.instanceForCmd(cmd);
+			if (component
+			&& !this.manifest.components![component.entrypoint].multiInstances) {
+				return component;
+			}
+		}
+		return; // explicit undefined
 	}
 
 }
@@ -210,6 +239,15 @@ class ComponentInstances {
 		}
 	}
 
+	instanceForCmd(cmd: string): GUIComponent|undefined {
+		for (const instance of this.instances) {
+			if ((instance as GUIComponent).cmdsHandler?.canHandleCmd(cmd)) {
+				return instance as GUIComponent;
+			}
+		}
+		return; // explicit undefined
+	}
+
 }
 Object.freeze(ComponentInstances.prototype);
 Object.freeze(ComponentInstances);
@@ -218,31 +256,52 @@ Object.freeze(ComponentInstances);
 export class Components {
 
 	private readonly apps = new Map<string, AppComponents>();
-	private readonly guiPlacement: ScreenGUIPlacements;
 
 	constructor(
 		private readonly guiConnectors: ElectronIPCConnectors,
 		private readonly sockConnectors: SocketIPCConnectors,
 		private readonly titleMaker: TitleGenerator,
 		private readonly makeAppCAPs: CoreDriver['makeCAPsForAppComponent'],
-		private readonly getAppFiles: SystemPlaces['findInstalledApp']
+		private readonly findInstalledApp: SystemPlaces['findInstalledApp'],
+		private readonly guiPlacement: ScreenGUIPlacements
 	) {
 		Object.seal(this);
 	}
 
-	findUserStarted(
+	findUserStartedSingleton(
 		appDomain: string, entrypoint = MAIN_GUI_ENTRYPOINT
 	): GUIComponent|undefined {
 		const components = this.apps.get(appDomain);
 		return (components ?
-			components.findUserStarted(entrypoint) : undefined);
+			components.findUserStartedSingleton(entrypoint) : undefined
+		);
 	}
 
-	private register(component: Component): void {
+	private async getAppFiles(
+		appDomain: string
+	): ReturnType<SystemPlaces['findInstalledApp']> {
+		const appComponents = this.apps.get(appDomain);
+		if (appComponents) {
+			return {
+				appRoot: appComponents.appRoot,
+				manifest: appComponents.manifest
+			};
+		} else {
+			return await this.findInstalledApp(appDomain);
+		}
+	}
+
+	private register(
+		component: Component, manifest: AppManifest, appRoot: ReadonlyFS
+	): void {
 		let components = this.apps.get(component.domain);
 		if (!components) {
-			components = new AppComponents();
+			components = new AppComponents(manifest, appRoot);
 			this.apps.set(component.domain, components);
+		} else if (components.manifest.version !== manifest.version) {
+			logWarning(
+				`Started app ${component.domain} component ${component.entrypoint} with app version ${manifest.version} while version ${components.manifest.version} is present in the memory.`
+			);
 		}
 		components.add(component);
 		component.setCloseListener(() => this.unregister(component));
@@ -263,24 +322,24 @@ export class Components {
 		startCore: CoreDriver['start']
 	): Promise<{ coreInit: Promise<void>; }> {
 		try {
-			const startupAppFolder = join(
-				BUNDLED_APPS_FOLDER, reverseDomain(STARTUP_APP_DOMAIN)
-			);
 			const {
 				manifest, appRoot
-			} = await appAndManifestOnDev(startupAppFolder);
+			} = await appAndManifestOnDev(STARTUP_APP_DOMAIN);
 			const entrypoint = MAIN_GUI_ENTRYPOINT;
 			const component = userStartedComponentFrom(manifest, entrypoint);
 			const { capsForStartup, coreInit } = startCore();
 			const startupApp = await GUIComponent.makeStartup(
 				STARTUP_APP_DOMAIN, appRoot, entrypoint,
-				component.windowOpts, devTools
+				startupOpts(component.windowOpts), devTools
 			);
 			this.guiConnectors.connectStartupW3N(
 				filterOutUserIds(capsForStartup, usersToFilterOut),
 				startupApp.window.webContents
 			);
-			this.register(startupApp);
+			this.register(startupApp, manifest, appRoot);
+			if (component.icon) {
+				await startupApp.setIcon(appRoot, component.icon);
+			}
 			await startupApp.start();
 			return { coreInit };
 		} catch (err) {
@@ -296,22 +355,25 @@ export class Components {
 			const entrypoint = MAIN_GUI_ENTRYPOINT;
 			const component = userStartedComponentFrom(manifest, entrypoint);
 			const { capsForStartup, coreInit } = startCore();
+			const appRoot = await DeviceFS.makeReadonly(dir);
 			let startupApp: GUIComponent;
 			if (url) {
 				startupApp = await DevAppInstanceFromUrl.makeStartupFor(
 					STARTUP_APP_DOMAIN, url, entrypoint, component.windowOpts
 				);
 			} else {
-				const appRoot = await DeviceFS.makeReadonly(dir);
 				startupApp = await GUIComponent.makeStartup(
 					STARTUP_APP_DOMAIN, appRoot, entrypoint,
-					component.windowOpts, true
+					startupOpts(component.windowOpts), true
 				);
 			}
 			this.guiConnectors.connectStartupW3N(
 				capsForStartup, startupApp.window.webContents
 			);
-			this.register(startupApp);
+			this.register(startupApp, manifest, appRoot);
+			if (component.icon) {
+				await startupApp.setIcon(appRoot, component.icon);
+			}
 			await startupApp.start();
 			return { coreInit };
 		} catch (err) {
@@ -327,48 +389,83 @@ export class Components {
 		}
 	}
 
-	async instantiateUserStartedGUI(
-		appDomain: string, entrypoint: string|undefined, devTools: boolean
+	async instantiateGUIComponent(
+		appDomain: string,
+		entrypoint: string|undefined, startCmd: CmdParams|undefined,
+		devTools: boolean
 	): Promise<GUIComponent> {
-		const { appRoot, manifest } = await this.getAppFiles(appDomain);
-		if (!entrypoint) {
-			entrypoint = MAIN_GUI_ENTRYPOINT;
+		const { appRoot, manifest } = await (isBundledApp(appDomain) ?
+			appAndManifestOnDev(appDomain) :
+			this.getAppFiles(appDomain)
+		);
+		let componentDef: GUIComponentDef;
+		if (typeof entrypoint === 'string') {
+			componentDef = userStartedComponentFrom(manifest, entrypoint);
+		} else {
+			if (!startCmd) {
+				throw new Error(`Neither entrypoint, nor start command given`);
+			}
+			({ entrypoint, component: componentDef } = getComponentForCommand(
+				manifest, startCmd.cmd
+			));
 		}
-		const component = userStartedComponentFrom(manifest, entrypoint);
 		const gui = await this.makeGUIComponent(
-			appRoot, appDomain, entrypoint, component, devTools, undefined
+			appRoot, manifest, appDomain, entrypoint, componentDef, startCmd,
+			devTools, undefined
 		);
 		return gui;
 	}
 
 	private async makeGUIComponent(
-		appRoot: ReadonlyFS, appDomain: string, entrypoint: string,
-		component: UserStartedComponent | GUIServiceComponent, devTools: boolean,
-		guiParent: GUIComponent|undefined
+		appRoot: ReadonlyFS, manifest: AppManifest, appDomain: string,
+		entrypoint: string, componentDef: GUIComponentDef | GUISrvDef,
+		startCmd: CmdParams|undefined,
+		devTools: boolean, guiParent: GUIComponent|undefined
 	): Promise<GUIComponent> {
-		const caps = this.makeAppCAPs(appDomain, entrypoint, component);
+		const caps = this.makeAppCAPs(
+			appDomain, entrypoint, componentDef, startCmd
+		);
+		const {
+			windowOpts, watchWindowGeometry
+		} = await this.guiPlacement.windowLocationFor(
+			appDomain, entrypoint, componentDef, guiParent?.window
+		);
 		const gui = await GUIComponent.make(
-			appDomain, appRoot, entrypoint, caps, component.windowOpts, guiParent,
-			devTools, this.titleMaker
+			appDomain, appRoot, entrypoint, caps,
+			windowOpts, guiParent, devTools, this.titleMaker
 		);
 		this.guiConnectors.connectW3N(gui.w3n, gui.window.webContents);
-		this.register(gui);
+		this.register(gui, manifest, appRoot);
+		if (watchWindowGeometry) {
+			watchWindowGeometry(gui.window);
+		}
+		if (componentDef.icon) {
+			await gui.setIcon(appRoot, componentDef.icon);
+		}
 		await gui.start();
 		gui.window.focus();
 		return gui;
 	}
 
-	async devInstantiateUserStartedGUI(
+	async devInstantiateGUIComponent(
 		dev: NonNullable<ReturnType<DevAppParamsGetter>>,
-		entrypoint: string|undefined
+		entrypoint: string|undefined, startCmd: CmdParams|undefined
 	): Promise<GUIComponent> {
-		if (!entrypoint) {
-			entrypoint = MAIN_GUI_ENTRYPOINT;
+		let componentDef: GUIComponentDef;
+		if (typeof entrypoint === 'string') {
+			componentDef = userStartedComponentFrom(
+				dev.params.manifest, entrypoint
+			);
+		} else {
+			if (!startCmd) {
+				throw new Error(`Neither entrypoint, nor start command given`);
+			}
+			({ entrypoint, component: componentDef } = getComponentForCommand(
+				dev.params.manifest, startCmd.cmd
+			));
 		}
-		const component = userStartedComponentFrom(
-			dev.params.manifest, entrypoint);
 		const gui = await this.devMakeGUIComponent(
-			dev, entrypoint, component, undefined
+			dev, entrypoint, componentDef, startCmd, undefined
 		);
 		return gui;
 	}
@@ -376,39 +473,51 @@ export class Components {
 	private async devMakeGUIComponent(
 		dev: NonNullable<ReturnType<DevAppParamsGetter>>,
 		entrypoint: string,
-		component: UserStartedComponent|GUIServiceComponent,
+		componentDef: GUIComponentDef|GUISrvDef,
+		startCmd: CmdParams|undefined,
 		guiParent: GUIComponent|undefined
 	): Promise<GUIComponent> {
-		const { manifest: { appDomain }, dir, url } = dev.params;
-		const caps = dev.wrapCAPs(
-			this.makeAppCAPs(appDomain, entrypoint, component)
+		const { manifest, dir, url } = dev.params;
+		const caps = dev.wrapCAPs(this.makeAppCAPs(
+			manifest.appDomain, entrypoint, componentDef, startCmd
+		));
+		const {
+			windowOpts, watchWindowGeometry
+		} = await this.guiPlacement.windowLocationFor(
+			manifest.appDomain, entrypoint, componentDef, guiParent?.window
 		);
+		const appRoot = await DeviceFS.makeReadonly(dir);
 		let gui: GUIComponent;
 		if (url) {
 			gui = await DevAppInstanceFromUrl.makeForUrl(
-				appDomain, url, entrypoint, caps, component.windowOpts, guiParent,
-				this.titleMaker
+				manifest.appDomain, url, entrypoint, caps,
+				windowOpts, guiParent, this.titleMaker
 			);
 		} else {
-			const appRoot = await DeviceFS.makeReadonly(dir);
 			gui = await GUIComponent.make(
-				appDomain, appRoot, entrypoint, caps, component.windowOpts,
-				guiParent, true, this.titleMaker
+				manifest.appDomain, appRoot, entrypoint, caps,
+				windowOpts, guiParent, true, this.titleMaker
 			);
 		}
 		this.guiConnectors.connectW3N(gui.w3n, gui.window.webContents);
-		this.register(gui);
+		this.register(gui, manifest, appRoot);
+		if (watchWindowGeometry) {
+			watchWindowGeometry(gui.window);
+		}
+		if (componentDef.icon) {
+			await gui.setIcon(appRoot, componentDef.icon);
+		}
 		await gui.start();
 		gui.window.focus();
 		return gui;
 	}
 
 	private async makeDenoComponent(
-		appRoot: ReadonlyFS, appDomain: string, entrypoint: string,
-		service: string, component: ServiceComponent, devTools: boolean,
+		appRoot: ReadonlyFS, manifest: AppManifest, appDomain: string,
+		entrypoint: string, service: string, component: SrvDef, devTools: boolean,
 		wrapDevCAPs?: WrapAppCAPsAndSetup
 	): Promise<DenoComponent> {
-		let caps = this.makeAppCAPs(appDomain, entrypoint, component);
+		let caps = this.makeAppCAPs(appDomain, entrypoint, component, undefined);
 		if (wrapDevCAPs) {
 			caps = wrapDevCAPs(caps);
 		}
@@ -431,7 +540,7 @@ export class Components {
 			deno.stdOut.pipe(process.stdout, { end: false });
 			deno.stdErr.pipe(process.stderr, { end: false });
 		}
-		this.register(deno);
+		this.register(deno, manifest, appRoot);
 		return deno;
 	}
 
@@ -446,29 +555,34 @@ export class Components {
 		}
 	}
 
-	findService(appDomain: string, service: string): Service[]|undefined {
+	findServiceInstanceForNewCall(
+		appDomain: string, service: string
+	): Service|undefined {
 		const components = this.apps.get(appDomain);
-		return (components ? components.serviceInstances(service) : undefined);
+		return components?.serviceInstancesForNewCall(service);
 	}
 
 	async instantiateService(
 		caller: Component, appDomain: string, service: string, devTools: boolean
 	): Promise<Service> {
-		const { appRoot, manifest } = await this.getAppFiles(appDomain);
-		const entrypoint = entrypointOfService(manifest, service);
-		const component = manifest.components![entrypoint] as
-			GUIServiceComponent|ServiceComponent;
+		const { appRoot, manifest } = await (isBundledApp(appDomain) ?
+			appAndManifestOnDev(appDomain) :
+			this.getAppFiles(appDomain)
+		);
+		const {
+			entrypoint, component
+		} = getComponentForService(manifest, service);
 		ensureCallerAllowed(
-			appDomain, service,
-			component.startedBy, caller.domain, caller.entrypoint
+			appDomain, service, component.allowedCallers,
+			caller.domain, caller.entrypoint
 		);
 		if (component.runtime === 'web-gui') {
 			let parent: GUIComponent|undefined = undefined;
 			if (caller.runtime === 'web-gui') {
-				if ((component as GUIServiceComponent).childOfGUICaller) {
+				if ((component as GUISrvDef).childOfGUICaller) {
 					parent = caller as GUIComponent;
 				}
-			} else if (!(component as GUIServiceComponent).allowNonGUICaller) {
+			} else if (!(component as GUISrvDef).allowNonGUICaller) {
 				throw makeRPCException(appDomain, service, {
 					callerNotAllowed: true
 				}, {
@@ -478,13 +592,14 @@ export class Components {
 				});
 			}
 			const gui = await this.makeGUIComponent(
-				appRoot, appDomain, entrypoint, component as GUIServiceComponent,
-				devTools, parent
+				appRoot, manifest, appDomain, entrypoint,
+				component as GUISrvDef, undefined, devTools, parent
 			);
 			return gui.services![service];
 		} else if (component.runtime === 'deno') {
 			const deno = await this.makeDenoComponent(
-				appRoot, appDomain, entrypoint, service, component, devTools
+				appRoot, manifest, appDomain, entrypoint, service, component,
+				devTools
 			);
 			return deno.services![service];
 		} else if (component.runtime === 'wasm,mp1') {
@@ -503,21 +618,21 @@ export class Components {
 		dev: NonNullable<ReturnType<DevAppParamsGetter>>,
 		service: string
 	): Promise<Service> {
-		const entrypoint = entrypointOfService(dev.params.manifest, service);
-		const component = dev.params.manifest.components![entrypoint] as
-			GUIServiceComponent|ServiceComponent;
+		const {
+			entrypoint, component
+		} = getComponentForService(dev.params.manifest, service);
 		const appDomain = dev.params.manifest.appDomain;
 		ensureCallerAllowed(
-			appDomain, service,
-			component.startedBy, caller.domain, caller.entrypoint
+			appDomain, service, component.allowedCallers,
+			caller.domain, caller.entrypoint
 		);
 		if (component.runtime === 'web-gui') {
 			let parent: GUIComponent|undefined = undefined;
 			if (caller.runtime === 'web-gui') {
-				if ((component as GUIServiceComponent).childOfGUICaller) {
+				if ((component as GUISrvDef).childOfGUICaller) {
 					parent = caller as GUIComponent;
 				}
-			} else if (!(component as GUIServiceComponent).allowNonGUICaller) {
+			} else if (!(component as GUISrvDef).allowNonGUICaller) {
 				throw makeRPCException(appDomain, service, {
 					callerNotAllowed: true
 				}, {
@@ -527,14 +642,14 @@ export class Components {
 				});
 			}
 			const gui = await this.devMakeGUIComponent(
-				dev, entrypoint, component as GUIServiceComponent, parent
+				dev, entrypoint, component as GUISrvDef, undefined, parent
 			);
 			return gui.services![service];
 		} else if (component.runtime === 'deno') {
 			const appRoot = await DeviceFS.makeReadonly(dev.params.dir);
 			const deno = await this.makeDenoComponent(
-				appRoot, appDomain, entrypoint, service, component, true,
-				dev.wrapCAPs
+				appRoot, dev.params.manifest, appDomain, entrypoint, service,
+				component, true, dev.wrapCAPs
 			);
 			return deno.services![service];
 		} else if (component.runtime === 'wasm,mp1') {
@@ -548,14 +663,27 @@ export class Components {
 		}
 	}
 
+
+	findComponentToHandleCmd(
+		appDomain: string, cmd: string
+	): GUIComponent|undefined {
+		const components = this.apps.get(appDomain);
+		if (!components) { return; }
+		return components.instanceToHandleCmd(cmd);
+	}
+	
+
 }
 Object.freeze(Components.prototype);
 Object.freeze(Components);
 
 
 async function appAndManifestOnDev(
-	path: string
+	appDomain: string
 ): ReturnType<typeof appAndManifestFrom> {
+	const path = join(
+		BUNDLED_APPS_FOLDER, reverseDomain(appDomain)
+	);
 	const appFS = await DeviceFS.makeReadonly(path);
 	return appAndManifestFrom(appFS);
 }
@@ -589,25 +717,19 @@ function filterOutUserIds(
 	};
 }
 
-function guiParentForService(
-	appDomain: string, service: string, component: GUIServiceComponent,
-	caller: GUIComponent
-): GUIComponent|undefined {
-	let parent: GUIComponent|undefined = undefined;
-	if (caller.runtime === 'web-gui') {
-		if (component.childOfGUICaller) {
-			return caller;
-		}
-	} else if (!component.allowNonGUICaller) {
-		// XXX 
-		throw makeRPCException(appDomain, service, {
-			callerNotAllowed: true
-		}, {
-			callerApp: caller.domain,
-			callerComponent: caller.entrypoint,
-			message: ``
-		});
+type ShellCmdException = web3n.shell.commands.ShellCmdException;
+
+export function makeShellCmdException(
+	appDomain: string, command: string,
+	flags: Partial<ShellCmdException>, params?: Partial<ShellCmdException>
+): ShellCmdException {
+	if (params) {
+		params.appDomain = appDomain;
+		params.command = command;
+	} else {
+		params = { appDomain, command };
 	}
+	return makeRuntimeException('shell-command', params, flags);
 }
 
 

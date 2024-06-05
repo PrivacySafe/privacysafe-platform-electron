@@ -5,6 +5,8 @@
 
 	"version": "0.1.0",
 
+	"icon": "./assets/logo.png",
+
 	"components": {
 		
 		"/index.html": {
@@ -39,14 +41,23 @@
 				"logout": "all",
 				"log": "all",
 				"shell": {
-					"userNotifications": true
+					"userNotifications": true,
+					"startAppCmds": {
+						"thisApp": [ "command-1", "command-2" ],
+						"otherApps": {
+							"start-by-cmd.3nweb.computer": [ "app-cmd-1", "app-cmd-2" ]
+						}
+					}
 				},
 				"connectivity": "check"
+			},
+			"windowOpts": {
+				"rememberWindowLocation": true
 			}
 		},
 
 		"/one-shot-dialog.html": {
-			"startedBy": {
+			"allowedCallers": {
 				"thisAppComponents": "*"
 			},
 			"runtime": "web-gui",
@@ -68,7 +79,7 @@
 		},
 
 		"/long-dialog.html": {
-			"startedBy": {
+			"allowedCallers": {
 				"thisAppComponents": "*"
 			},
 			"runtime": "web-gui",
@@ -88,7 +99,7 @@
 		},
 
 		"/service-in-deno.js": {
-			"startedBy": {
+			"allowedCallers": {
 				"thisAppComponents": "*"
 			},
 			"runtime": "deno",
@@ -103,7 +114,7 @@
 		},
 
 		"/long-service-in-deno.js": {
-			"startedBy": {
+			"allowedCallers": {
 				"thisAppComponents": "*"
 			},
 			"runtime": "deno",
@@ -113,6 +124,24 @@
 				"storage": {
 					"appFS": "default"
 				}
+			}
+		},
+
+		"/started-by-command.html": {
+			"startCmds": {
+				"command-1": {
+					"otherApps": "*",
+					"thisAppComponents": "*"
+				},
+				"command-2": {
+					"thisAppComponents": "*"
+				}
+			},
+			"runtime": "web-gui",
+			"windowOpts": {
+				"useContentSize": true,
+				"width": 400,
+				"height": 300
 			}
 		}
 

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 3NSoft Inc.
+ Copyright (C) 2021, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -22,12 +22,12 @@ import { createHash } from "crypto";
 import { from, Observable, Subject } from "rxjs";
 import { mergeMap } from "rxjs/operators";
 import { MANIFEST_FILE } from "../installer/unpack-zipped-app";
-import { appChannels, appPlatformUrl, channelLatestVersion, listAppVersionPacks, getJson, makeAppDownloadExc } from "./download-resources";
+import { appChannels, channelLatestVersion, listAppVersionPacks, getJson, makeAppDownloadExc } from "./download-resources";
 import { toRxObserver } from "../../lib-common/utils-for-observables";
 
 type DownloadProgress = web3n.apps.DownloadProgress;
 type Observer<T> = web3n.Observer<T>;
-type AppVersionPacks = web3n.apps.AppVersionPacks;
+type AppVersionPacks = web3n.apps.AppDistributionList;
 type DistChannels = web3n.apps.DistChannels;
 type AppManifest = web3n.caps.AppManifest;
 
@@ -41,10 +41,12 @@ export class AppDownloader {
 	}
 
 	private async getAppUrl(id: string): Promise<string> {
-		const appBaseUrl = await getAppLocation(id).catch(exc => {
+		try {
+			const appBaseUrl = await getAppLocation(id);
+			return appBaseUrl;
+		} catch (exc) {
 			throw makeAppDownloadExc(id, { dnsErr: true }, exc);
-		});
-		return appPlatformUrl(appBaseUrl, 'web');
+		}
 	}
 
 	async getAppChannels(id: string): Promise<DistChannels> {
@@ -57,12 +59,13 @@ export class AppDownloader {
 		return channelLatestVersion(appUrl, id, channel);
 	}
 
-	async getAppVersionList(
+	async getAppVersionFilesList(
 		id: string, version: string
 	): Promise<AppVersionPacks> {
 		const appUrl = await this.getAppUrl(id);
 		const { listInAppVersion } = await listAppVersionPacks(
-			appUrl, id, version);
+			appUrl, id, version
+		);
 		return listInAppVersion;
 	}
 
@@ -141,7 +144,7 @@ Object.freeze(AppDownloader);
 
 function getUnpackedFolder(lst: AppVersionPacks): string|undefined {
 	for (const [fName, info] of Object.entries(lst.files)) {
-		if ((info.arch === 'web') && (info.variant === 'unpacked')) {
+		if ((info.content === 'bin/unpacked')) {
 			return fName;
 		}
 	}

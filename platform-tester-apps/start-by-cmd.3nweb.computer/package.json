@@ -1,0 +1,19 @@
+{
+  "name": "start-by-cmd.3nweb.computer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "compile-ts": "rm -rf app && tsc -p src",
+    "copy-static": "cp -LHr public/* app/ || cp -r public/* app/",
+    "build": "npm run compile-ts && npm run copy-static"
+  },
+  "devDependencies": {
+    "typescript": "~4.1.5"
+  },
+  "author": {
+    "name": "3NSoft Inc.",
+    "url": "https://3nsoft.com",
+    "email": "hq@3nsoft.com"
+  },
+  "license": "GPL-3.0-or-later"
+}

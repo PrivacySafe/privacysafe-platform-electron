@@ -17,6 +17,7 @@
 
 import { Component, Service } from '../components';
 import { makeRuntimeException } from '../lib-common/exceptions/runtime';
+import { isCallerAllowed } from '../lib-common/manifest-utils';
 import { defer, Deferred } from '../lib-common/processes';
 
 type PassedDatum = web3n.rpc.PassedDatum;
@@ -26,7 +27,7 @@ type IncomingConnection = web3n.rpc.service.IncomingConnection;
 type IncomingMsg = web3n.rpc.service.IncomingMsg;
 type OutgoingMsg = web3n.rpc.service.OutgoingMsg;
 type Observer<T> = web3n.Observer<T>;
-type AllowedServiceCallers = web3n.caps.AllowedServiceCallers;
+type AllowedCallers = web3n.caps.AllowedCallers;
 type RPCException = web3n.rpc.RPCException;
 
 export function makeRPCException(
@@ -251,7 +252,7 @@ export class ServiceConnector implements Service {
 	constructor(
 		public readonly appDomain: string,
 		public readonly srvName: string,
-		private readonly allowedCallers: AllowedServiceCallers,
+		private readonly allowedCallers: AllowedCallers,
 		private readonly forOneConnectionOnly: boolean,
 	) {
 		Object.seal(this);
@@ -333,31 +334,16 @@ Object.freeze(ServiceConnector);
 
 
 export function ensureCallerAllowed(
-	appDomain: string, service: string, conf: AllowedServiceCallers,
+	appDomain: string, service: string, conf: AllowedCallers,
 	callerApp: string, callerComponent: string
 ): void {
-	if (conf && (typeof conf === 'object')) {
-		if (appDomain === callerApp) {
-			if (Array.isArray(conf.thisAppComponents)) {
-				if (conf.thisAppComponents.includes(callerComponent)) {
-					return;
-				}
-			} else if (conf.thisAppComponents === '*') {
-				return;
-			}
-		} else {
-			if (Array.isArray(conf.otherApps)) {
-				if (conf.otherApps.includes(callerApp)) {
-					return;
-				}
-			} else if (conf.otherApps === '*') {
-				return;
-			}
-		}
+	if (!isCallerAllowed(appDomain, conf, callerApp, callerComponent)) {
+		throw makeRPCException(
+			appDomain, service,
+			{ callerNotAllowed: true },
+			{ callerApp, callerComponent }
+		);
 	}
-	throw makeRPCException(appDomain, service,
-		{ callerNotAllowed: true },
-		{ callerApp, callerComponent });
 }
 
 function noop() {}

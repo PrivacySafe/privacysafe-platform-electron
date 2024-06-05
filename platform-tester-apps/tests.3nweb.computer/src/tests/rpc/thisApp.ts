@@ -104,8 +104,10 @@ describe(`RPCConnection to GUI service single connection`, () => {
 	}, timeout);
 
 	afterEach(async () => {
-		await connection.close();
-		connection = (undefined as any);
+		if (connection) {
+			await connection.close();
+			connection = (undefined as any);
+		}
 	});
 
 	it(`calls service's method without arguments`, async () => {
@@ -136,15 +138,21 @@ describe(`RPCConnection to GUI service for many connections`, () => {
 	}, timeout);
 
 	afterEach(async () => {
-		await connection2.close();
-		connection2 = (undefined as any);
-		await connection3.close();
-		connection3 = (undefined as any);
+		if (connection2) {
+			await connection2.close();
+			connection2 = (undefined as any);
+		}
+		if (connection3) {
+			await connection3.close();
+			connection3 = (undefined as any);
+		}
 	});
 
 	afterAll(async () => {
-		await connection1.close();
-		connection1 = (undefined as any);
+		if (connection1) {
+			await connection1.close();
+			connection1 = (undefined as any);
+		}
 	});
 
 	it(`serves concurrently`, async () => {
@@ -228,7 +236,7 @@ describe(`RPCConnection to non-GUI service for many connections`, () => {
 async function testGetUserIdServiceAtSecondUser(
 	service: string, expectedId: string
 ): Promise<void> {
-	const r = await callSrvAtSecondUser(service);
+	const r = await callSrvAtSecondUser(service, timeout-100);
 	if (r.err) {
 		fail(r.err);
 	} else {

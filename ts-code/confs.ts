@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2015 - 2018, 2020 - 2022 3NSoft Inc.
+ Copyright (C) 2015 - 2018, 2020 - 2022, 2024 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -27,8 +27,6 @@ export const SIGNUP_URL = (CUSTOM_SIGNUP_URL ?
 	CUSTOM_SIGNUP_URL : DEFAULT_SIGNUP_URL
 );
 
-type PackVariant = web3n.apps.PackVariant;
-
 export const UTIL_DIR = 'util';
 
 export const appDir = (() => {
@@ -53,9 +51,14 @@ export const {
 	appLog, logError, logWarning, recordUnhandledRejectionsInProcess
 } = makeLogger(utilDir);
 
+interface PackInfo {
+	arch: 'x64' | 'arm64';
+	variant: 'AppImage' | 'deb' | 'nsis' | 'exe' | 'dmg';
+}
+
 const PACKING_INFO_FNAME = 'packing-info.json';
 
-export function findPackInfo(): PackVariant|undefined {
+export function findPackInfo(): PackInfo|undefined {
 	if (!isInAsar(__dirname)) { return; }
 	const infoFile = toAsarUnpacked(join(__dirname, PACKING_INFO_FNAME));
 	try {

@@ -1,0 +1,60 @@
+{
+ "name": "3nweb",
+ "version": "0.18.3",
+ "private": true,
+ "description": "3NWeb platform client for desktop environments",
+ "main": "build/all/main.js",
+ "scripts": {
+  "postinstall": "bash packing/patch-type-files.sh && bash -c \"rm -rf node_modules/browserify/node_modules/buffer\" && bash packing/npm-ci-test-apps.sh",
+  "protos-to-es6": "bash packing/protos-to-es6-module.sh",
+  "protos-to-node": "bash packing/protos-to-node-module.sh",
+  "compile-platform-ts": "bash packing/compile.sh platform-ts",
+  "compile-deno-runtime": "bash packing/compile.sh deno-runtime-preload",
+  "compile-platform": "npm run protos-to-node && npm run compile-platform-ts && npm run compile-deno-runtime",
+  "compile-tests": "bash packing/compile.sh tests",
+  "compile-all": "npm run compile-platform && npm run compile-tests",
+  "tests": "bash build/test-apps/run-tests-on.sh",
+  "start-app": "electron build/all/main.js --data-dir=3NWeb-data --devtools --console-log-http --allow-multi-instances",
+  "build": "bash packing/build.sh"
+ },
+ "repository": {
+  "type": "git",
+  "url": "https://github.com/PrivacySafe/privacysafe-platform-electron"
+ },
+ "keywords": [
+  "3NWeb",
+  "desktop",
+  "client",
+  "ASMail",
+  "MailerId",
+  "3NStorage"
+ ],
+ "author": {
+  "name": "3NSoft Inc.",
+  "url": "https://3nsoft.com",
+  "email": "hq@3nsoft.com"
+ },
+ "license": "GPL-3.0-or-later",
+ "dependencies": {
+  "adm-zip": "^0.5.5",
+  "command-line-args": "^5.2.1",
+  "command-line-usage": "^6.1.3",
+  "core-3nweb-client-lib": "^0.30.2",
+  "electron-localshortcut": "^3.2.1",
+  "electron-updater": "^4.3.9",
+  "mime": "^1.3.4",
+  "portfinder": "^1.0.28",
+  "protobufjs": "^6.11.3",
+  "rxjs": "^7.5.7"
+ },
+ "devDependencies": {
+  "@types/node": "^16.11.9",
+  "browserify": "^17.0.0",
+  "buffer": "^4.9.2",
+  "electron": "^26.3.0",
+  "electron-build-env": "^0.2.0",
+  "electron-builder": "^24.6.4",
+  "js-yaml": "^4.1.0",
+  "typescript": "^4.7.4"
+ }
+}

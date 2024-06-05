@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2024 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -48,37 +48,46 @@ export const BUNDLED_APPS_FOLDER = toAsarUnpacked(
 	join(__dirname, 'bundled-apps')
 );
 
+export const BUNDLED_APP_PACKS_FOLDER = toAsarUnpacked(
+	join(__dirname, 'bundled-app-packs')
+);
+
 interface ConfigurableConstants {
 	'launcher-app': string;
 	'startup-app': string;
 	'signup-url': string;
 	'platform-name': string;
 	'bundled-apps': string[];
+	'bundled-app-packs': string[];
 	'data-dir-name': string;
 	'bundle-base-url': string;
-	'electron-updates-base-url': string;
 }
 const confConstants = require('./configuration.json') as ConfigurableConstants;
-function getConfConst(
-	key: Exclude<keyof ConfigurableConstants, 'bundled-apps'>
+function getConfStringConst(
+	key: keyof ConfigurableConstants
 ): string {
 	const confValue = confConstants[key];
 	assert(
-		(typeof confValue === 'string') && (confValue.length > 0),
-		`Value of "${key}" in configurations.json is not a non-empty string`
+		!Array.isArray(confValue) && (confValue.length > 0),
+		`Value of "${key}" in configurations.json is not a string`
 	);
-	return confValue.trim();
+	return (confValue as string).trim();
 }
+assert(
+	Array.isArray(confConstants['bundled-app-packs']) &&
+	Array.isArray(confConstants['bundled-apps']),
+	`configuration.json must have arrays fields`
+);
 
-export const DEFAULT_SIGNUP_URL = getConfConst('signup-url');
+export const DEFAULT_SIGNUP_URL = getConfStringConst('signup-url');
 
-export const STARTUP_APP_DOMAIN = getConfConst('startup-app');
-export const LAUNCHER_APP_DOMAIN = getConfConst('launcher-app');
+export const STARTUP_APP_DOMAIN = getConfStringConst('startup-app');
+export const LAUNCHER_APP_DOMAIN = getConfStringConst('launcher-app');
 
-export const PLATFORM_NAME = getConfConst('platform-name');
+export const PLATFORM_NAME = getConfStringConst('platform-name');
 
 export const DATA_DIR_NAME = (() => {
-	let dirName = getConfConst('data-dir-name');
+	let dirName = getConfStringConst('data-dir-name');
 	if ((platform() === 'win32') && dirName.startsWith('.')) {
 		dirName = dirName.substring(1);
 	}
@@ -86,11 +95,14 @@ export const DATA_DIR_NAME = (() => {
 	return dirName;
 })();
 
-export const PLATFORM_BUNDLE_URL = getConfConst('bundle-base-url');
+export const PLATFORM_BUNDLE_URL = getConfStringConst('bundle-base-url');
 
-export const BASE_ELECTRON_UPDATES_URL = getConfConst(
-	'electron-updates-base-url'
-);
+export function isBundledApp(appDomain: string): boolean {
+	return (
+		(appDomain === LAUNCHER_APP_DOMAIN) ||
+		confConstants['bundled-apps'].includes(appDomain)
+	);
+}
 
 
 Object.freeze(exports);

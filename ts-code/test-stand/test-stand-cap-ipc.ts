@@ -18,7 +18,7 @@
 import { ExposedFn, Caller, ExposedObj, exposeLogger, makeLogCaller, EnvelopeBody } from 'core-3nweb-client-lib/build/ipc';
 import { Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { ProtoType, strValType, toVal, unpackInt, packInt } from '../ipc-with-core/protobuf-msg';
+import { ProtoType, strValType, toVal, unpackInt, packInt, Value, toOptVal, valOfOpt } from '../ipc-with-core/protobuf-msg';
 import { test_stand as pb } from '../protos/test_stand.proto';
 
 type StartupTestStand = web3n.testing.StartupTestStand;
@@ -42,11 +42,13 @@ export function exposeTestStandCAP(cap: TestStand): ExposedObj<TestStand> {
 		exitAll: exitAll.wrapService(cap.exitAll),
 		staticTestInfo: staticTestInfo.wrapService(cap.staticTestInfo),
 		idOfTestUser: idOfTestUser.wrapService(cap.idOfTestUser),
-		sendMsgToOtherLocalTestUser: sendMsgToOtherLocalTestUser.wrapService(
-			cap.sendMsgToOtherLocalTestUser),
-		observeMsgsFromOtherLocalTestUser:
-			observeMsgsFromOtherLocalTestUser.wrapService(
-				cap.observeMsgsFromOtherLocalTestUser
+		sendMsgToOtherLocalTestProcess:
+			sendMsgToOtherLocalTestProcess.wrapService(
+				cap.sendMsgToOtherLocalTestProcess
+			),
+		observeMsgsFromOtherLocalTestProcess:
+			observeMsgsFromOtherLocalTestProcess.wrapService(
+				cap.observeMsgsFromOtherLocalTestProcess
 			),
 	};
 }
@@ -72,10 +74,11 @@ export function makeTestStandCaller(
 		exitAll: exitAll.makeCaller(caller, objPath),
 		staticTestInfo: staticTestInfo.makeCaller(caller, objPath),
 		idOfTestUser: idOfTestUser.makeCaller(caller, objPath),
-		sendMsgToOtherLocalTestUser: sendMsgToOtherLocalTestUser.makeCaller(
-			caller, objPath),
-		observeMsgsFromOtherLocalTestUser:
-			observeMsgsFromOtherLocalTestUser.makeCaller(caller, objPath),
+		sendMsgToOtherLocalTestProcess: sendMsgToOtherLocalTestProcess.makeCaller(
+			caller, objPath
+		),
+		observeMsgsFromOtherLocalTestProcess:
+			observeMsgsFromOtherLocalTestProcess.makeCaller(caller, objPath),
 	};
 }
 
@@ -182,54 +185,59 @@ namespace idOfTestUser {
 Object.freeze(idOfTestUser);
 
 
-namespace sendMsgToOtherLocalTestUser {
+namespace sendMsgToOtherLocalTestProcess {
 
 	const requestType = ProtoType.for<{
-		userNum: number;
-		appDomain?: string;
-		appComponent?: string;
+		userNum?: Value<number>;
+		appDomain?: Value<string>;
+		appComponent?: Value<string>;
 		msgJson: string;
-	}>(pb.SendMsgToOtherLocalTestUserRequestBody);
+	}>(pb.SendMsgToOtherLocalTestProcessRequestBody);
 
 	export function wrapService(
-		fn: TestStand['sendMsgToOtherLocalTestUser']
+		fn: TestStand['sendMsgToOtherLocalTestProcess']
 	): ExposedFn {
 		return buf => {
 			const {
 				userNum, appDomain, appComponent, msgJson
 			} = requestType.unpack(buf);
 			const msg = JSON.parse(msgJson);
-			const promise = fn(userNum, appDomain, appComponent, msg);
+			const promise = fn(
+				valOfOpt(userNum), valOfOpt(appDomain), valOfOpt(appComponent), msg
+			);
 			return { promise };
 		}
 	}
 
 	export function makeCaller(
 		caller: Caller, objPath: string[]
-	): TestStand['sendMsgToOtherLocalTestUser'] {
-		const path = objPath.concat('sendMsgToOtherLocalTestUser');
+	): TestStand['sendMsgToOtherLocalTestProcess'] {
+		const path = objPath.concat('sendMsgToOtherLocalTestProcess');
 		return (userNum, appDomain, appComponent, msg) => caller.startPromiseCall(
 			path,
 			requestType.pack({
-				userNum, appDomain, appComponent, msgJson: JSON.stringify(msg)
+				userNum: toOptVal(userNum),
+				appDomain: toOptVal(appDomain),
+				appComponent: toOptVal(appComponent),
+				msgJson: JSON.stringify(msg)
 			}))
 		.then(noop);
 	}
 
 }
-Object.freeze(sendMsgToOtherLocalTestUser);
+Object.freeze(sendMsgToOtherLocalTestProcess);
 
 
-namespace observeMsgsFromOtherLocalTestUser {
+namespace observeMsgsFromOtherLocalTestProcess {
 
 	const requestType = ProtoType.for<{
-		userNum: number;
-		appDomain?: string;
-		appComponent?: string;
-	}>(pb.ObserveOtherTestUserRequestBody);
+		userNum?: Value<number>;
+		appDomain?: Value<string>;
+		appComponent?: Value<string>;
+	}>(pb.ObserveOtherTestProcessRequestBody);
 
 	export function wrapService(
-		fn: TestStand['observeMsgsFromOtherLocalTestUser']
+		fn: TestStand['observeMsgsFromOtherLocalTestProcess']
 	): ExposedFn {
 		return buf => {
 			const { userNum, appDomain, appComponent } = requestType.unpack(buf);
@@ -237,19 +245,25 @@ namespace observeMsgsFromOtherLocalTestUser {
 			const obs = s.asObservable().pipe(
 				map(msg => strValType.pack(toVal(JSON.stringify(msg))))
 			);
-			const onCancel = fn(userNum, appDomain, appComponent, s);
+			const onCancel = fn(
+				valOfOpt(userNum), valOfOpt(appDomain), valOfOpt(appComponent), s
+			);
 			return { obs, onCancel };
 		}
 	}
 
 	export function makeCaller(
 		caller: Caller, objPath: string[]
-	): TestStand['observeMsgsFromOtherLocalTestUser'] {
-		const path = objPath.concat('observeMsgsFromOtherLocalTestUser');
+	): TestStand['observeMsgsFromOtherLocalTestProcess'] {
+		const path = objPath.concat('observeMsgsFromOtherLocalTestProcess');
 		return (userNum, appDomain, appComponent, obs) => {
 			const s = new Subject<EnvelopeBody>();
 			const unsub = caller.startObservableCall(
-				path, requestType.pack({ appDomain, appComponent, userNum }), s);
+				path, requestType.pack({
+					userNum: toOptVal(userNum),
+					appDomain: toOptVal(appDomain),
+					appComponent: toOptVal(appComponent)
+				}), s);
 			s.subscribe({
 				next: buf => {
 					if (obs.next) {
@@ -264,7 +278,7 @@ namespace observeMsgsFromOtherLocalTestUser {
 	}
 
 }
-Object.freeze(observeMsgsFromOtherLocalTestUser);
+Object.freeze(observeMsgsFromOtherLocalTestProcess);
 
 
 Object.freeze(exports);

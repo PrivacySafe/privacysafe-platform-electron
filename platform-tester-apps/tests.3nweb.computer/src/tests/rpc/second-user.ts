@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -17,6 +17,7 @@
 
 import { strFromBytes } from "../../test-page-utils.js";
 import { stringifyErr } from "../../lib-common/exceptions/error.js";
+import { getOneMsgFromProcess } from "../libs-for-tests/proc-messaging.js";
 
 export interface TestSignal<T> {
 	testSignal: T;
@@ -33,7 +34,7 @@ export interface SignalWithSrvResult extends TestSignal<'service-result'> {
 
 export function setupSecondUserRPCTestReactions(): void {
 
-	w3n.testStand.observeMsgsFromOtherLocalTestUser(1, undefined, undefined, {
+	w3n.testStand.observeMsgsFromOtherLocalTestProcess(1, undefined, undefined, {
 		next: async ({ testSignal, service }: SignalToCallSrv) => {
 			if (testSignal !== 'call-service') { return; }
 			const srvResult: SignalWithSrvResult = {
@@ -46,7 +47,7 @@ export function setupSecondUserRPCTestReactions(): void {
 				await w3n.testStand.log('error', `Error in calling `, err);
 				srvResult.err = stringifyErr(err);
 			}
-			await w3n.testStand.sendMsgToOtherLocalTestUser(
+			await w3n.testStand.sendMsgToOtherLocalTestProcess(
 				1, undefined, undefined, srvResult);
 		}
 	});
@@ -61,23 +62,16 @@ async function callGetUserIdSrv(srv: string): Promise<string> {
 }
 
 export async function callSrvAtSecondUser(
-	service: string
+	service: string, timeout?: number
 ): Promise<SignalWithSrvResult> {
-	const reply = new Promise<SignalWithSrvResult>((resolve, reject) => {
-		const unsub = w3n.testStand.observeMsgsFromOtherLocalTestUser(
-			2, undefined, undefined, {
-				next: async (sig: SignalWithSrvResult) => {
-					unsub();
-					resolve(sig);
-				},
-				error: reject
-			});
-	});
+	const reply = getOneMsgFromProcess<SignalWithSrvResult>(
+		2, undefined, undefined, timeout
+	);
 	const sig: SignalToCallSrv = {
 		testSignal: 'call-service',
 		service
 	};
-	await w3n.testStand.sendMsgToOtherLocalTestUser(
+	await w3n.testStand.sendMsgToOtherLocalTestProcess(
 		2, undefined, undefined, sig
 	);
 	return reply;

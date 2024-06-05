@@ -27,7 +27,7 @@ import { fromEvent } from 'rxjs';
 import { appDir, logError, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './confs';
 import { take } from 'rxjs/operators';
 import { makeCoreDriver } from './core/core-driver';
-import { clearDefaultWindowMenu } from './desktop-integration/window-menu';
+import { clearDefaultWindowMenu } from './window-utils/window-menu';
 import { mkdirSync } from 'fs';
 import { sleep } from './lib-common/processes';
 import { EventEmitter } from 'events';

@@ -1,0 +1,1 @@
+../../packing/npm-ci-test-apps.sh

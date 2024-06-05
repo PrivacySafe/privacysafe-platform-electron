@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2022 3NSoft Inc.
+ Copyright (C) 2016 - 2023 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,30 +15,21 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { GUIComponent, TitleGenerator } from '../components/gui-component';
+import { TitleGenerator } from '../components/gui-component';
 import { CoreConf } from 'core-3nweb-client-lib';
-import { CoreDriver, makeCoreDriver } from '../core/core-driver';
+import { makeCoreDriver } from '../core/core-driver';
 import { ElectronIPCConnectors, SocketIPCConnectors } from '../core/w3n-connectors';
 import { app } from 'electron';
 import { logError } from '../confs';
 import { setTimeout } from 'timers';
 import { DevToolsAppAllowance } from '../process-args';
-import { SystemPlaces, AppInitException, makeAppInitExc } from '../apps/installer/system-places';
-import { AppDownloader } from '../apps/downloader';
-import { latestVersionIn } from '../apps/downloader/versions';
 import { PlatformDownloader } from '../apps/platform';
-import { UserAppOpenCmd, UserSystemCmd, UserCmd, UserAppInfo, AppInfoForUI } from '../desktop-integration';
-import { Observable, Subject } from 'rxjs';
-import { WrapStartupCAPs, AppsRunnerForTesting, DevAppParams, DevAppParamsGetter, TestStand, TestStandConfig, DevSiteParamsGetter } from '../test-stand';
+import { UserAppOpenCmd, UserSystemCmd, UserCmd, AppInfoForUI } from '../desktop-integration';
+import { WrapStartupCAPs, AppsRunnerForTesting, DevAppParams, TestStand, TestStandConfig } from '../test-stand';
 import { toCanonicalAddress } from '../lib-common/canonical-address';
-import { Component, Components, Service } from '../components';
-import { NamedProcs, sleep } from '../lib-common/processes';
-import { AppManifestException, MAIN_GUI_ENTRYPOINT } from '../lib-common/manifest-utils';
-import { assert } from 'console';
-import { makeRPCException } from '../rpc';
 import { DesktopUI } from '../desktop-integration';
-import { LAUNCHER_APP_DOMAIN, STARTUP_APP_DOMAIN } from '../bundle-confs';
-import { Sites } from '../site-runner';
+import { UserApps } from './user-apps';
+import { assert } from '../lib-common/assert';
 
 
 export class InitProc {
@@ -66,7 +57,8 @@ export class InitProc {
 		if (testStandConf) {
 			const { conf, filePath } = testStandConf;
 			this.testStand = new TestStand(
-				conf, filePath, code => this.exit(code));
+				conf, filePath, this.exit.bind(this)
+			);
 		} else {
 			this.testStand = undefined;
 		}
@@ -298,372 +290,6 @@ export class InitProc {
 }
 Object.freeze(InitProc.prototype);
 Object.freeze(InitProc);
-
-
-type UserAppsEvents = 'start-closing' | {
-	type: 'closed';
-	canClosePlatform: boolean;
-} | {
-	type: 'app-installed' | 'app-downloaded';
-	app: UserAppInfo;
-} | {
-	type: 'app-removed';
-	appId: string;
-};
-
-
-class UserApps {
-
-	private readonly core: CoreDriver;
-	private readonly sysPlaces: SystemPlaces;
-	private readonly appDownloader: AppDownloader;
-	private readonly appStartingProcs = new NamedProcs();
-	private readonly siteStartingProcs = new NamedProcs();
-	private readonly components: Components;
-	private readonly sites: Sites;
-	private readonly broadcast = new Subject<UserAppsEvents>();
-	readonly event$ = this.broadcast.asObservable();
-
-	constructor(
-		makeDriver: typeof makeCoreDriver,
-		conf: CoreConf,
-		guiConnectors: ElectronIPCConnectors,
-		sockConnectors: SocketIPCConnectors,
-		makeTitleGenerator: InitProc['makeTitleGenerator'],
-		private readonly devApps: DevAppParamsGetter|undefined,
-		private readonly devSites: DevSiteParamsGetter|undefined,
-		private readonly devToolsAllowance: DevToolsAppAllowance,
-		private readonly getPlatform: () => Platform
-	) {
-		this.sysPlaces = new SystemPlaces(() => this.core.storages);
-		this.appDownloader = new AppDownloader(this.sysPlaces);
-		this.core = makeDriver(
-			conf, this.appsCapFns(), this.logout,
-			this.getServiceToHandleCall.bind(this)
-		);
-		this.components = new Components(
-			guiConnectors, sockConnectors,
-			makeTitleGenerator(() => this.userId),
-			this.core.makeCAPsForAppComponent.bind(this.core),
-			this.getAppFiles.bind(this)
-		);
-		this.sites = new Sites(
-			guiConnectors,
-			makeTitleGenerator(() => this.userId),
-			this.core.makeCAPsForSiteComponent.bind(this.core)
-		);
-		Object.seal(this);
-	}
-
-	get userId(): string {
-		return this.core.getUserId();
-	}
-
-	get coreStarted(): boolean {
-		return this.core.isStarted();
-	}
-
-	async listInstalled(): Promise<UserAppInfo[]> {
-		const infos: UserAppInfo[] = [];
-		const allApps = await this.sysPlaces.listApps();
-		for (const { id, installed } of allApps) {
-			infos.push({
-				id, name: id, isInstalled: !!installed
-			});
-		}
-		return infos;
-	}
-
-	updateWindowTitles(): void {
-		this.components.updateWindowTitles();
-	}
-
-	private ensureCanStartup(): void {
-		if (this.core.isStarted()
-		|| this.components.findUserStarted(STARTUP_APP_DOMAIN)
-		|| this.appStartingProcs.getP(STARTUP_APP_DOMAIN)) {
-			throw new Error(`Startup was already started`);
-		}
-	}
-
-	async openStartupApp(
-		usersToFilterOut: string[]
-	): Promise<{ coreInit: Promise<void>; }> {
-		this.ensureCanStartup();
-		const openningProc = this.components.instantiateStartup(
-			usersToFilterOut, this.devToolsAllowance(STARTUP_APP_DOMAIN),
-			() => this.core.start()
-		);
-		return this.appStartingProcs.addStarted(STARTUP_APP_DOMAIN, openningProc);
-	}
-
-	closeStartupApp(): void {
-		const startupApp = this.components.findUserStarted(STARTUP_APP_DOMAIN);
-		if (startupApp) {
-			startupApp.window.close();
-		}
-	}
-
-	startCoreDirectly(): ReturnType<CoreDriver['start']> {
-		return this.core.start();
-	}
-
-	async openDevStartupApp(
-		devParams: DevAppParams, wrapCAP: WrapStartupCAPs
-	): Promise<{ coreInit: Promise<void>; }> {
-		this.ensureCanStartup();
-		const openningProc = this.components.devInstantiateStartup(
-			devParams,
-			() => {
-				const { capsForStartup, coreInit } = this.core.start();
-				return { capsForStartup: wrapCAP(capsForStartup), coreInit };
-			}
-		);
-		return this.appStartingProcs.addStarted(STARTUP_APP_DOMAIN, openningProc);
-	}
-
-	async openApp(appDomain: string, devTools = false): Promise<void> {
-		const entrypoint = MAIN_GUI_ENTRYPOINT;
-		const app = this.components.findUserStarted(appDomain);
-		if (app) {
-			app.window.focus();
-			return;
-		}
-
-		let startedProc = this.appStartingProcs.getP<void>(appDomain);
-		if (startedProc) {
-			return startedProc;
-		}
-
-		const devParams = (this.devApps ?
-			this.devApps(appDomain, entrypoint) : undefined
-		);
-		startedProc = (devParams ?
-			this.components.devInstantiateUserStartedGUI(devParams, entrypoint) :
-			this.components.instantiateUserStartedGUI(
-				appDomain, entrypoint,
-				(devTools ? true : this.devToolsAllowance(appDomain))
-			)
-		).then(
-			app => app.window.focus(),
-			(err: AppInitException) => {
-				if (err.type === 'app-init') {
-					throw err;
-				} else {
-					throw makeAppInitExc(appDomain, {}, { cause: err });
-				}
-			}
-		);
-		return this.appStartingProcs.addStarted(appDomain, startedProc);
-	}
-
-	async openSite(siteDomain: string): Promise<void> {
-		const entrypoint = MAIN_GUI_ENTRYPOINT;
-		if (this.sites.focusOnSiteComponentIfOpened(siteDomain, entrypoint)) {
-			return;
-		}
-
-		let startedProc = this.siteStartingProcs.getP<void>(siteDomain);
-		if (startedProc) {
-			return startedProc;
-		}
-
-		const devParams = (this.devSites ?
-			this.devSites(siteDomain, entrypoint) : undefined
-		);
-		startedProc = (devParams ?
-			this.sites.devOpenSiteComponent(devParams, entrypoint) :
-			this.sites.openSiteComponent(siteDomain, entrypoint)
-		);
-		return this.siteStartingProcs.addStarted(siteDomain, startedProc);
-	}
-
-	private async getServiceToHandleCall(
-		caller: Component, appDomain: string, service: string
-	): Promise<Service> {
-		// have a hope that the following wait loop with following
-		// procs.addStarted provides sync of starting services
-		while (this.appStartingProcs.getP(appDomain)) {
-			await this.appStartingProcs.getP(appDomain);
-		}
-
-		const srvInstances = this.components.findService(appDomain, service);
-		if (srvInstances) {
-			for (const srv of srvInstances) {
-				if (srv.canHandleCall()) {
-					return srv;
-				}
-			}
-		}
-
-		try {
-			const devParams = (this.devApps ?
-				this.devApps(appDomain, undefined, service) : undefined
-			);
-			const srvPromise = (devParams ?
-				this.components.devInstantiateService(caller, devParams, service) :
-				this.components.instantiateService(
-					caller, appDomain, service, this.devToolsAllowance(appDomain)
-				)
-			);
-			return this.appStartingProcs.addStarted(appDomain, srvPromise);
-		} catch (err) {
-			if ((err as AppManifestException).serviceNotFound) {
-				throw makeRPCException(appDomain, service, {
-					serviceNotFound: true
-				}, {
-					callerApp: caller.domain,
-					callerComponent: caller.entrypoint
-				});
-			} else {
-				throw makeRPCException(appDomain, service, {}, {
-					callerApp: caller.domain,
-					callerComponent: caller.entrypoint,
-					cause: err
-				});
-			}
-		}
-	}
-
-	private async getAppFiles(
-		appDomain: string
-	): ReturnType<SystemPlaces['findInstalledApp']> {
-		try {
-			return await this.sysPlaces.findInstalledApp(appDomain);
-		} catch (exc) {
-			if ((exc as  AppInitException).notInstalled) {
-				const {
-					bundleUnpack$, download$, version
-				} = await this.getAppWebPack(appDomain);
-				// XXX note that we may wat to add process observation to openApp's
-				//     instead of just non-responsive await below
-				if (bundleUnpack$) {
-					await bundleUnpack$.toPromise();
-				}
-				if (download$) {
-					await download$.toPromise();
-				}
-				await this.sysPlaces.installWebApp(appDomain, version);
-				return this.sysPlaces.findInstalledApp(appDomain);
-			} else {
-				throw exc;
-			}
-		}
-	}
-
-	async openAppLauncher(): Promise<void> {
-		await this.openApp(LAUNCHER_APP_DOMAIN);
-	}
-
-	private async getAppWebPack(
-		appDomain: string
-	): Promise<{
-		version: string;
-		bundleUnpack$?: Observable<BundleUnpackProgress>;
-		download$?: Observable<DownloadProgress>;
-	}> {
-		const info = await this.sysPlaces.getAppInfo(appDomain);
-		if (info) {
-			// check if pack is already present
-			if (info.packs) {
-				const version = latestVersionInPacks(info.packs, 'web');
-				if (version) {
-					return { version };
-				}
-			}
-			// check if there is a bundle to unpack
-			if (info.bundled) {
-				const bundle = info.bundled
-				.find(b => (!b.isLink && (b.platform === 'web')));
-				if (bundle) {
-					const bundleUnpack = new Subject<BundleUnpackProgress>();
-					this.sysPlaces.unpackBundledWebApp(appDomain, bundleUnpack);
-					return {
-						version: bundle.version,
-						bundleUnpack$: bundleUnpack.asObservable()
-					};
-				}
-			}
-		}
-		// download pack
-		const channels = await this.appDownloader.getAppChannels(appDomain);
-		const channel = (channels.main ? channels.main : 'latest');
-		const version = await this.appDownloader.getLatestAppVersion(
-			appDomain, channel
-		);
-		const download = new Subject<DownloadProgress>();
-		this.appDownloader.downloadWebApp(appDomain, version, download);
-		return {
-			version,
-			download$: download.asObservable()
-		};
-	}
-
-	async closeAllApps(): Promise<void> {
-		await this.components.closeAllApps();
-	}
-
-	async exit(closePlatform = false): Promise<void> {
-		this.broadcast.next('start-closing');
-		await this.closeAllApps();
-		await this.core.close().catch(logError);
-		this.broadcast.next({
-			type: 'closed', canClosePlatform: closePlatform
-		});
-		await sleep(1);
-		this.broadcast.complete();
-	}
-
-	private readonly logout = async (closePlatform: boolean): Promise<void> => {
-		this.exit(closePlatform);	// we don't wait for this to end
-	};
-
-	private appsCapFns(): web3n.apps.Apps {
-		return {
-			opener: {
-				listApps: this.sysPlaces.listApps.bind(this.sysPlaces),
-				openApp: this.openApp.bind(this),
-				getAppIcon: this.sysPlaces.getAppIcon.bind(this.sysPlaces),
-				getAppInfo: this.sysPlaces.getAppInfo.bind(this.sysPlaces),
-			},
-			downloader: {
-				downloadWebApp: this.appDownloader.downloadWebApp.bind(
-					this.appDownloader),
-				getAppChannels: this.appDownloader.getAppChannels.bind(
-					this.appDownloader),
-				getLatestAppVersion: this.appDownloader.getLatestAppVersion.bind(
-					this.appDownloader),
-				getAppVersionList: this.appDownloader.getAppVersionList.bind(
-					this.appDownloader)
-			},
-			installer: {
-				unpackBundledWebApp: this.sysPlaces.unpackBundledWebApp.bind(
-					this.sysPlaces),
-				installWebApp: this.sysPlaces.installWebApp.bind(this.sysPlaces),
-			},
-			platform: this.getPlatform()
-		};
-	}
-
-}
-Object.freeze(UserApps.prototype);
-Object.freeze(UserApps);
-
-
-type AppInfo = web3n.apps.AppInfo;
-type PlatformType = web3n.apps.PlatformType;
-type Platform = web3n.apps.Platform;
-type BundleUnpackProgress = web3n.apps.BundleUnpackProgress;
-type DownloadProgress = web3n.apps.DownloadProgress;
-
-function latestVersionInPacks(
-	packs: NonNullable<AppInfo['packs']>, platform: PlatformType
-): string|undefined {
-	const webVersions = packs
-	.filter(info => (info.platform === platform))
-	.map(info => info.version);
-	return ((webVersions.length > 0) ? latestVersionIn(webVersions) : undefined);
-}
 
 
 Object.freeze(exports);

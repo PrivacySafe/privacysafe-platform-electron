@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2023 3NSoft Inc.
+ Copyright (C) 2021 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -16,30 +16,14 @@
 */
 
 import { NsisUpdater, AppImageUpdater, MacUpdater, AppUpdater, ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from "electron-updater";
-import { arch, platform } from "os";
 import { Subject } from "rxjs";
 import { makeRuntimeException } from "../../lib-common/exceptions/runtime";
 import { toRxObserver } from "../../lib-common/utils-for-observables";
-import { BASE_ELECTRON_UPDATES_URL } from "../../bundle-confs";
+import { PLATFORM_BUNDLE_URL } from "../../bundle-confs";
+import { findPackInfo } from "../../confs";
 
 type PlatformDownloadProgress = web3n.apps.PlatformDownloadProgress;
 type Observer<T> = web3n.Observer<T>;
-type PackVariant = web3n.apps.PackVariant;
-
-
-type PlatformType = web3n.apps.PlatformType;
-type ArchType = web3n.apps.ArchType;
-
-function electronUpdatesBaseUrl(
-	platform: PlatformType, arch: ArchType
-): string {
-	return `${BASE_ELECTRON_UPDATES_URL}${platform}/${arch}/`;
-}
-
-// XXX postpone check of install methods
-// export function packingInfoOfThis(): PackVariant {
-// 	return require('../packing-info.json');
-// }
 
 export interface Updater {
 	checkForUpdateAndApply(
@@ -48,46 +32,25 @@ export interface Updater {
 }
 
 export async function makeUpdater(channel: string): Promise<Updater|undefined> {
-	if (platform() === 'linux') {
-		// XXX postpone check of install methods
-		// const { variant, arch } = packingInfoOfThis();
-		// if (variant === 'AppImage') {
-		// 	return wrapElectronBuilderUpdater(new AppImageUpdater({
-		// 		provider: 'generic', channel,
-		// 		url: electronUpdatesBaseUrl('linux', arch)
-		// 	}));
-		// }
-		const arcVal = arch();
-		if ((arcVal === 'x64') || (arcVal === 'arm64')) {
-			return wrapElectronBuilderUpdater(new AppImageUpdater({
-				provider: 'generic', channel,
-				url: electronUpdatesBaseUrl('linux', arcVal)
-			}));			
-		}
-	} else if (platform() === 'win32') {
-		// XXX postpone check of install methods
-		// const { variant, arch } = packingInfoOfThis();
-		// if (variant === 'nsis') {
-		// 	return wrapElectronBuilderUpdater(new NsisUpdater({
-		// 		provider: 'generic', channel,
-		// 		url: electronUpdatesBaseUrl('windows', arch)
-		// 	}));
-		// }
-		const arcVal = arch();
-		if (arcVal === 'x64') {
-			return wrapElectronBuilderUpdater(new NsisUpdater({
-				provider: 'generic', channel,
-				url: electronUpdatesBaseUrl('windows', arcVal)
-			}));
-		}
-	} else if (platform() === 'darwin') {
-		const arcVal = arch();
-		if ((arcVal === 'x64') || (arcVal === 'arm64')) {
-			return wrapElectronBuilderUpdater(new MacUpdater({
-				provider: 'generic', channel,
-				url: electronUpdatesBaseUrl('mac', arcVal)
-			}));
-		}
+	const packInfo = findPackInfo();
+	if (!packInfo) {
+		return;
+	}
+	if (packInfo.variant === 'AppImage') {
+		return wrapElectronBuilderUpdater(new AppImageUpdater({
+			provider: 'generic',
+			url: `${PLATFORM_BUNDLE_URL}${channel}/linux/`
+		}));			
+	} else if (packInfo.variant === 'nsis') {
+		return wrapElectronBuilderUpdater(new NsisUpdater({
+			provider: 'generic',
+			url: `${PLATFORM_BUNDLE_URL}${channel}/windows/`
+		}));			
+	} else if (packInfo.variant === 'dmg') {
+		return wrapElectronBuilderUpdater(new MacUpdater({
+			provider: 'generic',
+			url: `${PLATFORM_BUNDLE_URL}${channel}/mac/`
+		}));			
 	} else {
 		return;
 	}

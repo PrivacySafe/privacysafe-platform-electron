@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2022 3NSoft Inc.
+ Copyright (C) 2020 - 2023 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -28,6 +28,9 @@ import { makeAppInitExc } from "../apps/installer/system-places";
 import { Component } from "../components";
 import { Notifications } from "../shell/user-notifications";
 import { makeConnectivity } from "../connectivity";
+import { Deferred, defer } from "../lib-common/processes";
+import { makeAppCmdsCaller, makeCmdsHandler, StartAppWithCmd } from "../shell/cmd-invocation";
+import { GUIComponent } from "../components/gui-component";
 
 type W3N = web3n.caps.W3N;
 type SitesW3N = web3n.caps.sites.W3N;
@@ -35,17 +38,19 @@ type Apps = web3n.apps.Apps;
 type Logout = web3n.caps.Logout;
 type AppComponent = web3n.caps.AppComponent;
 type GUIServiceComponent = web3n.caps.GUIServiceComponent;
+type GUIComponentDef = web3n.caps.GUIComponent;
 type ServiceComponent = web3n.caps.ServiceComponent;
 type RequestedCAPs = web3n.caps.RequestedCAPs;
 type ExposeService = web3n.rpc.service.ExposeService;
 type SiteComponent = web3n.caps.SiteComponent;
-
-const CORE_LIB_DOMAIN = '3nweb.computer';
+type CmdParams = web3n.shell.commands.CmdParams;
+type CmdHandlerDef = NonNullable<GUIComponentDef['startCmds']>;
 
 export interface CoreDriver {
 	close(): Promise<void>;
 	makeCAPsForAppComponent(
-		appDomain: string, component: string, componentDef: AppComponent
+		appDomain: string, component: string, componentDef: AppComponent,
+		startCmd: CmdParams|undefined
 	): AppCAPsAndSetup;
 	makeCAPsForSiteComponent(
 		appDomain: string, component: string, componentDef: SiteComponent
@@ -54,6 +59,7 @@ export interface CoreDriver {
 	isStarted(): boolean;
 	storages: FactoryOfFSs;
 	getUserId(): string;
+	whenReady(): Promise<void>;
 }
 
 export interface AppCAPsAndSetup {
@@ -69,10 +75,10 @@ export interface SiteCAPsAndSetup {
 export type AppSetter = (app: Component) => void;
 
 export function makeCoreDriver(
-	conf: CoreConf, appsCapFns: Apps, logout: Logout,
-	getService: GetServiceToHandleNewCall
+	conf: CoreConf, appsCapFns: Apps, startAppWithCmd: StartAppWithCmd, 
+	logout: Logout, getService: GetServiceToHandleNewCall
 ): CoreDriver {
-	return new Driver(conf, appsCapFns, logout, getService);
+	return new Driver(conf, appsCapFns, startAppWithCmd, logout, getService);
 }
 
 
@@ -83,10 +89,12 @@ class Driver implements CoreDriver {
 	private readonly fsMounts: MountsInOS;
 	private readonly rpcClientSide: ClientSideConnector;
 	private readonly userNotifications = new Notifications();
+	private coreReady: Deferred<void>|undefined = defer();
 
 	constructor(
 		conf: CoreConf,
 		private readonly appsCapFns: Apps,
+		private readonly startAppWithCmd: StartAppWithCmd,
 		private readonly logout: Logout,
 		getService: GetServiceToHandleNewCall,
 	) {
@@ -114,8 +122,20 @@ class Driver implements CoreDriver {
 		const { capsForStartup, coreInit } = this.core.start();
 		return {
 			capsForStartup,
-			coreInit: coreInit.then(userId => this.doAfterInit(userId))
+			coreInit: coreInit.then(
+				userId => this.doAfterInit(userId),
+				err => {
+					this.coreReady?.reject(err);
+					throw err;
+				}
+			)
 		};
+	}
+
+	async whenReady(): Promise<void> {
+		if (this.coreReady) {
+			await this.coreReady.promise;
+		}
 	}
 
 	private async doAfterInit(userId: string): Promise<void> {
@@ -123,6 +143,10 @@ class Driver implements CoreDriver {
 		// XXX mounting into OS should be moved from here to mount CAP(s)
 		// await this.mountUserStorageInOS();
 		// await this.mountAppsFoldersForDebug();
+		if (this.coreReady) {
+			this.coreReady.resolve();
+			this.coreReady = undefined;
+		}
 	}
 
 	private async mountUserStorageInOS(): Promise<void> {
@@ -168,7 +192,8 @@ class Driver implements CoreDriver {
 	}
 
 	makeCAPsForAppComponent(
-		appDomain: string, component: string, componentDef: AppComponent
+		appDomain: string, component: string, componentDef: AppComponent,
+		startCmd: CmdParams|undefined
 	): { w3n: W3N; close: () => void; setApp: AppSetter; } {
 		if (!this.core) { throw new Error(`Core is already closed`); }
 		const capsReq = (componentDef.capsRequested ?
@@ -176,7 +201,10 @@ class Driver implements CoreDriver {
 		);
 		const baseW3N = this.core.makeCAPsForApp(appDomain, capsReq);
 		const closeSelf = this.closeSelfCAP();
-		const shell = this.shellCAPs(appDomain, component, capsReq);
+		const shell = this.shellCAPs(
+			appDomain, component, capsReq,
+			(componentDef as GUIComponentDef).startCmds, startCmd
+		);
 		const rpc = makeRpcCAP(
 			this.rpcClientSide, appDomain, componentDef, capsReq
 		);
@@ -196,8 +224,8 @@ class Driver implements CoreDriver {
 			mail: baseW3N.caps.mail,
 			mailerid: baseW3N.caps.mailerid,
 			closeSelf: closeSelf.cap,
-			apps: makeAppsCAP(this.appsCapFns, appDomain, capsReq),
-			logout: makeLogoutCAP(this.logout, appDomain, capsReq),
+			apps: makeAppsCAP(this.appsCapFns, capsReq),
+			logout: makeLogoutCAP(this.logout, capsReq),
 			shell: shell?.cap,
 			rpc: rpc?.cap,
 			connectivity: connectivityCAP(capsReq.connectivity),
@@ -224,27 +252,44 @@ class Driver implements CoreDriver {
 	}
 
 	private shellCAPs(
-		appDomain: string, component: string, capsReq: RequestedCAPs
+		appDomain: string, component: string, capsReq: RequestedCAPs,
+		cmdHandlerDef: GUIComponentDef['startCmds'], startCmd: CmdParams|undefined
 	): {
 		cap: NonNullable<W3N['shell']>; setApp: AppSetter; close: () => void;
 	}|undefined {
-		if (!capsReq.shell) { return; }
+		if (!capsReq.shell && !cmdHandlerDef) { return; }
 		const cap: NonNullable<W3N['shell']> = {};
 		const closeFns: (() => void)[] = [];
 		const setAppFns: AppSetter[] = [];
-		const fileDialogs = fileDialogShellCAP(capsReq.shell.fileDialog);
-		if (fileDialogs) {
-			cap.fileDialogs = fileDialogs.cap;
-			closeFns.push(fileDialogs.close);
-			setAppFns.push(fileDialogs.setApp);
+		if (capsReq.shell) {
+			const fileDialogs = fileDialogShellCAP(capsReq.shell.fileDialog);
+			if (fileDialogs) {
+				cap.fileDialogs = fileDialogs.cap;
+				closeFns.push(fileDialogs.close);
+				setAppFns.push(fileDialogs.setApp);
+			}
+			const userNotifications = this.userNotificationsShellCAP(
+				appDomain, component, capsReq.shell.userNotifications
+			);
+			if (userNotifications) {
+				cap.userNotifications = userNotifications.cap;
+				closeFns.push(userNotifications.close);
+				setAppFns.push(userNotifications.setApp);
+			}
+			const startAppWithParamsShell = this.startAppWithParamsShellCAP(
+				appDomain, component, capsReq.shell.startAppCmds
+			);
+			if (startAppWithParamsShell) {
+				cap.startAppWithParams = startAppWithParamsShell.cap;
+			}
 		}
-		const userNotifications = this.userNotificationsShellCAP(
-			appDomain, component, capsReq.shell.userNotifications
-		);
-		if (userNotifications) {
-			cap.userNotifications = userNotifications.cap;
-			closeFns.push(userNotifications.close);
-			setAppFns.push(userNotifications.setApp);
+		if (cmdHandlerDef) {
+			const {
+				getStartedCmd, watchStartCmds, setApp
+			} = makeCmdHandlerCAP(appDomain, cmdHandlerDef, startCmd);
+			cap.getStartedCmd = getStartedCmd;
+			cap.watchStartCmds = watchStartCmds;
+			setAppFns.push(setApp);
 		}
 		return {
 			cap,
@@ -265,6 +310,20 @@ class Driver implements CoreDriver {
 			notifications: cap, setApp, close
 		} = this.userNotifications.makeFor(appDomain, component);
 		return { cap, setApp, close };
+	}
+
+	private startAppWithParamsShellCAP(
+		appDomain: string, component: string,
+		capsReq: web3n.caps.ShellCAPsSetting['startAppCmds']
+	): {
+		cap: web3n.shell.ShellCAPs['startAppWithParams'];
+	}|undefined {
+		if (!capsReq?.otherApps && !capsReq?.thisApp) { return; }
+		return {
+			cap: makeAppCmdsCaller(
+				this.startAppWithCmd, appDomain, component, capsReq
+			)
+		};
 	}
 
 }
@@ -337,7 +396,7 @@ function makeRpcCAP(
 }
 
 function makeAppsCAP(
-	appsCapFns: Driver['appsCapFns'], appDomain: string, capsReq: RequestedCAPs
+	appsCapFns: Driver['appsCapFns'], capsReq: RequestedCAPs
 ): W3N['apps'] {
 	if (capsReq.apps === 'all') {
 		return appsCapFns;
@@ -357,7 +416,7 @@ function makeAppsCAP(
 }
 
 function makeLogoutCAP(
-	logout: Driver['logout'], appDomain: string, capsReq: RequestedCAPs
+	logout: Driver['logout'], capsReq: RequestedCAPs
 ): W3N['logout'] {
 	if (capsReq.logout === 'all') {
 		return logout;
@@ -393,7 +452,7 @@ function exposeServiceCAP(
 	for (const srvName of expectedSrvs) {
 		connectors[srvName] = new ServiceConnector(
 			appDomain, srvName,
-			componentDef.startedBy, !!componentDef.forOneConnectionOnly
+			componentDef.allowedCallers, !!componentDef.forOneConnectionOnly
 		);
 	}
 	const setApp: AppSetter = app => {
@@ -421,8 +480,7 @@ function exposeServiceCAP(
 
 function servicesIn(componentDef: AppComponent): string[]|undefined {
 	if ((componentDef as ServiceComponent).services) {
-		const services = (componentDef as ServiceComponent).services;
-		return (Array.isArray(services) ? services : [ services ]);
+		return (componentDef as ServiceComponent).services;
 	} else if ((componentDef as GUIServiceComponent).service) {
 		return [ (componentDef as GUIServiceComponent).service ];
 	}
@@ -434,6 +492,31 @@ function connectivityCAP(
 	if (connectivityCAPsReq === 'check') {
 		return makeConnectivity();
 	}
+}
+
+function makeCmdHandlerCAP(
+	appDomain: string, cmdHandlerDef: CmdHandlerDef,
+	startCmd: CmdParams|undefined
+): {
+	getStartedCmd: NonNullable<web3n.shell.ShellCAPs['getStartedCmd']>;
+	watchStartCmds: NonNullable<web3n.shell.ShellCAPs['watchStartCmds']>;
+	setApp: AppSetter;
+} {
+	const cmdHandler = makeCmdsHandler(appDomain, cmdHandlerDef);
+	return {
+		getStartedCmd: async () => startCmd,
+		watchStartCmds: obs => {
+			const sub = cmdHandler.cmd$.subscribe(obs);
+			return () => sub.unsubscribe();
+		},
+		setApp: app => {
+			if (!cmdHandlerDef) {
+				// XXX add some proper app
+				throw new Error(``);
+			}
+			(app as GUIComponent).setCmdHandler(cmdHandler);
+		}
+	};
 }
 
 

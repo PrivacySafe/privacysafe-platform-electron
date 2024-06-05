@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2022 3NSoft Inc.
+ Copyright (C) 2021 - 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,6 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { getOneMsgFromProcess } from "../libs-for-tests/proc-messaging.js";
 import { logErr } from "../../test-page-utils.js";
 
 type IncomingMessage = web3n.asmail.IncomingMessage;
@@ -25,7 +26,7 @@ export interface TestSignal<T> {
 }
 
 async function sendTestSignal<T>(userNum: number, msg: T): Promise<void> {
-	await w3n.testStand.sendMsgToOtherLocalTestUser(
+	await w3n.testStand.sendMsgToOtherLocalTestProcess(
 		userNum, undefined, undefined, msg);
 }
 
@@ -95,7 +96,7 @@ export async function setupSecondUserASMailTestReactions(): Promise<void> {
 	});
 
 	// attend signal asking to send message back
-	w3n.testStand.observeMsgsFromOtherLocalTestUser(1, undefined, undefined, {
+	w3n.testStand.observeMsgsFromOtherLocalTestProcess(1, undefined, undefined, {
 		next: async (sig: AskToSendMsgBackSignal) => {
 			if (sig.testSignal !== 'ask-to-send-msg-back') { return; }
 			try {
@@ -134,16 +135,7 @@ async function sendMsg(userId: string, msg: OutgoingMessage): Promise<void> {
 }
 
 export function listenForOneMsgEchoFromSecondUser(): Promise<EchoMsgSignal> {
-	return new Promise((resolve, reject) => {
-		const unsub = w3n.testStand.observeMsgsFromOtherLocalTestUser(
-			2, undefined, undefined, {
-				next: async (sig: EchoMsgSignal) => {
-					unsub();
-					resolve(sig);
-				},
-				error: reject
-			});
-	});
+	return getOneMsgFromProcess(2, undefined, undefined);
 }
 
 export async function askSecondUserToSendMsg(

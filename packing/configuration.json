@@ -3,14 +3,13 @@
 	"startup-app": "startup.app.privacysafe.io",
 	"signup-url": "https://signup.privacysafe.me/",
 	"platform-name": "PrivacySafe",
-	"bundled-apps": [
-		"installer.app.privacysafe.io",
+	"bundled-apps": [],
+	"bundled-app-packs": [
 		"files.app.privacysafe.io",
 		"chat.app.privacysafe.io",
 		"inbox.app.privacysafe.io",
 		"contacts.app.privacysafe.io"
 	],
 	"data-dir-name": ".PrivacySafe",
-	"electron-updates-base-url": "https://3nsoft.com/downloads/PrivacySafe/electron-updates/",
 	"bundle-base-url": "https://3nweb.com/downloads/PrivacySafe"
 }

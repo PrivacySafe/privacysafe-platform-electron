@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+import "common.proto";
+
+package shell_cmd;
+
+
+// ==== shell.startAppWithParams capability ====
+// Reply has only status and body is empty
+message StartAppWithParamsRequestBody {
+	common.StringValue appDomain = 1;
+	string cmd = 2;
+	repeated common.AnyValue params = 3;
+}
+
+
+message CmdParams {
+	string cmd = 1;
+	repeated common.AnyValue params = 2;
+}
+
+
+// ==== shell.getStartedCmd capability ====
+// Request body is empty
+// Reply body is CmdParams
+
+
+// ==== shell.watchStartCmds capability ====
+// Its an observable call, and initial request is empty.
+// Observer expects CmdParams in next.
+

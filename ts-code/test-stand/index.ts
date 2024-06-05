@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2023 3NSoft Inc.
+ Copyright (C) 2021 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -24,7 +24,7 @@ import { errWithCause } from "../lib-common/exceptions/error";
 import { AppCAPsAndSetup, AppSetter, CoreDriver, SiteCAPsAndSetup } from "../core/core-driver";
 import { Code } from "../lib-common/exceptions/file";
 import { stringOfB64CharsSync, stringOfB64UrlSafeCharsSync } from "../lib-common/random-node";
-import { entrypointOfService, MAIN_GUI_ENTRYPOINT } from "../lib-common/manifest-utils";
+import { getComponentForCommand, getComponentForService, MAIN_GUI_ENTRYPOINT } from "../lib-common/manifest-utils";
 import { MapOfSets } from "../lib-common/map-of-sets";
 import { DesktopUI, UserAppInfo } from "../desktop-integration";
 import { RPCLogger } from "./log-rpc";
@@ -44,6 +44,7 @@ export interface DevApp {
 	dir: string;
 	url?: string;
 	logRPC?: true;
+	skipAutoLaunch?: true;
 }
 
 export interface DevAppParams extends DevApp {
@@ -102,7 +103,8 @@ export type StartDevStartupApp = (
 ) => Promise<void>;
 
 export type DevAppParamsGetter = (
-	appDomain: string, entrypoint: string|undefined, service?: string
+	appDomain: string,
+	start: { entrypoint?: string; service?: string; cmd?: string; }
 ) => { params: DevAppParams; wrapCAPs: WrapAppCAPsAndSetup; }|undefined;
 
 export type DevSiteParamsGetter = (
@@ -237,8 +239,8 @@ export class TestStand {
 		console.log(`\n🏁 opening apps for test user ${userParams.userId}`);
 		const testStartupApp = this.devStartupApp?.manifest.appDomain;
 		let devAppsOpened = 0;
-		for (const appDomain of this.devApps.keys()) {
-			if (appDomain !== testStartupApp) {
+		for (const [ appDomain, { skipAutoLaunch } ] of this.devApps.entries()) {
+			if ((appDomain !== testStartupApp) && !skipAutoLaunch) {
 				console.log(`▶ starting app ${appDomain}`);
 				await runner.openApp(appDomain);
 				devAppsOpened += 1;
@@ -267,12 +269,15 @@ export class TestStand {
 			u => areAddressesEqual(u.userId, userId)
 		)!;
 		assert(!!userParams);
-		return (appDomain, entrypoint, service) => {
+		return (appDomain, { entrypoint, service, cmd }) => {
 			const params = this.devApps.get(appDomain);
 			if (!params) { return; }
-			if (!entrypoint) {
-				assert(!!service, `service must be given`);
-				entrypoint = entrypointOfService(params.manifest, service!);
+			if (service) {
+				({ entrypoint } = getComponentForService(params.manifest, service));
+			} else if (cmd) {
+				({ entrypoint } = getComponentForCommand(params.manifest, cmd));
+			} else {
+				assert(!!entrypoint, `entrypoint is needed when both service and command are undefined`);
 			}
 			const { testStand, closeCAP } = this.makeTestStandCAP(
 				userParams, appDomain, entrypoint
@@ -400,7 +405,8 @@ export class TestStand {
 		this.listeners.add(capId, listeners);
 
 		const { log, record, exitAll } = this.makeBasicTestStand(
-			appDomain, userId);
+			appDomain, userId
+		);
 
 		const testStand: web3n.testing.TestStand = {
 
@@ -419,24 +425,22 @@ export class TestStand {
 				}
 			},
 
-			observeMsgsFromOtherLocalTestUser: (
+			observeMsgsFromOtherLocalTestProcess: (
 				sender, senderApp, senderComponent, obs
-			) => {
-				if (!senderApp) {
-					senderApp = appDomain;
-				}
-				return listeners.addListenerOf(
-					sender, senderApp, senderComponent, obs);
-			},
+			) => listeners.addListenerOf(
+				(sender === undefined) ? userNum : sender,
+				(senderApp === undefined) ? appDomain : senderApp,
+				senderComponent, obs
+			),
 
-			sendMsgToOtherLocalTestUser: async (
+			sendMsgToOtherLocalTestProcess: async (
 				recipient, recipientApp, recipientComponent, msg
 			) => {
-				if (!recipientApp) {
-					recipientApp = appDomain;
-				}
 				const recipientListenerId = capIdFor(
-					recipient, recipientApp, recipientComponent);
+					(recipient === undefined) ? userNum : recipient,
+					(recipientApp === undefined) ? appDomain : recipientApp,
+					recipientComponent
+				);
 				const recipientListeners = this.listeners.get(recipientListenerId);
 				if (!recipientListeners) { return; }
 				for (const l of recipientListeners) {
@@ -485,7 +489,7 @@ function toDevAppParams(
 		typeof app === 'object',
 		`Test stand app configuration should be an object.`
 	);
-	const { dir, url, logRPC } = app;
+	const { dir, url, logRPC, skipAutoLaunch } = app;
 	assert(
 		typeof dir === 'string',
 		`Test stand app configuration should have string 'dir' field.`
@@ -502,7 +506,9 @@ function toDevAppParams(
 		`App domain '${appDomain}' in test stand configuration should be equal to appDomain value in manifest file '${join(app.dir, MANIFEST_FILE)}'.`
 	);
 	return {
-		manifest, dir: appDir, url, logRPC: (logRPC === true) || undefined
+		manifest, dir: appDir, url,
+		logRPC: (logRPC === true) || undefined,
+		skipAutoLaunch: (skipAutoLaunch === true) || undefined
 	};
 }
 
@@ -799,7 +805,7 @@ class TestMsgListeners {
 		userNum: number, appDomain: string, component: string|undefined,
 		obs: web3n.Observer<any>
 	): (() => void) {
-		const srcId = capIdFor(userNum, appDomain,component);
+		const srcId = capIdFor(userNum, appDomain, component);
 		this.srcIdToObservers.add(srcId, obs);
 		return () => {
 			if (obs.complete)
@@ -810,7 +816,7 @@ class TestMsgListeners {
 	passMsgFrom(
 		userNum: number, appDomain: string, component: string|undefined, msg: any
 	): void {
-		const srcId = capIdFor(userNum, appDomain,component);
+		const srcId = capIdFor(userNum, appDomain, component);
 		const observers = this.srcIdToObservers.get(srcId);
 		if (!observers) { return; }
 		for (const obs of observers) {

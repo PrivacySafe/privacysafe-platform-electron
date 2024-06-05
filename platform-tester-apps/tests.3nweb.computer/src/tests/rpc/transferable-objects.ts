@@ -44,8 +44,10 @@ describe(``, () => {
 	}, timeout);
 
 	afterEach(async () => {
-		await connection.close();
-		connection = (undefined as any);
+		if (connection) {
+			await connection.close();
+			connection = (undefined as any);
+		}
 	});
 
 	it(`RPC transfers file object`, async () => {
