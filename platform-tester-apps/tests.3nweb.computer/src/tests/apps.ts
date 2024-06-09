@@ -20,8 +20,8 @@ describe(`apps`, () => {
 	it(`has all methods`, () => {
 		expect(w3n.apps).toBeDefined();
 		expect(w3n.apps!.opener).toBeDefined();
-		expect(typeof w3n.apps!.opener!.getAppIcon).toBe('function');
-		expect(typeof w3n.apps!.opener!.getAppInfo).toBe('function');
+		expect(typeof w3n.apps!.opener!.getAppManifest).toBe('function');
+		expect(typeof w3n.apps!.opener!.getAppFileBytes).toBe('function');
 		expect(typeof w3n.apps!.opener!.listApps).toBe('function');
 		expect(typeof w3n.apps!.opener!.openApp).toBe('function');
 		expect(w3n.apps!.downloader).toBeDefined();
@@ -30,8 +30,10 @@ describe(`apps`, () => {
 		expect(typeof w3n.apps!.downloader!.getAppVersionFilesList).toBe('function');
 		expect(typeof w3n.apps!.downloader!.getLatestAppVersion).toBe('function');
 		expect(w3n.apps!.installer).toBeDefined();
-		expect(typeof w3n.apps!.installer!.installWebApp).toBe('function');
-		expect(typeof w3n.apps!.installer!.unpackBundledWebApp).toBe('function');
+		expect(typeof w3n.apps!.installer!.unpackBundledApp).toBe('function');
+		expect(typeof w3n.apps!.installer!.installApp).toBe('function');
+		expect(typeof w3n.apps!.installer!.uninstallApp).toBe('function');
+		expect(typeof w3n.apps!.installer!.removeAppPack).toBe('function');
 		expect(w3n.apps!.platform).toBeDefined();
 		expect(typeof w3n.apps!.platform!.availableUpdateType).toBe('function');
 		expect(typeof w3n.apps!.platform!.downloadAndApplyUpdate).toBe('function');

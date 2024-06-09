@@ -14,7 +14,7 @@ message RequestWithAppIdAndVersion {
 	string version = 2;
 }
 
-// --- apps.installer.unpackBundledWebApp ---
+// --- apps.installer.unpackBundledApp ---
 // Its an observable call, and initial request is RequestWithAppId.
 message BundleUnpackProgress {
 	uint32 numOfFiles = 1;
@@ -22,6 +22,14 @@ message BundleUnpackProgress {
 	string fileInProgress = 3;
 }
 
-// --- apps.installer.installWebApp ---
+// --- apps.installer.installApp ---
 // Request body is RequestWithAppIdAndVersion
+// Reply body is empty
+
+// --- apps.installer.removeAppPack ---
+// Request body is RequestWithAppIdAndVersion
+// Reply body is empty
+
+// --- apps.installer.uninstallApp ---
+// Request body is RequestWithAppId
 // Reply body is empty

@@ -77,9 +77,12 @@ export interface StringArrayValue {
 	values: string[];
 }
 export const strArrValType = ProtoType.for<StringArrayValue>(
-	pb.StringArrayValue);
+	pb.StringArrayValue
+);
 
 export const strValType = ProtoType.for<Value<string>>(pb.StringValue);
+
+export const bytesValType = ProtoType.for<Value<Uint8Array>>(pb.BytesValue);
 
 export function fixArray<T>(arr: T[]): T[] {
 	return (arr ? arr : []);

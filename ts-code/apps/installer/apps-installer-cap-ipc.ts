@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2022 3NSoft Inc.
+ Copyright (C) 2021 - 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -29,9 +29,10 @@ export function exposeAppsInstallerCAP(
 	cap: AppsInstaller
 ): ExposedObj<AppsInstaller> {
 	return {
-		unpackBundledWebApp: unpackBundledWebApp.wrapService(
-			cap.unpackBundledWebApp),
-		installWebApp: installWebApp.wrapService(cap.installWebApp)
+		unpackBundledApp: unpackBundledApp.wrapService(cap.unpackBundledApp),
+		installApp: installApp.wrapService(cap.installApp),
+		uninstallApp: uninstallApp.wrapService(cap.uninstallApp),
+		removeAppPack: removeAppPack.wrapService(cap.removeAppPack)
 	};
 }
 
@@ -39,8 +40,10 @@ export function makeAppsInstallerCaller(
 	caller: Caller, objPath: string[]
 ): AppsInstaller {
 	return {
-		unpackBundledWebApp: unpackBundledWebApp.makeCaller(caller, objPath),
-		installWebApp: installWebApp.makeCaller(caller, objPath)
+		unpackBundledApp: unpackBundledApp.makeCaller(caller, objPath),
+		installApp: installApp.makeCaller(caller, objPath),
+		uninstallApp: uninstallApp.makeCaller(caller, objPath),
+		removeAppPack: removeAppPack.makeCaller(caller, objPath)
 	};
 }
 
@@ -49,12 +52,13 @@ const requestWithAppIdType = ProtoType.for<{
 }>(pb.RequestWithAppId);
 
 
-namespace unpackBundledWebApp {
+namespace unpackBundledApp {
 
 	const progressEventType = ProtoType.for<BundleUnpackProgress>(
-		pb.BundleUnpackProgress);
+		pb.BundleUnpackProgress
+	);
 
-	export function wrapService(fn: AppsInstaller['unpackBundledWebApp']): ExposedFn {
+	export function wrapService(fn: AppsInstaller['unpackBundledApp']): ExposedFn {
 		return buf => {
 			const { id } = requestWithAppIdType.unpack(buf);
 			const s = new Subject<BundleUnpackProgress>();
@@ -68,8 +72,8 @@ namespace unpackBundledWebApp {
 
 	export function makeCaller(
 		caller: Caller, objPath: string[]
-	): AppsInstaller['unpackBundledWebApp'] {
-		const path = objPath.concat('unpackBundledWebApp');
+	): AppsInstaller['unpackBundledApp'] {
+		const path = objPath.concat('unpackBundledApp');
 		return (id, obs) => {
 			const s = new Subject<EnvelopeBody>();
 			const unsub = caller.startObservableCall(
@@ -83,7 +87,7 @@ namespace unpackBundledWebApp {
 	}
 
 }
-Object.freeze(unpackBundledWebApp);
+Object.freeze(unpackBundledApp);
 
 
 const requestWithAppIdAndVersionType = ProtoType.for<{
@@ -91,9 +95,9 @@ const requestWithAppIdAndVersionType = ProtoType.for<{
 }>(pb.RequestWithAppIdAndVersion);
 
 
-namespace installWebApp {
+namespace installApp {
 
-	export function wrapService(fn: AppsInstaller['installWebApp']): ExposedFn {
+	export function wrapService(fn: AppsInstaller['installApp']): ExposedFn {
 		return buf => {
 			const { id, version } = requestWithAppIdAndVersionType.unpack(buf);
 			const promise = fn(id, version);
@@ -103,8 +107,8 @@ namespace installWebApp {
 
 	export function makeCaller(
 		caller: Caller, objPath: string[]
-	): AppsInstaller['installWebApp'] {
-		const path = objPath.concat('installWebApp');
+	): AppsInstaller['installApp'] {
+		const path = objPath.concat('installApp');
 		return async (id, version) => {
 			const req = requestWithAppIdAndVersionType.pack({ id, version });
 			await caller.startPromiseCall(path, req);
@@ -112,7 +116,55 @@ namespace installWebApp {
 	}
 
 }
-Object.freeze(installWebApp);
+Object.freeze(installApp);
+
+
+namespace uninstallApp {
+
+	export function wrapService(fn: AppsInstaller['uninstallApp']): ExposedFn {
+		return buf => {
+			const { id } = requestWithAppIdType.unpack(buf);
+			const promise = fn(id);
+			return { promise };
+		};
+	}
+
+	export function makeCaller(
+		caller: Caller, objPath: string[]
+	): AppsInstaller['uninstallApp'] {
+		const path = objPath.concat('uninstallApp');
+		return async (id) => {
+			const req = requestWithAppIdType.pack({ id });
+			await caller.startPromiseCall(path, req);
+		};
+	}
+
+}
+Object.freeze(uninstallApp);
+
+
+namespace removeAppPack {
+
+	export function wrapService(fn: AppsInstaller['removeAppPack']): ExposedFn {
+		return buf => {
+			const { id, version } = requestWithAppIdAndVersionType.unpack(buf);
+			const promise = fn(id, version);
+			return { promise };
+		};
+	}
+
+	export function makeCaller(
+		caller: Caller, objPath: string[]
+	): AppsInstaller['removeAppPack'] {
+		const path = objPath.concat('removeAppPack');
+		return async (id, version) => {
+			const req = requestWithAppIdAndVersionType.pack({ id, version });
+			await caller.startPromiseCall(path, req);
+		};
+	}
+
+}
+Object.freeze(removeAppPack);
 
 
 Object.freeze(exports);

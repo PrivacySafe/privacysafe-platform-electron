@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2022 3NSoft Inc.
+ Copyright (C) 2021 - 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,11 +15,16 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedFn, Caller, ExposedObj, FileMsg, exposeFileService, ExposedServices, makeFileCaller } from 'core-3nweb-client-lib/build/ipc';
-import { ProtoType, strValType } from '../ipc-with-core/protobuf-msg';
+import { ExposedFn, Caller, ExposedObj, ExposedServices, EnvelopeBody } from 'core-3nweb-client-lib/build/ipc';
+import { ProtoType, strValType, Value, toOptVal, valOfOpt, bytesValType } from '../ipc-with-core/protobuf-msg';
 import { apps_opener as pb } from '../protos/apps_opener.proto';
+import { Subject, map } from 'rxjs';
 
 type AppsOpener = web3n.apps.AppsOpener;
+type AppState = web3n.apps.AppState;
+type AppEvent = web3n.apps.AppEvent;
+type AppVersions = web3n.apps.AppVersions;
+type ReadonlyFile = web3n.files.ReadonlyFile;
 
 export function exposeAppsOpenerCAP(
 	cap: AppsOpener, expServices: ExposedServices
@@ -27,8 +32,10 @@ export function exposeAppsOpenerCAP(
 	return {
 		listApps: listApps.wrapService(cap.listApps),
 		openApp: openApp.wrapService(cap.openApp),
-		getAppIcon: getAppIcon.wrapService(cap.getAppIcon, expServices),
-		getAppInfo: getAppInfo.wrapService(cap.getAppInfo),
+		getAppFileBytes: getAppFile.wrapService(cap.getAppFileBytes),
+		getAppManifest: getAppManifest.wrapService(cap.getAppManifest),
+		getAppVersions: getAppVersions.wrapService(cap.getAppVersions),
+		watchApps: watchApps.wrapService(cap.watchApps)
 	};
 }
 
@@ -38,18 +45,53 @@ export function makeAppsOpenerCaller(
 	return {
 		listApps: listApps.makeCaller(caller, objPath),
 		openApp: openApp.makeCaller(caller, objPath),
-		getAppIcon: getAppIcon.makeCaller(caller, objPath),
-		getAppInfo: getAppInfo.makeCaller(caller, objPath),
+		getAppFileBytes: getAppFile.makeCaller(caller, objPath),
+		getAppManifest: getAppManifest.makeCaller(caller, objPath),
+		getAppVersions: getAppVersions.makeCaller(caller, objPath),
+		watchApps: watchApps.makeCaller(caller, objPath)
+	};
+}
+
+
+interface AppVersionsMsg {
+	id: string;
+	current?: Value<string>;
+	bundled?: Value<string>;
+	packs: string[];
+}
+function appVersionsToMsg(v: AppVersions): AppVersionsMsg {
+	return {
+		id: v.id,
+		bundled: toOptVal(v.bundled),
+		current: toOptVal(v.current),
+		packs: (v.packs ? v.packs : [])
+	};
+}
+function appVersionsFromMsg(v: AppVersionsMsg): AppVersions {
+	return {
+		id: v.id,
+		bundled: valOfOpt(v.bundled),
+		current: valOfOpt(v.current),
+		packs: ((v.packs.length > 0) ? v.packs : undefined)
 	};
 }
 
 
 namespace listApps {
 
+	const requestType = ProtoType.for<{
+		filter: AppState[];
+	}>(pb.ListAppsRequestBody);
+
+	const replyType = ProtoType.for<{
+		apps: AppVersionsMsg[];
+	}>(pb.ListAppsReplyBody);
+
 	export function wrapService(fn: AppsOpener['listApps']): ExposedFn {
-		return () => {
-			const promise = fn()
-			.then(apps => strValType.pack({ value: JSON.stringify(apps) }));
+		return buf => {
+			const { filter } = requestType.unpack(buf);
+			const promise = fn((filter.length > 0) ? filter : undefined)
+			.then(apps => replyType.pack({ apps: apps.map(appVersionsToMsg) }));
 			return { promise };
 		};
 	}
@@ -58,9 +100,11 @@ namespace listApps {
 		caller: Caller, objPath: string[]
 	): AppsOpener['listApps'] {
 		const path = objPath.concat('listApps');
-		return async () => {
-			const buf = await caller.startPromiseCall(path, undefined);
-			return JSON.parse(strValType.unpack(buf).value);
+		return async filter => {
+			const buf = await caller.startPromiseCall(
+				path, requestType.pack({ filter: (filter ? filter : []) })
+			);
+			return replyType.unpack(buf).apps.map(appVersionsFromMsg);
 		};
 	}
 
@@ -77,7 +121,7 @@ namespace openApp {
 	export function wrapService(fn: AppsOpener['openApp']): ExposedFn {
 		return buf => {
 			const { id, devtools } = requestType.unpack(buf);
-			const promise = fn(id);
+			const promise = fn(id, devtools);
 			return { promise };
 		};
 	}
@@ -96,71 +140,151 @@ namespace openApp {
 Object.freeze(openApp);
 
 
-const requestWithAppIdType = ProtoType.for<{
-	id: string;
-}>(pb.RequestWithAppId);
+namespace getAppVersions {
 
+	const requestType = ProtoType.for<{
+		id: string;
+		filter: AppState[];
+	}>(pb.GetAppVersionsRequestBody);
 
-namespace getAppInfo {
+	const appVersionsType = ProtoType.for<AppVersionsMsg>(pb.AppVersions);
 
-	export function wrapService(fn: AppsOpener['getAppInfo']): ExposedFn {
+	export function wrapService(fn: AppsOpener['getAppVersions']): ExposedFn {
 		return buf => {
-			const { id } = requestWithAppIdType.unpack(buf);
-			const promise = fn(id)
-			.then(info => strValType.pack({ value: JSON.stringify(info) }));
+			const { id, filter } = requestType.unpack(buf);
+			const promise = fn(id, ((filter.length > 0) ? filter : undefined))
+			.then(v => (v ?
+				appVersionsType.pack(appVersionsToMsg(v)) : undefined
+			));
 			return { promise };
 		};
 	}
 
 	export function makeCaller(
 		caller: Caller, objPath: string[]
-	): AppsOpener['getAppInfo'] {
-		const path = objPath.concat('getAppInfo');
-		return async id => {
-			const req = requestWithAppIdType.pack({ id });
+	): AppsOpener['getAppVersions'] {
+		const path = objPath.concat('getAppVersions');
+		return async (id, filter) => {
+			const req = requestType.pack({ id, filter: (filter ? filter : []) });
 			const buf = await caller.startPromiseCall(path, req);
-			const { value: infoInJson } = strValType.unpack(buf);
-			return (infoInJson ? JSON.parse(infoInJson) : undefined);
+			return (buf ?
+				appVersionsFromMsg(appVersionsType.unpack(buf)) : undefined
+			);
 		};
 	}
 
 }
-Object.freeze(getAppInfo);
+Object.freeze(getAppVersions);
 
 
-namespace getAppIcon {
+namespace getAppManifest {
 
-	const replyType = ProtoType.for<{
-		file: FileMsg;
-	}>(pb.GetAppIconReplyBody);
+	const requestType = ProtoType.for<{
+		id: string;
+		version?: Value<string>;
+	}>(pb.GetAppManifestRequestBody);
+
+	export function wrapService(fn: AppsOpener['getAppManifest']): ExposedFn {
+		return buf => {
+			const { id, version } = requestType.unpack(buf);
+			const promise = fn(id, valOfOpt(version))
+			.then(m => (m ?
+				strValType.pack({ value: JSON.stringify(m) }) : undefined
+			));
+			return { promise };
+		};
+	}
+
+	export function makeCaller(
+		caller: Caller, objPath: string[]
+	): AppsOpener['getAppManifest'] {
+		const path = objPath.concat('getAppManifest');
+		return async (id, version) => {
+			const req = requestType.pack({ id, version: toOptVal(version) });
+			const buf = await caller.startPromiseCall(path, req);
+			return (buf ?
+				JSON.parse(strValType.unpack(buf).value) : undefined
+			);
+		};
+	}
+
+}
+Object.freeze(getAppManifest);
+
+
+namespace getAppFile {
+
+	const requestType = ProtoType.for<{
+		id: string;
+		path: string;
+		version?: Value<string>;
+	}>(pb.GetAppFileBytesRequestBody);
+
+	export function wrapService(fn: AppsOpener['getAppFileBytes']): ExposedFn {
+		return buf => {
+			const { id, path, version } = requestType.unpack(buf);
+			const promise = fn(id, path, valOfOpt(version))
+			.then(bytes => (bytes ?
+				bytesValType.pack({ value: bytes }) : undefined
+			));
+			return { promise };
+		};
+	}
+
+	export function makeCaller(
+		caller: Caller, objPath: string[]
+	): AppsOpener['getAppFileBytes'] {
+		const methodPath = objPath.concat('getAppFileBytes');
+		return async (id, path, version) => {
+			const req = requestType.pack({ id, path, version: toOptVal(version) });
+			const buf = await caller.startPromiseCall(methodPath, req);
+			return (buf ? bytesValType.unpack(buf).value : undefined);
+		};
+	}
+
+}
+Object.freeze(getAppFile);
+
+
+namespace watchApps {
+
+	const eventType = ProtoType.for<AppEvent>(pb.AppEvent);
 
 	export function wrapService(
-		fn: AppsOpener['getAppIcon'], expServices: ExposedServices
+		fn: AppsOpener['watchApps']
 	): ExposedFn {
-		return buf => {
-			const { id } = requestWithAppIdType.unpack(buf);
-			const promise = fn(id)
-			.then(file => replyType.pack({
-				file: exposeFileService(file, expServices)
-			}));
-			return { promise };
+		return () => {
+			const s = new Subject<AppEvent>();
+			const obs = s.asObservable().pipe(
+				map(ev => eventType.pack(ev))
+			);
+			const onCancel = fn(s);
+			return { obs, onCancel };
 		};
 	}
 
 	export function makeCaller(
 		caller: Caller, objPath: string[]
-	): AppsOpener['getAppIcon'] {
-		const path = objPath.concat('getAppIcon');
-		return async id => {
-			const req = requestWithAppIdType.pack({ id });
-			const buf = await caller.startPromiseCall(path, req);
-			const reply = replyType.unpack(buf);
-			return makeFileCaller(caller, reply.file) as web3n.files.ReadonlyFile;
+	): AppsOpener['watchApps'] {
+		const path = objPath.concat('watchApps');
+		return obs => {
+			const s = new Subject<EnvelopeBody>();
+			const unsub = caller.startObservableCall(path, undefined, s);
+			s.subscribe({
+				next: buf => {
+					if (obs.next) {
+						obs.next(eventType.unpack(buf));
+					}
+				},
+				complete: obs.complete,
+				error: obs.error
+			});
+			return unsub;
 		};
 	}
 
 }
-Object.freeze(getAppIcon);
+Object.freeze(watchApps);
 
 
 Object.freeze(exports);

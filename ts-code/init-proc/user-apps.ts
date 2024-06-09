@@ -49,6 +49,9 @@ type UserAppsEvents = 'start-closing' | {
 };
 
 type CmdParams = web3n.shell.commands.CmdParams;
+type Platform = web3n.apps.Platform;
+type BundleUnpackProgress = web3n.apps.BundleUnpackProgress;
+type DownloadProgress = web3n.apps.DownloadProgress;
 
 const platformComponentName = {
 	guiPlacement: 'gui.placement'
@@ -116,9 +119,9 @@ export class UserApps {
 	async listInstalled(): Promise<UserAppInfo[]> {
 		const infos: UserAppInfo[] = [];
 		const allApps = await this.sysPlaces.listApps();
-		for (const { id, installed } of allApps) {
+		for (const { id, current } of allApps) {
 			infos.push({
-				id, name: id, isInstalled: !!installed
+				id, name: id, isInstalled: !!current
 			});
 		}
 		return infos;
@@ -305,13 +308,12 @@ export class UserApps {
 			if ((exc as  AppInitException).notInstalled) {
 				const {
 					bundleUnpack$, download$, version
-				} = await this.getAppPack(appDomain);
+				} = await this.checkAppPackPresenceOrStartToGetIt(appDomain);
 				// XXX note that we may want to add process observation to openApp's
 				//     instead of just non-responsive await below
 				if (bundleUnpack$) {
 					await bundleUnpack$.toPromise();
-				}
-				if (download$) {
+				} else if (download$) {
 					await download$.toPromise();
 				}
 				await this.sysPlaces.installApp(appDomain, version);
@@ -326,34 +328,30 @@ export class UserApps {
 		await this.openApp(LAUNCHER_APP_DOMAIN);
 	}
 
-	private async getAppPack(
+	private async checkAppPackPresenceOrStartToGetIt(
 		appDomain: string
 	): Promise<{
 		version: string;
 		bundleUnpack$?: Observable<BundleUnpackProgress>;
 		download$?: Observable<DownloadProgress>;
 	}> {
-		const info = await this.sysPlaces.getAppInfo(appDomain);
+		const info = await this.sysPlaces.getAppVersions(appDomain);
 		if (info) {
 			// check if pack is already present
 			if (info.packs) {
-				const version = latestVersionInPacks(info.packs);
+				const version = latestVersionIn(info.packs);
 				if (version) {
 					return { version };
 				}
 			}
 			// check if there is a bundle to unpack
 			if (info.bundled) {
-				const bundle = info.bundled
-				.find(b => (!b.isLink));
-				if (bundle) {
-					const bundleUnpackProgress = new Subject<BundleUnpackProgress>();
-					this.sysPlaces.unpackBundledApp(appDomain, bundleUnpackProgress);
-					return {
-						version: bundle.version,
-						bundleUnpack$: bundleUnpackProgress.asObservable()
-					};
-				}
+				const bundleUnpackProgress = new Subject<BundleUnpackProgress>();
+				this.sysPlaces.unpackBundledApp(appDomain, bundleUnpackProgress);
+				return {
+					version: info.bundled,
+					bundleUnpack$: bundleUnpackProgress.asObservable()
+				};
 			}
 		}
 		// download pack
@@ -394,8 +392,12 @@ export class UserApps {
 			opener: {
 				listApps: this.sysPlaces.listApps.bind(this.sysPlaces),
 				openApp: this.openApp.bind(this),
-				getAppIcon: this.sysPlaces.getAppIcon.bind(this.sysPlaces),
-				getAppInfo: this.sysPlaces.getAppInfo.bind(this.sysPlaces),
+				getAppVersions: this.sysPlaces.getAppVersions.bind(this.sysPlaces),
+				getAppManifest: this.sysPlaces.getAppManifest.bind(this.sysPlaces),
+				getAppFileBytes: this.sysPlaces.getAppFileBytes.bind(
+					this.sysPlaces
+				),
+				watchApps: this.sysPlaces.watchApps.bind(this.sysPlaces)
 			},
 			downloader: {
 				downloadWebApp: this.appDownloader.downloadWebApp.bind(
@@ -412,10 +414,15 @@ export class UserApps {
 				)
 			},
 			installer: {
-				unpackBundledWebApp: this.sysPlaces.unpackBundledApp.bind(
+				unpackBundledApp: this.sysPlaces.unpackBundledApp.bind(
 					this.sysPlaces
 				),
-				installWebApp: this.sysPlaces.installApp.bind(this.sysPlaces),
+				installApp: this.sysPlaces.installApp.bind(this.sysPlaces),
+				uninstallApp: async id => {
+					await this.components.closeApp(id);
+					await this.sysPlaces.uninstallApp(id);
+				},
+				removeAppPack: this.sysPlaces.removeAppPack.bind(this.sysPlaces)
 			},
 			platform: this.getPlatform()
 		};
@@ -447,20 +454,6 @@ export class UserApps {
 }
 Object.freeze(UserApps.prototype);
 Object.freeze(UserApps);
-
-
-type AppInfo = web3n.apps.AppInfo;
-type Platform = web3n.apps.Platform;
-type BundleUnpackProgress = web3n.apps.BundleUnpackProgress;
-type DownloadProgress = web3n.apps.DownloadProgress;
-
-function latestVersionInPacks(
-	packs: NonNullable<AppInfo['packs']>
-): string|undefined {
-	const webVersions = packs
-	.map(info => info.version);
-	return ((webVersions.length > 0) ? latestVersionIn(webVersions) : undefined);
-}
 
 
 Object.freeze(exports);

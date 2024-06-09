@@ -555,6 +555,17 @@ export class Components {
 		}
 	}
 
+	async closeApp(appDomain: string): Promise<void> {
+		const app = this.apps.get(appDomain);
+		if (!app) { return; }
+		for (const gui of app.userStarted()) {
+			gui.close();
+		}
+		for (const srv of app.serviceComponents()) {
+			srv.close();
+		}
+	}
+
 	findServiceInstanceForNewCall(
 		appDomain: string, service: string
 	): Service|undefined {

@@ -267,5 +267,18 @@ export async function readManifestFromZip(
 	}
 }
 
+export async function readFileBytesFromZip(
+	zipFile: string, pathInZip: string
+): Promise<Uint8Array|undefined> {
+	const zip = await ZipReaderInWorker.forLocalFile(zipFile);
+	try {
+		return await zip.readFile(pathInZip);
+	} catch (err) {
+		return;
+	} finally {
+		zip.close();
+	}
+}
+
 
 Object.freeze(exports);

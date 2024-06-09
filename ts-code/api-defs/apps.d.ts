@@ -15,6 +15,8 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+/// <reference path="./manifest.d.ts" />
+
 /**
  * This is used by system utility launcher app, and concerns only platform
  * developers, not app developers. Nonetheless, app developers have a standard
@@ -30,24 +32,33 @@ declare namespace web3n.apps {
 	}
 
 	interface AppsOpener {
-		listApps(): Promise<AppInfo[]>;
+		listApps(filter?: AppState[]): Promise<AppVersions[]>;
 		openApp(id: string, devTools?: boolean): Promise<void>;
-		getAppInfo(id: string): Promise<AppInfo|undefined>;
-		getAppIcon(id: string, entrypoint?: string): Promise<files.ReadonlyFile>;
+		getAppVersions(
+			id: string, filter?: AppState[]
+		): Promise<AppVersions|undefined>;
+		getAppManifest(
+			id: string, version?: string
+		): Promise<caps.AppManifest|undefined>;
+		getAppFileBytes(
+			id: string, path: string, version?: string
+		): Promise<Uint8Array|undefined>;
+		watchApps(observer: Observer<AppEvent>): () => void;
 	}
 
-	interface AppInfo {
+	interface AppVersions {
 		id: string;
-		installed?: {
-			version: string;
-		}[];
-		packs?: {
-			version: string;
-		}[];
-		bundled?: {
-			version: string;
-			isLink?: true;
-		}[];
+		current?: string;
+		packs?: string[];
+		bundled?: string;
+	}
+
+	type AppState = 'current' | 'packs' | 'bundled';
+
+	interface AppEvent {
+		type: 'installed' | 'uninstalled';
+		id: string;
+		version: string;
 	}
 
 	interface AppsDownloader {
@@ -93,13 +104,13 @@ declare namespace web3n.apps {
 	}
 
 	interface AppsInstaller {
-		unpackBundledWebApp(
+		unpackBundledApp(
 			id: string, observer: Observer<BundleUnpackProgress>
 		): () => void;
-		installWebApp(id: string, version: string): Promise<void>;
+		installApp(id: string, version: string): Promise<void>;
+		removeAppPack(id: string, version: string): Promise<void>;
+		uninstallApp(id: string): Promise<void>;
 		// removeAppData(id: string);
-		// removeAppPacks(id: string);
-		// uninstallApp(id: string);
 	}
 
 	interface BundleUnpackProgress {

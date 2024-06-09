@@ -18,7 +18,7 @@
 import { FactoryOfFSs, reverseDomain, sysFolders } from 'core-3nweb-client-lib';
 import { join } from 'path';
 import { from, Observable, Subject } from 'rxjs';
-import { mergeMap } from 'rxjs/operators';
+import { mergeMap, share } from 'rxjs/operators';
 import { BUNDLED_APP_PACKS_FOLDER } from '../../bundle-confs';
 import { logError } from '../../confs';
 import { assert } from '../../lib-common/assert';
@@ -26,20 +26,19 @@ import { FileException, readdir, stat } from '../../lib-common/async-fs-node';
 import { makeRuntimeException } from '../../lib-common/exceptions/runtime';
 import { checkAppManifest } from '../../lib-common/manifest-utils';
 import { toRxObserver } from '../../lib-common/utils-for-observables';
-import { readManifestFromZip, unzipAppVersion, APP_ROOT_FOLDER, MANIFEST_FILE } from './unpack-zipped-app';
+import { readManifestFromZip, unzipAppVersion, APP_ROOT_FOLDER, MANIFEST_FILE, readFileBytesFromZip } from './unpack-zipped-app';
 import { SingleProc } from '../../lib-common/processes';
 
 type Observer<T> = web3n.Observer<T>;
 type ReadonlyFS = web3n.files.ReadonlyFS;
 type WritableFS = web3n.files.WritableFS;
-type ReadonlyFile = web3n.files.ReadonlyFile;
 type FSCollection = web3n.files.FSCollection;
 type StorageType = web3n.storage.StorageType;
 type BundleUnpackProgress = web3n.apps.BundleUnpackProgress;
-type AppInfo = web3n.apps.AppInfo;
+type AppVersions = web3n.apps.AppVersions;
+type AppState = web3n.apps.AppState;
+type AppEvent = web3n.apps.AppEvent;
 type AppManifest = web3n.caps.AppManifest;
-
-export type ExtAppInfo = AppInfo & { name: string; };
 
 const CURRENT_FNAME = 'current';
 const COMPLETE_PACKS_DIR = 'complete';
@@ -49,6 +48,9 @@ const PLATFORM_PREFIX = 'computer.3nweb.platform';
 
 
 export class SystemPlaces {
+
+	private readonly appEventSink = new Subject<AppEvent>();
+	private readonly appEvent$ = this.appEventSink.asObservable().pipe(share());
 
 	constructor(
 		private readonly storages: () => FactoryOfFSs
@@ -84,80 +86,112 @@ export class SystemPlaces {
 		return componentFS;
 	}
 
-	async listApps(): Promise<AppInfo[]> {
-		const infos = new Map<string, AppInfo>();
-		for (const info of await listInstalledApps(await this.getAppsCodeFS())) {
-			infos.set(info.id, info);
-		}
-		for (const info of await listBundledApps()) {
-			const existing = infos.get(info.id);
-			if (existing) {
-				existing.bundled = info.bundled;
-			} else {
+	async listApps(filter?: AppState[]): Promise<AppVersions[]> {
+		const infos = new Map<string, AppVersions>();
+		if (!filter || filter.includes('current')) {
+			for (const info of await listInstalledApps(
+				await this.getAppsCodeFS()
+			)) {
 				infos.set(info.id, info);
 			}
 		}
-		for (const info of await listCompletePacks(await this.getPackagesFS())) {
-			const existing = infos.get(info.id);
-			if (existing) {
-				existing.packs = info.packs;
-			} else {
-				infos.set(info.id, info);
+		if (!filter || filter.includes('bundled')) {
+			for (const info of await listBundledApps()) {
+				const existing = infos.get(info.id);
+				if (existing) {
+					existing.bundled = info.bundled;
+				} else {
+					infos.set(info.id, info);
+				}
+			}
+		}
+		if (!filter || filter.includes('packs')) {
+			for (const info of await listCompleteAppPacks(
+				await this.getPackagesFS()
+			)) {
+				const existing = infos.get(info.id);
+				if (existing) {
+					existing.packs = info.packs;
+				} else {
+					infos.set(info.id, info);
+				}
 			}
 		}
 		return Array.from(infos.values());
 	}
 
-	async listInstalledApps(): Promise<ExtAppInfo[]> {
-
-		// XXX should get installed with system, and installed in user's folder,
-		//     AppInfo or AppVersionsInfo should pass this data.
-
-		return await listInstalledApps(await this.getAppsCodeFS());
-	}
-
-	async getAppInfo(id: string): Promise<AppInfo|undefined> {
+	async getAppVersions(
+		id: string, filter?: AppState[]
+	): Promise<AppVersions|undefined> {
 		const appFolder = reverseDomain(id);
-		let info: AppInfo|undefined = await getInstalledAppInfo(
-			await this.getAppsCodeFS(), appFolder
-		);
-		const bundled = await getBundledAppInfo(id);
-		if (bundled) {
-			if (info) {
-				info.bundled = bundled.bundled;
-			} else {
-				info = bundled;
+		const info: AppVersions = { id };
+		if (!filter || filter.includes('current')) {
+			const appFS = await getInstalledAppDir(
+				await this.getAppsCodeFS(), appFolder
+			);
+			if (appFS) {
+				const m = await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
+				info.current = m.version;
 			}
 		}
-		const packs = await getAppPacksInfo(
-			await this.getPackagesFS(), appFolder
-		);
-		if (packs) {
-			if (info) {
-				info.packs = packs.packs;
-			} else {
-				info = packs;
+		if (!filter || filter.includes('bundled')) {
+			const m = await getBundledAppManifest(id);
+			if (m) {
+				info.bundled = m.version;
 			}
 		}
-		return info;
+		if (!filter || filter.includes('packs')) {
+			const completePacks = await getAppPacksVersions(
+				await this.getPackagesFS(), appFolder
+			);
+			if (completePacks) {
+				info.packs = completePacks.packs;
+			}
+		}
+		return ((!info.current && !info.bundled && !info.packs) ?
+			undefined : info
+		);
 	}
 
-	async getAppIcon(id: string): Promise<ReadonlyFile> {
-		const appsFolder = await this.getAppsCodeFS();
+	async getAppManifest(
+		id: string, version?: string
+	): Promise<AppManifest|undefined> {
 		const appFolder = reverseDomain(id);
-		// ().readonlyFile(`${appFolder}/`)
-
-		let info: AppInfo|undefined = await getInstalledAppInfo(
-			appsFolder, appFolder
+		const appFS = await (version ?
+			getAppDirInPacks(await this.getPackagesFS(), appFolder, version) :
+			getInstalledAppDir(await this.getAppsCodeFS(), appFolder)
 		);
+		if (appFS) {
+			return await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
+		} else if (version) {
+			const bundledM = await getBundledAppManifest(id);
+			if (bundledM && (bundledM.version === version)) {
+				return bundledM;
+			}
+		}
+	}
 
-		// XXX
-		//  - read path from manifest's component's icon field
-		//  - return file for current API
-		//  - if file not found, return icon of a default component,
-		//  - if default component has no icon, we should return some other.
+	async getAppFileBytes(
+		id: string, path: string, appVersion?: string
+	): Promise<Uint8Array|undefined> {
+		const appFolder = reverseDomain(id);
+		const appFS = await (appVersion ?
+			getAppDirInPacks(await this.getPackagesFS(), appFolder, appVersion) :
+			getInstalledAppDir(await this.getAppsCodeFS(), appFolder)
+		);
+		if (appFS) {
+			return await appFS.readBytes(`${APP_ROOT_FOLDER}/${path}`);
+		} else if (appVersion) {
+			const bundledM = await getBundledAppManifest(id);
+			if (bundledM && (bundledM.version === appVersion)) {
+				return await getBundledAppFileBytes(id, path);
+			}
+		}
+	}
 
-		throw new Error("Method not implemented.");
+	watchApps(observer: Observer<AppEvent>): () => void {
+		const sub = this.appEvent$.subscribe(observer);
+		return () => sub.unsubscribe();
 	}
 
 	unpackBundledApp(
@@ -179,16 +213,35 @@ export class SystemPlaces {
 			const pack = await (await this.getPackagesFS()).readonlySubRoot(
 				completePackAppVersionFolder(id, version)
 			);
-			await checkWebPackBeforeInstall(pack, id, version);
+			await checkPackBeforeInstall(pack, id, version);
 			const appsCode = await this.getAppsCodeFS();
 			const current =`${reverseDomain(id)}/${CURRENT_FNAME}`;
 			if (await appsCode.checkLinkPresence(current)) {
 				await appsCode.deleteLink(current);
 			}
 			await appsCode.link(current, pack);
+			this.appEventSink.next({ type: 'installed', id, version });
 		} catch (err) {
 			throw makeAppInitExc(id, { errAtInstall: true }, { cause: err });
 		}
+	}
+
+	async uninstallApp(id: string): Promise<void> {
+		try {
+			const appsCode = await this.getAppsCodeFS();
+			const current =`${reverseDomain(id)}/${CURRENT_FNAME}`;
+			if (await appsCode.checkLinkPresence(current)) {
+				const { version } = await appsCode.readLink(current)
+				.then(link => link.target())
+				.then((
+					appFS: ReadonlyFS
+				) => appFS.readJSONFile<AppManifest>(MANIFEST_FILE));
+				await appsCode.deleteLink(current);
+				this.appEventSink.next({ type: 'uninstalled', id, version });
+			}
+		} catch (err) {
+			throw makeAppInitExc(id, { errAtUninstall: true }, { cause: err });
+		}		
 	}
 
 	async findInstalledApp(
@@ -209,11 +262,37 @@ export class SystemPlaces {
 		const dlPath = `${PARTIAL_PACKS_DIR}/${appDomain}-${version}-download`;
 		return {
 			dir: await packs.writableSubRoot(
-				dlPath, { create: true, exclusive: true }),
+				dlPath, { create: true, exclusive: true }
+			),
 			rmDirOnErr: () => packs.deleteFolder(dlPath, true),
 			mvDirOnCompletion: () => packs.move(
-				dlPath, completePackAppVersionFolder(appDomain, version))
+				dlPath, completePackAppVersionFolder(appDomain, version)
+			)
 		};	
+	}
+
+	async removeAppPack(id: string, version: string): Promise<void> {
+		const appVersions = await this.getAppVersions(id, [ 'current', 'packs' ]);
+		if (!appVersions || !appVersions.packs
+		|| !appVersions.packs.includes(version)) {
+			return;
+		}
+		if (appVersions.current === version) {
+			throw makeAppInitExc(id, { errAtPackRemoval: true }, {
+				version,
+				message: `Can't remove pack version that is installed as current. Uninstall it first.`
+			});
+		}
+		try {
+			const packsFS = await this.getPackagesFS();
+			await packsFS.deleteFolder(
+				completePackAppVersionFolder(id, version), true
+			);
+		} catch (err) {
+			throw makeAppInitExc(
+				id, { errAtPackRemoval: true }, { cause: err, version }
+			);
+		}
 	}
 
 }
@@ -232,6 +311,8 @@ export interface AppInitException extends web3n.RuntimeException {
 	notInstalled?: true;
 	noBundledPack?: true;
 	errAtInstall?: true;
+	errAtUninstall?: true;
+	errAtPackRemoval?: true;
 }
 
 export function makeAppInitExc(
@@ -246,7 +327,7 @@ export function makeAppInitExc(
 	return makeRuntimeException<AppInitException>('app-init', params, flags);
 }
 
-async function checkWebPackBeforeInstall(
+async function checkPackBeforeInstall(
 	pack: ReadonlyFS, id: string, version: string
 ): Promise<void> {
 	const { manifest, appRoot } = await appAndManifestFrom(pack)
@@ -333,10 +414,6 @@ function bundleZipName(appDomain: string): string {
 	return `${reverseDomain(appDomain)}.zip`;
 }
 
-// XXX we need to remove platform section in the middle, in code and user data,
-// and keep this removal for backwards compatibility at least for some time.
-// Platform can change to just 'web' constant, as it was the only one used.
-
 function appVersionFolder(
 	appDomain: string, version: string
 ): string {
@@ -353,24 +430,28 @@ function appDomainFromFolder(fName: string): string {
 	return reverseDomain(fName);
 }
 
-async function listInstalledApps(codeFS: ReadonlyFS): Promise<ExtAppInfo[]> {
+async function listInstalledApps(codeFS: ReadonlyFS): Promise<AppVersions[]> {
 	const lst = await codeFS.listFolder('/');
-	const infos: ExtAppInfo[] = [];
+	const infos: AppVersions[] = [];
 	for (const entry of lst) {
-		const info = await getInstalledAppInfo(codeFS, entry.name)
+		const appFS = await getInstalledAppDir(codeFS, entry.name)
 		.catch(err => logError(
 			err, `Error during listing app in ${entry.name} folder of installed`
 		));
-		if (info) {
-			infos.push(info);
+		if (!appFS) {
+			continue;
 		}
+		const {
+			appDomain: id, version: current
+		} = await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
+		infos.push({ id, current });
 	}
 	return infos;
 }
 
-async function getInstalledAppInfo(
+async function getInstalledAppDir(
 	codeFS: ReadonlyFS, appFolder: string
-): Promise<ExtAppInfo|undefined> {
+): Promise<ReadonlyFS|undefined> {
 	const lstOfAppFolder = await codeFS.listFolder(appFolder)
 	.then(async lst => {
 		if (lst.find(item => (item.name === 'web'))) {
@@ -387,54 +468,52 @@ async function getInstalledAppInfo(
 		return;
 	}
 	const current = await codeFS.readLink(`${appFolder}/${CURRENT_FNAME}`);
-	const appFS = await current.target() as ReadonlyFS;
-	const m = await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
-	await appFS.close();
-	return {
-		id: m.appDomain,
-		name: (m.name ? m.name : m.appDomain),
-		installed: [
-			{ version: m.version }
-		]
-	};
+	return await current.target() as ReadonlyFS;
 }
 
-async function listBundledApps(): Promise<AppInfo[]> {
-	const appInfoPromises = (await readdir(BUNDLED_APP_PACKS_FOLDER)
+async function listBundledApps(): Promise<AppVersions[]> {
+	const appManifestsPromises = (await readdir(BUNDLED_APP_PACKS_FOLDER)
 	.catch((exc: FileException) => {
 		if (exc.notFound) { return [] as string[]; }
 		else { throw exc; }
 	}))
 	.filter(fName => fName.endsWith(`.zip`))
-	.map(fName => getAppInfoFromZip(join(BUNDLED_APP_PACKS_FOLDER, fName)));
-	const infos = (await Promise.all(appInfoPromises))
-	.filter(info => !!info) as AppInfo[];
+	.map(fName => readManifestFromZip(join(BUNDLED_APP_PACKS_FOLDER, fName)));
+	const infos = (await Promise.all(appManifestsPromises))
+	.filter(info => !!info)
+	.map(m => ({
+		id: m!.appDomain,
+		bundled: m!.version
+	} as AppVersions));
 	return infos;
 }
 
-async function getAppInfoFromZip(file: string): Promise<AppInfo|undefined> {
-	const m = await readManifestFromZip(file);
-	return (m ? {
-		id: m.appDomain,
-		bundled: [ {
-			version: m.version
-		} ]
-	} : undefined);
+function getBundledAppManifest(id: string): Promise<AppManifest|undefined> {
+	return readManifestFromZip(
+		join(BUNDLED_APP_PACKS_FOLDER, bundleZipName(id))
+	);
 }
 
-function getBundledAppInfo(id: string): Promise<AppInfo|undefined> {
-	return getAppInfoFromZip(join(BUNDLED_APP_PACKS_FOLDER, bundleZipName(id)));
+function getBundledAppFileBytes(
+	id: string, path: string
+): Promise<Uint8Array|undefined> {
+	return readFileBytesFromZip(
+		join(BUNDLED_APP_PACKS_FOLDER, bundleZipName(id)),
+		join(APP_ROOT_FOLDER, path)
+	);
 }
 
-async function listCompletePacks(packsFS: ReadonlyFS): Promise<AppInfo[]> {
+async function listCompleteAppPacks(
+	packsFS: ReadonlyFS
+): Promise<AppVersions[]> {
 	const lst = await packsFS.listFolder(COMPLETE_PACKS_DIR)
 	.catch((exc: FileException) => {
 		if (exc.notFound) { return []; }
 		else { throw exc; }
 	});
-	const infos: AppInfo[] = [];
+	const infos: AppVersions[] = [];
 	for (const entry of lst) {
-		const info = await getAppPacksInfo(packsFS, entry.name);
+		const info = await getAppPacksVersions(packsFS, entry.name);
 		if (info) {
 			infos.push(info);
 		}
@@ -442,9 +521,9 @@ async function listCompletePacks(packsFS: ReadonlyFS): Promise<AppInfo[]> {
 	return infos;
 }
 
-async function getAppPacksInfo(
+async function getAppPacksVersions(
 	packsFS: ReadonlyFS, appFolder: string
-): Promise<AppInfo|undefined> {
+): Promise<AppVersions|undefined> {
 	const packsFolder = `${COMPLETE_PACKS_DIR}/${appFolder}`;
 	const lstOfAppFolder = await packsFS.listFolder(packsFolder)
 	.then(async lst => {
@@ -462,7 +541,7 @@ async function getAppPacksInfo(
 	if (!lstOfAppFolder) { return; }
 	const packs = (await packsFS.listFolder(packsFolder))
 	.filter(entry => entry.isFolder)
-	.map(entry => ({ version: entry.name }));
+	.map(entry => entry.name);
 	return ((packs.length > 0) ? {
 		id: appDomainFromFolder(appFolder),
 		packs
@@ -486,6 +565,18 @@ async function removeWebSectionInInstallLinks(
 		await codeFS.deleteFolder(`${appFolder}/web`);
 	})
 	.catch(exc => logError(exc, `Exception thrown in removal of 'web' section from install path within ${appFolder} app folder`));
+}
+
+async function getAppDirInPacks(
+	packsFS: ReadonlyFS, appFolder: string, version: string
+): Promise<ReadonlyFS|undefined> {
+	try {
+		return await packsFS.readonlySubRoot(
+			`${COMPLETE_PACKS_DIR}/${appFolder}/${version}`
+		);
+	} catch (exc) {
+		if (!(exc as FileException).notFound) { throw exc; }
+	}
 }
 
 
