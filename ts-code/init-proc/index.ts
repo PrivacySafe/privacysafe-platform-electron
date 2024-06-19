@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2023 3NSoft Inc.
+ Copyright (C) 2016 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -30,6 +30,7 @@ import { toCanonicalAddress } from '../lib-common/canonical-address';
 import { DesktopUI } from '../desktop-integration';
 import { UserApps } from './user-apps';
 import { assert } from '../lib-common/assert';
+import { parse as parseSemVer } from 'semver';
 
 
 export class InitProc {
@@ -262,7 +263,7 @@ export class InitProc {
 	}
 
 	private readonly platformCAP: web3n.apps.Platform = {
-		getCurrentVersion: async () => app.getVersion(),
+		getCurrentVersion: getBundleVersionFromElectronApp,
 		getChannels: this.platform.getChannels.bind(this.platform),
 		getLatestVersion: this.platform.getLatestVersion.bind(
 			this.platform),
@@ -290,6 +291,14 @@ export class InitProc {
 }
 Object.freeze(InitProc.prototype);
 Object.freeze(InitProc);
+
+
+async function getBundleVersionFromElectronApp(): Promise<string> {
+	const v = parseSemVer(app.getVersion());
+	const platformVer = `${v!.major}.${v!.minor}.${Math.floor(v!.patch/1000)}`;
+	const bundleNum = v!.patch%1000;
+	return `${platformVer}+${bundleNum}`;
+}
 
 
 Object.freeze(exports);

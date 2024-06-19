@@ -23,10 +23,6 @@ addMsgToPage(JSON.stringify(fstCmd, undefined, 2));
 
 let cmdCount = (!!fstCmd ? 1 : 0);
 
-await w3n.testStand.sendMsgToOtherLocalTestProcess(
-	undefined, undefined, undefined, { cmdCount, cmd: fstCmd }
-);
-
 const unsub = w3n.shell!.watchStartCmds!({
 	next: sndCmd => {
 		cmdCount += 1;
@@ -42,4 +38,8 @@ const unsub = w3n.shell!.watchStartCmds!({
 	error: err => {},
 	complete: () => {}
 });
+
+await w3n.testStand.sendMsgToOtherLocalTestProcess(
+	undefined, undefined, undefined, { cmdCount, cmd: fstCmd }
+);
 

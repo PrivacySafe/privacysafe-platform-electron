@@ -6,11 +6,11 @@ exclude_package() {
 	node -e "
 		const pack = require('./package.json');
 		delete pack.dependencies['$mod'];
-		fs.writeFileSync('./package.json', JSON.stringify(pack, null, ' '));
+		fs.writeFileSync('./package.json', JSON.stringify(pack, null, '  '));
 		const lock = require('./package-lock.json');
 		delete lock.packages[''].dependencies['$mod'];
 		delete lock.packages['node_modules/$mod'];
-		fs.writeFileSync('./package-lock.json', JSON.stringify(lock, null, ' '));
+		fs.writeFileSync('./package-lock.json', JSON.stringify(lock, null, '  '));
 	" || return $?
 }
 

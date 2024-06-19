@@ -19,7 +19,7 @@ import { doBodylessRequest } from "../../electron/request-utils";
 import { makeRuntimeException } from "../../lib-common/exceptions/runtime";
 import { assert } from "../../lib-common/assert";
 import { makeUpdater } from "./updater";
-import { findPackInfo } from "../../confs";
+import { PackInfo, findPackInfo } from "../../confs";
 import { platform } from "os";
 import { PLATFORM_BUNDLE_URL } from "../../bundle-confs";
 
@@ -31,29 +31,13 @@ type DistChannels = web3n.apps.DistChannels;
 
 export class PlatformDownloader {
 
-	private readonly packInfo = findPackInfo();
+	private readonly packInfo: PackInfo|undefined;
 	private readonly type: 'electron-builder-update' | undefined;
 
 	constructor() {
-		this.type = this.packInfoToType();
+		this.packInfo = findPackInfo();
+		this.type = packInfoToType(this.packInfo);
 		Object.seal(this);
-	}
-
-	private packInfoToType(): PlatformDownloader['type'] {
-		if (platform() === 'linux') {
-			if (this.packInfo
-			&& (this.packInfo.variant === 'AppImage')) {
-				return 'electron-builder-update';
-			}
-		} else if (platform() === 'darwin') {
-			// we assume only one dmg variant on mac
-			return 'electron-builder-update';
-		} else if (platform() === 'win32') {
-			if (this.packInfo
-			&& (this.packInfo.variant === 'nsis')) {
-				return 'electron-builder-update';
-			}
-		}
 	}
 
 	getChannels(): Promise<DistChannels> {
@@ -87,6 +71,21 @@ Object.freeze(PlatformDownloader.prototype);
 Object.freeze(PlatformDownloader);
 
 
+function packInfoToType(
+	packInfo: PackInfo|undefined
+): PlatformDownloader['type'] {
+	if (packInfo) {
+		const os = platform();
+		if ((os === 'linux') && (packInfo.variant === 'AppImage')) {
+			return 'electron-builder-update';
+		} else if ((os === 'darwin') && (packInfo.variant === 'dmg')) {
+			return 'electron-builder-update';
+		} else if ((os === 'win32') && (packInfo.variant === 'nsis')) {
+			return 'electron-builder-update';
+		}
+	}
+}
+
 const bundleInfoFName = 'versions-in-bundle.json';
 
 interface BundleVersionsInfo {
@@ -104,7 +103,7 @@ async function getJson<T>(url: string): Promise<T|undefined> {
 }
 
 async function platfChannels(): Promise<DistChannels> {
-	const channels = await getJson<DistChannels>(`${PLATFORM_BUNDLE_URL}/channels`);
+	const channels = await getJson<DistChannels>(`${PLATFORM_BUNDLE_URL}/platform/channels`);
 	if (channels && (typeof channels.channels === 'object')) {
 		return channels;
 	} else {
@@ -173,7 +172,8 @@ function makeDownloadExc(
 	flags: Partial<PlatformDownloadException>, cause?: any
 ): PlatformDownloadException {
 	return makeRuntimeException<PlatformDownloadException>(
-		'platform-download', { cause }, flags);
+		'platform-download', { cause }, flags
+	);
 }
 
 function runElectronBuilderUpdate(
@@ -184,7 +184,11 @@ function runElectronBuilderUpdate(
 		if (updater) {
 			unsub = updater.checkForUpdateAndApply(observer);
 		} else if (observer && observer.error) {
-			observer.error(new Error(`Failed to create an updater. Packing info is ${JSON.stringify(findPackInfo())}`));
+			observer.error(new Error(
+				`Failed to create an updater. Packing info is ${
+					JSON.stringify(findPackInfo())
+				}`
+			));
 		}
 	});
 	return () => {

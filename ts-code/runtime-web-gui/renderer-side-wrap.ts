@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2022 3NSoft Inc.
+ Copyright (C) 2020 - 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -29,12 +29,10 @@ type W3N = web3n.caps.W3N;
 function makeClientSideConnector(): ObjectsConnector {
 	const fromCore = new Subject<Envelope>();
 	const coreListener = (event: IpcRendererEvent, msg: Envelope) => {
-		if (event.senderId === 0) {
-			if (msg.body) {
-				msg.body.value = toBuffer(msg.body.value);
-			}
-			fromCore.next(msg);
+		if (msg.body) {
+			msg.body.value = toBuffer(msg.body.value);
 		}
+		fromCore.next(msg);
 	};
 	const listObjOnServiceSide = (
 		path: string[]

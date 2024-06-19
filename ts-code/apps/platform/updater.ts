@@ -36,20 +36,21 @@ export async function makeUpdater(channel: string): Promise<Updater|undefined> {
 	if (!packInfo) {
 		return;
 	}
-	if (packInfo.variant === 'AppImage') {
+	const { arch, variant } = packInfo;
+	if (variant === 'AppImage') {
 		return wrapElectronBuilderUpdater(new AppImageUpdater({
 			provider: 'generic',
-			url: `${PLATFORM_BUNDLE_URL}${channel}/linux/`
+			url: `${PLATFORM_BUNDLE_URL}/${channel}/linux/${arch}/`
 		}));			
-	} else if (packInfo.variant === 'nsis') {
+	} else if (variant === 'nsis') {
 		return wrapElectronBuilderUpdater(new NsisUpdater({
 			provider: 'generic',
-			url: `${PLATFORM_BUNDLE_URL}${channel}/windows/`
+			url: `${PLATFORM_BUNDLE_URL}/${channel}/windows/${arch}/`
 		}));			
-	} else if (packInfo.variant === 'dmg') {
+	} else if (variant === 'dmg') {
 		return wrapElectronBuilderUpdater(new MacUpdater({
 			provider: 'generic',
-			url: `${PLATFORM_BUNDLE_URL}${channel}/mac/`
+			url: `${PLATFORM_BUNDLE_URL}/${channel}/mac/${arch}/`
 		}));			
 	} else {
 		return;
@@ -60,27 +61,26 @@ function wrapElectronBuilderUpdater(updater: AppUpdater): Updater {
 	updater.on('checking-for-update', () => {
 		next({ event: 'checking-for-update' });
 	});
-	updater.on('update-available', (info: UpdateInfo) => {
-		next({
-			event: 'update-available',
-			totalSizeMBs: Math.round(info.files[0].size!/1024/1024)
-		});
-	});
-	updater.on('update-not-available', info => {
-		signalErr(makeRuntimeException('platform-download', {
+	updater.on('update-available', (info: UpdateInfo) => next({
+		event: 'update-available',
+		totalSizeMBs: Math.round(info.files[0].size!/1024/1024)
+	}));
+	updater.on('update-not-available', info => signalErr(makeRuntimeException(
+		'platform-download',
+		{
 			message: `Update unexpectedly not available`,
 			cause: info
-		}, {}));
-	});
-	updater.on('download-progress', (progress: ProgressInfo) => {
-		next({
-			event: 'download-progress',
-			percent: progress.percent
-		});
-	});
-	updater.on('update-downloaded', (info: UpdateDownloadedEvent) => {
-		next({ event: 'download-progress', percent: 100 });
-	});
+		},
+		{}
+	)));
+	updater.on('download-progress', (progress: ProgressInfo) => next({
+		event: 'download-progress',
+		percent: progress.percent
+	}));
+	updater.on('update-downloaded', (info: UpdateDownloadedEvent) => next({
+		event: 'download-progress',
+		percent: 100
+	}));
 	updater.on('error', err => signalErr(err));
 
 	let proc: Promise<any>|undefined = undefined;
@@ -90,7 +90,7 @@ function wrapElectronBuilderUpdater(updater: AppUpdater): Updater {
 		sinks.forEach(s => s.error(err));
 		sinks = [];
 		proc = undefined;
-	}
+	};
 	const signalCompletion = () => {
 		sinks.forEach(s => s.complete());
 		sinks = [];

@@ -4,11 +4,6 @@ arch="$1"
 shift 1
 variants="$@"
 
-if [ -n "$arch" ]
-then
-	arch="--$arch"
-fi
-
 get_platform() {
 	local platform="$(node -e 'console.log(os.platform())')"
 	case $platform in 
@@ -26,13 +21,6 @@ get_platform() {
 			;;
 	esac
 }
-
-if [ -n "$variants" ]
-then
-	variants="--$(get_platform) $variants"
-else
-	variants="--dir"
-fi
 
 copy_code() {
 	src_dir="$1"
@@ -80,7 +68,7 @@ prep_package_json() {
 			JSON.stringify(newPack, null, '  '),
 			{ encoding: 'utf8', flag: 'wx' }
 		);
-	" || exit $?
+	" || return $?
 	echo "Placed package.json into $dst_dir"
 }
 
@@ -106,7 +94,7 @@ prep_package_lock_json() {
 			JSON.stringify(newLock, null, '  '),
 			{ encoding: 'utf8', flag: 'wx' }
 		);
-	" || exit $?
+	" || return $?
 	echo "Placed package-lock.json into $dst_dir"
 }
 
@@ -131,7 +119,48 @@ cp_list="icons runtimes bundled-apps configuration.json"
 (cd packing || exit $?
 	cp -rf $cp_list ../$app_dir/ || exit $?
 ) || exit $?
-
-echo "Building with electron-builder ..."
 build_conf="packing/app.yml"
-node_modules/.bin/electron-builder --publish never --config $build_conf $arch $variants || exit $?
+pack_info_file="packing-info.json"
+
+write_pack_info_file() {
+	echo "Adding $pack_info_file into code folder for updater to use"
+	(cd $app_dir
+		echo "{
+	\"arch\": \"$1\",
+	\"variant\": \"$2\"
+}" > $pack_info_file
+	) || return $?
+}
+
+build_variant() {
+	if [ -z "$1" ]
+	then
+		local arch=""
+		local variant="--dir"
+		echo "Building with electron-builder a directory variant for current architecture ..."
+		rm $app_dir/$pack_info_file 2> /dev/null
+	else
+		local arch="--$1"
+		if [ -z "$2" ]
+		then
+			local variant="--dir"
+			echo "Building with electron-builder a directory variant for $1 architecture ..."
+			rm $app_dir/$pack_info_file 2> /dev/null
+		else
+			local variant="--$(get_platform) $2"
+			echo "Building with electron-builder a $2 variant for $1 architecture ..."
+			write_pack_info_file $1 $2
+		fi
+	fi
+	node_modules/.bin/electron-builder --publish never --config $build_conf $arch $variant || return $?
+}
+
+if [ -z "$variants" ]
+then
+	build_variant "$arch" || exit $?
+else
+	for variant in $variants
+	do
+		build_variant "$arch" $variant || exit $?
+	done
+fi

@@ -51,9 +51,9 @@ export const {
 	appLog, logError, logWarning, recordUnhandledRejectionsInProcess
 } = makeLogger(utilDir);
 
-interface PackInfo {
+export interface PackInfo {
 	arch: 'x64' | 'arm64';
-	variant: 'AppImage' | 'deb' | 'nsis' | 'exe' | 'dmg';
+	variant: 'AppImage' | 'deb' | 'nsis' | 'exe' | 'dmg' | 'portable';
 }
 
 const PACKING_INFO_FNAME = 'packing-info.json';
@@ -69,21 +69,28 @@ export function findPackInfo(): PackInfo|undefined {
 }
 
 export const iconsFolder = toAsarUnpacked(join(__dirname, 'icons',
-	(process.platform === 'win32') ? 'windows' :
-		((process.platform === 'darwin') ? 'mac' : 'linux')));
+	(process.platform === 'win32') ?
+		'windows' : ((process.platform === 'darwin') ? 'mac' : 'linux'
+	)
+));
 
 const runtimesFolder = toAsarUnpacked(join(__dirname, 'runtimes',
-	(process.platform === 'win32') ? 'windows' :
-		((process.platform === 'darwin') ? 'mac' : process.platform)));
+	(process.platform === 'win32') ?
+		'windows' : ((process.platform === 'darwin') ? 'mac' : process.platform
+	)
+));
 
 const PACKED_DENO_BIN = join(runtimesFolder, process.arch,
-	(process.platform === 'win32') ? 'deno.exe' : 'deno');
+	(process.platform === 'win32') ? 'deno.exe' : 'deno'
+);
 
-const DEFAULT_EXT_DENO_BIN = (process.platform === 'win32') ?
-	'deno.exe' : 'deno';
+const DEFAULT_EXT_DENO_BIN = ((process.platform === 'win32') ?
+	'deno.exe' : 'deno'
+);
 
 const DENO_PRELOAD = toAsarUnpacked(join(
-	__dirname, 'runtime-deno', 'preload.bundle.js'));
+	__dirname, 'runtime-deno', 'preload.bundle.js'
+));
 
 export interface DenoParams {
 	bin: string;
