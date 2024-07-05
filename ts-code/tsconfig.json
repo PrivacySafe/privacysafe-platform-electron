@@ -5,7 +5,8 @@
 		"strictNullChecks": true,
 		"strictBindCallApply": true,
 		"outDir": "../build/all",
-		"pretty": true
+		"pretty": true,
+		"skipLibCheck": true
 	},
 	"exclude": [
 		"api-defs/injected-w3n.d.ts"

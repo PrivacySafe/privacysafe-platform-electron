@@ -8,7 +8,7 @@
     "build": "npm run compile-ts && npm run copy-static"
   },
   "devDependencies": {
-    "typescript": "~4.1.5"
+    "typescript": "^5.5.3"
   },
   "author": {
     "name": "3NSoft Inc.",

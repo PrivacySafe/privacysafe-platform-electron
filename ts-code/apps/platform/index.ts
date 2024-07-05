@@ -78,7 +78,8 @@ function packInfoToType(
 		const os = platform();
 		if ((os === 'linux') && (packInfo.variant === 'AppImage')) {
 			return 'electron-builder-update';
-		} else if ((os === 'darwin') && (packInfo.variant === 'dmg')) {
+		} else if ((os === 'darwin')
+		&& ((packInfo.variant === 'dmg') || (packInfo.variant === 'zip'))) {
 			return 'electron-builder-update';
 		} else if ((os === 'win32') && (packInfo.variant === 'nsis')) {
 			return 'electron-builder-update';

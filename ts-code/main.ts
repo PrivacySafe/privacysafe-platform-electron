@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2023 3NSoft Inc.
+ Copyright (C) 2016 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -23,7 +23,7 @@ import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devTool
 import { app, dialog } from 'electron';
 import { InitProc } from './init-proc';
 import { registerAllProtocolShemas } from "./electron/protocols";
-import { fromEvent } from 'rxjs';
+import { fromEvent, lastValueFrom } from 'rxjs';
 import { appDir, logError, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './confs';
 import { take } from 'rxjs/operators';
 import { makeCoreDriver } from './core/core-driver';
@@ -63,7 +63,8 @@ function setupAndStartMainInstance(): InitProc {
 	clearDefaultWindowMenu();
 
 	// Opening process
-	fromEvent(app, 'ready').pipe(take(1)).toPromise().then(async () => {
+	lastValueFrom(fromEvent(app, 'ready').pipe(take(1)))
+	.then(async () => {
 
 		try {
 			await init.boot();
@@ -92,6 +93,10 @@ function setupAndStartMainInstance(): InitProc {
 }
 
 try {
+
+	// XXX
+	// Use if OPEN_APP_CMD to open only single app, talking via socket.
+	// Note that caller should give --data-dir (always?).
 
 	if (!MULTI_INSTANCE_FLAG) {
 		const isFstInstance = app.requestSingleInstanceLock();

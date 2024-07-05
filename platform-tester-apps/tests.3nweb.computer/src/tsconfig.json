@@ -9,6 +9,7 @@
     "sourceMap": true,
     "baseUrl": ".",
     "outDir": "../app/scripts",
+    "skipLibCheck": true,
     "paths": {
       "@/*": [
         "src/*"

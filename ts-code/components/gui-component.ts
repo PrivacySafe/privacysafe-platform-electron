@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { BrowserWindow, nativeImage } from 'electron';
+import { BrowserWindow, NativeImage, nativeImage } from 'electron';
 import { makeSessionForApp, makeSessionForDevAppFromUrl } from '../electron/session';
 import { protoSchemas } from "../electron/protocols";
 import { join } from 'path';
@@ -137,15 +137,20 @@ export class GUIComponent implements Component {
 	static async make(
 		domain: string, appRoot: ReadonlyFS, entrypoint: string,
 		caps: AppCAPsAndSetup,
-		winOpts: WindowOptions|undefined, parent: GUIComponent|undefined,
+		winOpts: WindowOptions|undefined, icon: string|undefined,
+		parent: GUIComponent|undefined,
 		devTools: boolean, generateTitle: TitleGenerator
 	): Promise<GUIComponent> {
 		const session = makeSessionForApp(domain, appRoot, devTools);
 		const preload = ((Object.keys(caps.w3n).length > 0) ?
-			APP_PRELOAD : undefined);
+			APP_PRELOAD : undefined
+		);
 		const opts = prepareWindowOpts(
 			session, preload, winOpts, parent?.window, devTools
 		);
+		if (icon) {
+			opts.icon = await nativeImageFromFile(appRoot, icon, domain);
+		}
 		const app = new GUIComponent(
 			domain, parent, entrypoint, caps, opts, generateTitle
 		);
@@ -156,12 +161,16 @@ export class GUIComponent implements Component {
 
 	static async makeStartup(
 		domain: string, appRoot: ReadonlyFS, entrypoint: string,
-		winOpts: WindowOptions|undefined, devTools: boolean
+		winOpts: WindowOptions|undefined, icon: string|undefined,
+		devTools: boolean
 	): Promise<GUIComponent> {
 		const session = makeSessionForApp(domain, appRoot, devTools);
 		const opts = prepareWindowOpts(
 			session, STARTUP_APP_PRELOAD, winOpts, undefined, devTools
 		);
+		if (icon) {
+			opts.icon = await nativeImageFromFile(appRoot, icon, domain);
+		}
 		const app = new GUIComponent(
 			domain, undefined, entrypoint, undefined, opts, t => t
 		);
@@ -178,20 +187,10 @@ export class GUIComponent implements Component {
 
 	async start(): Promise<void> {
 		const path = (this.entrypoint.startsWith('/') ?
-			this.entrypoint : `/${this.entrypoint}`);
+			this.entrypoint : `/${this.entrypoint}`
+		);
 		const url = `${protoSchemas.W3N_APP.scheme}://${this.domain}${path}`;
 		await this.window.loadURL(url);
-	}
-
-	async setIcon(appRoot: ReadonlyFS, imgPath: string): Promise<void> {
-		try {
-			const imgBytes = await appRoot.readBytes(imgPath);
-			if (!imgBytes) { return; }
-			const img = nativeImage.createFromBuffer(toBuffer(imgBytes));
-			this.window.setIcon(img);
-		} catch (err) {
-			await logError(err, `Error in using image ${imgPath} in app ${appRoot}`);
-		}
 	}
 
 }
@@ -255,6 +254,19 @@ const winOptsToCopy = new Set<keyof WindowOptions>([
 	'rememberWindowLocation'
 ]);
 
+async function nativeImageFromFile(
+	appRoot: ReadonlyFS, imgPath: string, domain: string
+): Promise<NativeImage|undefined> {
+	try {
+		if (!(await appRoot.checkFilePresence(imgPath))) { return; }
+		const imgBytes = await appRoot.readBytes(imgPath);
+		if (!imgBytes) { return; }
+		return nativeImage.createFromBuffer(toBuffer(imgBytes));
+	} catch (err) {
+		await logError(err, `Error in using image from ${imgPath} in app ${domain}`);
+	}
+}
+
 
 export class DevAppInstanceFromUrl extends GUIComponent {
 
@@ -272,7 +284,8 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 	static async makeForUrl(
 		domain: string, appUrl: string, entrypoint: string,
 		caps: AppCAPsAndSetup,
-		winOpts: WindowOptions|undefined, parent: GUIComponent|undefined,
+		winOpts: WindowOptions|undefined, icon: string|undefined,
+		parent: GUIComponent|undefined,
 		generateTitle: TitleGenerator
 	): Promise<GUIComponent> {
 		const session = makeSessionForDevAppFromUrl(appUrl);
@@ -281,6 +294,9 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 		const opts = prepareWindowOpts(
 			session, preload, winOpts, parent?.window, true
 		);
+		if (icon) {
+			opts.icon = await nativeImageFromURL(appUrl, icon, domain);
+		}
 		const app = new DevAppInstanceFromUrl(
 			domain, parent, appUrl, entrypoint, caps, opts,
 			generateTitle
@@ -292,7 +308,7 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 
 	static async makeStartupFor(
 		domain: string, appUrl: string, entrypoint: string,
-		winOpts: WindowOptions|undefined
+		winOpts: WindowOptions|undefined, icon: string|undefined
 	): Promise<GUIComponent> {
 		const session = makeSessionForDevAppFromUrl(appUrl);
 		const opts = prepareWindowOpts(
@@ -301,6 +317,9 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 		const app = new DevAppInstanceFromUrl(
 			domain, undefined, appUrl, entrypoint, undefined, opts, t => t
 		);
+		if (icon) {
+			opts.icon = await nativeImageFromURL(appUrl, icon, domain);
+		}
 		await app.attachDevTools(session);
 		Object.seal(app);
 		return app;
@@ -316,6 +335,21 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 }
 Object.freeze(DevAppInstanceFromUrl.prototype);
 Object.freeze(DevAppInstanceFromUrl);
+
+
+async function nativeImageFromURL(
+	appUrl: string, imgPath: string, domain: string
+): Promise<NativeImage|undefined> {
+	try {
+		const url = `${appUrl}${(imgPath.startsWith('/') ? '' : '/')}${imgPath}`;
+		const blob = await (await fetch(url)).blob();
+		// XXX hoping this buffer-bytes-blob shovelling is correct. Needs test.
+		const imgBytes = await blob.arrayBuffer();
+		return nativeImage.createFromBuffer(toBuffer(new Uint8Array(imgBytes)));
+	} catch (err) {
+		await logError(err, `Error in using image ${imgPath} in app ${domain}`);
+	}
+}
 
 
 Object.freeze(exports);

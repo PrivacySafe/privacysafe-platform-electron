@@ -28,7 +28,7 @@ function getTrayIconImage(): NativeImage {
 	if (process.platform === 'win32') {
 		trayIconPath = join(iconsFolder, '256x256.ico');
 	} else if (process.platform === 'darwin') {
-		trayIconPath = join(iconsFolder, 'tray', '24x24.png');
+		trayIconPath = join(iconsFolder, 'tray', '32x32.png');
 	} else {
 		trayIconPath = join(iconsFolder, '256x256.png');
 	}

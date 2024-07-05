@@ -19,10 +19,10 @@ import { FactoryOfFSs, reverseDomain, sysFolders } from 'core-3nweb-client-lib';
 import { join } from 'path';
 import { from, Observable, Subject } from 'rxjs';
 import { mergeMap, share } from 'rxjs/operators';
-import { BUNDLED_APP_PACKS_FOLDER } from '../../bundle-confs';
+import { BUNDLED_APPS_FOLDER, BUNDLED_APP_PACKS_FOLDER, LAUNCHER_APP_DOMAIN, STARTUP_APP_DOMAIN } from '../../bundle-confs';
 import { logError } from '../../confs';
 import { assert } from '../../lib-common/assert';
-import { FileException, readdir, stat } from '../../lib-common/async-fs-node';
+import { FileException, readdir, stat, readFile } from '../../lib-common/async-fs-node';
 import { makeRuntimeException } from '../../lib-common/exceptions/runtime';
 import { checkAppManifest } from '../../lib-common/manifest-utils';
 import { toRxObserver } from '../../lib-common/utils-for-observables';
@@ -92,6 +92,9 @@ export class SystemPlaces {
 			for (const info of await listInstalledApps(
 				await this.getAppsCodeFS()
 			)) {
+				infos.set(info.id, info);
+			}
+			for (const info of await listInstalledBundledApps()) {
 				infos.set(info.id, info);
 			}
 		}
@@ -486,6 +489,29 @@ async function listBundledApps(): Promise<AppVersions[]> {
 		bundled: m!.version
 	} as AppVersions));
 	return infos;
+}
+
+async function listInstalledBundledApps(): Promise<AppVersions[]> {
+	const appManifestsPromises = (await readdir(BUNDLED_APPS_FOLDER)
+	.catch((exc: FileException) => {
+		if (exc.notFound) { return [] as string[]; }
+		else { throw exc; }
+	}))
+	.map(fName => readFile(
+		join(BUNDLED_APPS_FOLDER, fName, MANIFEST_FILE),
+		{ encoding: 'utf8' }
+	));
+	const infos = (await Promise.all(appManifestsPromises))
+	.map(mFile => JSON.parse(mFile) as AppManifest)
+	.filter(({ appDomain }) => (
+		(appDomain !== STARTUP_APP_DOMAIN) &&
+		(appDomain !== LAUNCHER_APP_DOMAIN)
+	))
+	.map(m => ({
+		id: m.appDomain,
+		current: m.version
+	} as AppVersions));
+	return infos;	
 }
 
 function getBundledAppManifest(id: string): Promise<AppManifest|undefined> {

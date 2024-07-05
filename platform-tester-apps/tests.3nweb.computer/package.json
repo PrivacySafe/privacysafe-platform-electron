@@ -4,15 +4,13 @@
   "private": true,
   "scripts": {
     "compile-ts": "rm -rf app && tsc -p src",
-    "compile-deno": "npm run compile-one-shot-srv && npm run compile-long-srv",
-    "compile-one-shot-srv": "deno bundle --unstable src-deno/service-in-deno.ts -- app/service-in-deno.js",
-    "compile-long-srv": "deno bundle --unstable src-deno/long-service-in-deno.ts -- app/long-service-in-deno.js",
+    "compile-deno": "bash bundle-deno-code.sh",
     "copy-static": "cp -LHr public/* app/ || cp -r public/* app/",
     "build": "npm run compile-ts && npm run compile-deno && npm run copy-static"
   },
   "devDependencies": {
     "@types/jasmine": "^3.9.1",
-    "typescript": "~4.1.5"
+    "typescript": "^5.5.3"
   },
   "author": {
     "name": "3NSoft Inc.",

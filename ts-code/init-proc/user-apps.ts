@@ -24,7 +24,7 @@ import { SystemPlaces, AppInitException, makeAppInitExc } from '../apps/installe
 import { AppDownloader } from '../apps/downloader';
 import { latestVersionIn } from '../apps/downloader/versions';
 import { UserAppInfo } from '../desktop-integration';
-import { Observable, Subject } from 'rxjs';
+import { Observable, Subject, lastValueFrom } from 'rxjs';
 import { WrapStartupCAPs, DevAppParams, DevAppParamsGetter, DevSiteParamsGetter } from '../test-stand';
 import { Component, Components, Service } from '../components';
 import { NamedProcs, sleep } from '../lib-common/processes';
@@ -312,9 +312,9 @@ export class UserApps {
 				// XXX note that we may want to add process observation to openApp's
 				//     instead of just non-responsive await below
 				if (bundleUnpack$) {
-					await bundleUnpack$.toPromise();
+					await lastValueFrom(bundleUnpack$);
 				} else if (download$) {
-					await download$.toPromise();
+					await lastValueFrom(download$);
 				}
 				await this.sysPlaces.installApp(appDomain, version);
 				return this.sysPlaces.findInstalledApp(appDomain);
@@ -435,6 +435,7 @@ export class UserApps {
 		const comp = this.components.findComponentToHandleCmd(appDomain, cmd);
 		if (comp) {
 			comp.cmdsHandler!.handle({ cmd, params }, callerApp, callerComponent);
+			comp.window.focus();
 			return;
 		}
 		return this.appStartingProcs.startOrChain(appDomain, async () => {
@@ -443,6 +444,7 @@ export class UserApps {
 				comp.cmdsHandler!.handle(
 					{ cmd, params }, callerApp, callerComponent
 				);
+				comp.window.focus();
 				return;
 			}
 			await this.startGUIComponentInSyncProc(

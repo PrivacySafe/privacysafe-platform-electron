@@ -330,16 +330,13 @@ export class Components {
 			const { capsForStartup, coreInit } = startCore();
 			const startupApp = await GUIComponent.makeStartup(
 				STARTUP_APP_DOMAIN, appRoot, entrypoint,
-				startupOpts(component.windowOpts), devTools
+				startupOpts(component.windowOpts), component.icon, devTools
 			);
 			this.guiConnectors.connectStartupW3N(
 				filterOutUserIds(capsForStartup, usersToFilterOut),
 				startupApp.window.webContents
 			);
 			this.register(startupApp, manifest, appRoot);
-			if (component.icon) {
-				await startupApp.setIcon(appRoot, component.icon);
-			}
 			await startupApp.start();
 			return { coreInit };
 		} catch (err) {
@@ -359,21 +356,19 @@ export class Components {
 			let startupApp: GUIComponent;
 			if (url) {
 				startupApp = await DevAppInstanceFromUrl.makeStartupFor(
-					STARTUP_APP_DOMAIN, url, entrypoint, component.windowOpts
+					STARTUP_APP_DOMAIN, url, entrypoint,
+					startupOpts(component.windowOpts), component.icon
 				);
 			} else {
 				startupApp = await GUIComponent.makeStartup(
 					STARTUP_APP_DOMAIN, appRoot, entrypoint,
-					startupOpts(component.windowOpts), true
+					startupOpts(component.windowOpts), component.icon, true
 				);
 			}
 			this.guiConnectors.connectStartupW3N(
 				capsForStartup, startupApp.window.webContents
 			);
 			this.register(startupApp, manifest, appRoot);
-			if (component.icon) {
-				await startupApp.setIcon(appRoot, component.icon);
-			}
 			await startupApp.start();
 			return { coreInit };
 		} catch (err) {
@@ -432,15 +427,12 @@ export class Components {
 		);
 		const gui = await GUIComponent.make(
 			appDomain, appRoot, entrypoint, caps,
-			windowOpts, guiParent, devTools, this.titleMaker
+			windowOpts, componentDef.icon, guiParent, devTools, this.titleMaker
 		);
 		this.guiConnectors.connectW3N(gui.w3n, gui.window.webContents);
 		this.register(gui, manifest, appRoot);
 		if (watchWindowGeometry) {
 			watchWindowGeometry(gui.window);
-		}
-		if (componentDef.icon) {
-			await gui.setIcon(appRoot, componentDef.icon);
 		}
 		await gui.start();
 		gui.window.focus();
@@ -491,21 +483,18 @@ export class Components {
 		if (url) {
 			gui = await DevAppInstanceFromUrl.makeForUrl(
 				manifest.appDomain, url, entrypoint, caps,
-				windowOpts, guiParent, this.titleMaker
+				windowOpts, componentDef.icon, guiParent, this.titleMaker
 			);
 		} else {
 			gui = await GUIComponent.make(
 				manifest.appDomain, appRoot, entrypoint, caps,
-				windowOpts, guiParent, true, this.titleMaker
+				windowOpts, componentDef.icon, guiParent, true, this.titleMaker
 			);
 		}
 		this.guiConnectors.connectW3N(gui.w3n, gui.window.webContents);
 		this.register(gui, manifest, appRoot);
 		if (watchWindowGeometry) {
 			watchWindowGeometry(gui.window);
-		}
-		if (componentDef.icon) {
-			await gui.setIcon(appRoot, componentDef.icon);
 		}
 		await gui.start();
 		gui.window.focus();

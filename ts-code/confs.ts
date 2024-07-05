@@ -53,7 +53,7 @@ export const {
 
 export interface PackInfo {
 	arch: 'x64' | 'arm64';
-	variant: 'AppImage' | 'deb' | 'nsis' | 'exe' | 'dmg' | 'portable';
+	variant: 'AppImage' | 'deb' | 'nsis' | 'exe' | 'dmg' | 'zip' | 'portable';
 }
 
 const PACKING_INFO_FNAME = 'packing-info.json';

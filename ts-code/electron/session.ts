@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2017, 2019, 2021 - 2022 3NSoft Inc.
+ Copyright (C) 2017, 2019, 2021 - 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -32,7 +32,8 @@ export function makeSessionForApp(
 
 	const allowUrl = makeUrlChecker(
 		`${protoSchemas.W3N_APP.scheme}://${appDomain}`,
-		devTools);
+		devTools
+	);
 
 	appSes.webRequest.onBeforeRequest((details, cb) => {
 		if (allowUrl(details.url)) {
@@ -54,7 +55,8 @@ function generateSession(devTools: boolean): Session {
 	}
 	const partition = (devTools ?
 		`persist:s${partitionCounter}` :
-		`s${partitionCounter}`);
+		`s${partitionCounter}`
+	);
 	return session.fromPartition(partition, { cache: false });
 }
 
