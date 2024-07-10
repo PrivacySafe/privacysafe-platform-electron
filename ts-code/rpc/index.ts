@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Component, Service } from '../components';
+import { Component, Service } from '../app-n-components';
 import { makeRuntimeException } from '../lib-common/exceptions/runtime';
 import { isCallerAllowed } from '../lib-common/manifest-utils';
 import { defer, Deferred } from '../lib-common/processes';

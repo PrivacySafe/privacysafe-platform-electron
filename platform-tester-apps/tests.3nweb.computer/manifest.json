@@ -61,7 +61,7 @@
 				"thisAppComponents": "*"
 			},
 			"runtime": "web-gui",
-			"service": "OneShotDialog",
+			"services": [ "OneShotDialog" ],
 			"childOfGUICaller": true,
 			"forOneConnectionOnly": true,
 			"capsRequested": {
@@ -83,7 +83,7 @@
 				"thisAppComponents": "*"
 			},
 			"runtime": "web-gui",
-			"service": "LongDialog",
+			"services": [ "LongDialog" ],
 			"childOfGUICaller": true,
 			"capsRequested": {
 				"mailerid": true,
@@ -103,7 +103,7 @@
 				"thisAppComponents": "*"
 			},
 			"runtime": "deno",
-			"service": "ServiceInDeno",
+			"services": [ "ServiceInDeno" ],
 			"forOneConnectionOnly": true,
 			"capsRequested": {
 				"mailerid": true,
@@ -118,7 +118,7 @@
 				"thisAppComponents": "*"
 			},
 			"runtime": "deno",
-			"service": "LongServiceInDeno",
+			"services": [ "LongServiceInDeno" ],
 			"capsRequested": {
 				"mailerid": true,
 				"storage": {

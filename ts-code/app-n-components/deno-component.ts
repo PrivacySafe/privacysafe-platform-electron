@@ -54,29 +54,18 @@ export class DenoComponent implements Component {
 		Object.seal(this);
 	}
 
-	private static readonly loadProc = new SingleProc();
-
 	static async makeLoadConnectAndStart(
 		domain: string, appRoot: ReadonlyFS, entrypoint: string,
 		caps: AppCAPsAndSetup, connectInfo: SocketConnectInfo,
 		connect: (caps: W3N) => (() => void)
 	): Promise<DenoComponent> {
-		// In an ideal world this synchronization is not needed, but, today
-		// we get std input from one process into another, if they start
-		// concurrently. This ordering of spawning deno processes is a work
-		// around some bug, or there is something unclear.
-		if (DenoComponent.loadProc.getP()) {
-			DenoComponent.loadProc.startOrChain(() => sleep(50));
-		}
-		return await DenoComponent.loadProc.startOrChain(async () => {
-			const component = await DenoComponent.make(
-				domain, appRoot, entrypoint, caps, connectInfo
-			);
-			const disconnectIPC = connect(component.w3n);
-			component.setCloseListener(disconnectIPC);
-			await component.start();
-			return component;
-		});
+		const component = await DenoComponent.make(
+			domain, appRoot, entrypoint, caps, connectInfo
+		);
+		const disconnectIPC = connect(component.w3n);
+		component.setCloseListener(disconnectIPC);
+		await component.start();
+		return component;
 	}
 
 	private static async make(
@@ -222,6 +211,10 @@ export class DenoComponent implements Component {
 
 	get stdErr(): NodeJS.ReadableStream {
 		return this.proc!.stderr!;
+	}
+
+	get pid(): number|undefined {
+		return this.proc?.pid;
 	}
 
 }

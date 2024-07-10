@@ -32,7 +32,8 @@ setTimeout(async () => {
 	const stopListening = w3n.rpc!.exposeService!(nonGuiSrvInThisApp, {
 
 		next: async connection => {
-			Service.singleton = new Service(connection, syncFS, localFS);
+			Service.singleton = new Service(false, syncFS, localFS);
+			Service.singleton.handleConnection(connection);
 			stopListening(); // we expect to serve only one connection
 		},
 

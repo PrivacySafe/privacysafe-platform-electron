@@ -30,7 +30,8 @@ setTimeout(() => {
 		next: async connection => {
 			const syncFS = await w3n.storage!.getAppSyncedFS();
 			const localFS = await w3n.storage!.getAppLocalFS();
-			Service.singleton = new Service(connection, syncFS, localFS);
+			Service.singleton = new Service(false, syncFS, localFS);
+			Service.singleton.handleConnection(connection);
 			stopListening(); // we expect to serve only one connection
 		},
 

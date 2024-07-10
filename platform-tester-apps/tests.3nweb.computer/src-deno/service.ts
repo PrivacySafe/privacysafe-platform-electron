@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -45,17 +45,19 @@ interface IPCException extends web3n.RuntimeException {
 
 export class Service {
 
-	public readonly disconnect: () => void;
-
 	constructor(
-		private readonly connection: IncomingConnection,
+		private readonly serveManyConnections: boolean,
 		public readonly syncFS: WritableFS,
 		public readonly localFS: WritableFS
 	) {
-		this.disconnect = this.connection.watch({
+		Object.seal(this);
+	}
+
+	public handleConnection(connection: IncomingConnection): void {
+		connection.watch({
 			next: async call => {
 				if (call.msgType === 'start') {
-					await this.serveCallStart(call);
+					await this.serveCallStart(connection, call);
 				} else if (call.msgType === 'cancel') {
 				} else {
 					await w3n.testStand.log('error',
@@ -63,85 +65,95 @@ export class Service {
 					w3n.closeSelf!();
 				}
 			},
-			complete: () => w3n.closeSelf!(),
+			complete: () => {
+				if (!this.serveManyConnections) {
+					w3n.closeSelf!();
+				}
+			},
 			error: async err => {
 				await w3n.testStand.log(
 					'error', `Error in listening for calls`, err);
 				w3n.closeSelf!();
 			}
 		});
-		Object.seal(this);
 	}
 
 	static singleton: Service|undefined = undefined;
 
 	private async serveCallStart(
-		{ callNum, method, data }: CallStart
+		connection: IncomingConnection, { callNum, method, data }: CallStart
 	): Promise<void> {
 		try {
 			if ((method as keyof Service) === 'foo') {
 				this.foo();
-				await this.connection.send({ callNum, callStatus: 'end' });
+				await connection.send({ callNum, callStatus: 'end' });
+			} else if ((method as keyof Service) === 'getUniqueIdentifier') {
+				const reply = this.getUniqueIdentifier();
+				await connection.send({
+					callNum, callStatus: 'end', data: reply
+				});
 			} else if ((method as keyof Service) === 'addToBytes') {
 				const reply = this.addToBytes(data!);
-				await this.connection.send({
+				await connection.send({
 					callNum, callStatus: 'end', data: reply
 				});
 			} else if ((method as keyof Service) === 'writeFileInSyncFS') {
 				await this.writeFileInSyncFS(data!);
-				await this.connection.send({ callNum, callStatus: 'end' });
+				await connection.send({ callNum, callStatus: 'end' });
 			} else if ((method as keyof Service) === 'readFileFromSyncFS') {
 				const content = await this.readFileFromSyncFS(data!);
-				await this.connection.send({
+				await connection.send({
 					callNum, callStatus: 'end', data: content
 				});
 			} else if ((method as keyof Service) === 'writeJSONFileInSyncFS') {
 				await this.writeJSONFileInSyncFS(data!);
-				await this.connection.send({ callNum, callStatus: 'end' });
+				await connection.send({ callNum, callStatus: 'end' });
 			} else if ((method as keyof Service) === 'readJSONFileFromSyncFS') {
 				const content = await this.readJSONFileFromSyncFS(data!);
-				await this.connection.send({
+				await connection.send({
 					callNum, callStatus: 'end', data: content
 				});
 			} else if ((method as keyof Service) === 'writeFileInLocalFS') {
 				await this.writeFileInLocalFS(data!);
-				await this.connection.send({ callNum, callStatus: 'end' });
+				await connection.send({ callNum, callStatus: 'end' });
 			} else if ((method as keyof Service) === 'readFileFromLocalFS') {
 				const content = await this.readFileFromLocalFS(data!);
-				await this.connection.send({
+				await connection.send({
 					callNum, callStatus: 'end', data: content
 				});
 			} else if ((method as keyof Service) === 'writeJSONFileInLocalFS') {
 				await this.writeJSONFileInLocalFS(data!);
-				await this.connection.send({ callNum, callStatus: 'end' });
+				await connection.send({ callNum, callStatus: 'end' });
 			} else if ((method as keyof Service) === 'readJSONFileFromLocalFS') {
 				const content = await this.readJSONFileFromLocalFS(data!);
-				await this.connection.send({
+				await connection.send({
 					callNum, callStatus: 'end', data: content
 				});
 			} else if ((method as keyof Service) === 'getUserId') {
 				const data = await this.getUserId();
-				await this.connection.send({
+				await connection.send({
 					callNum, callStatus: 'end', data
 				});
 
 			} else {
-				await this.connection.send({
+				await connection.send({
 					callNum, callStatus: 'error', err: `Method ${method} not found`
 				});
 			}
 		} catch (err) {
-			if ((err as IPCException).type !== 'ipc'
-			&& !(err as IPCException).stopFromOtherSide
-			&& !(err as IPCException).connectorStop) {
-				await this.connection.send({
-					callNum, callStatus: 'error', err
-				});
-			}
+			await connection.send({
+				callNum, callStatus: 'error', err
+			});
 		}
 	}
 
 	public foo(): void {}
+
+	public readonly uid = `${Math.floor(Number.MAX_SAFE_INTEGER * Math.random())}`;
+
+	public getUniqueIdentifier(): PassedDatum|undefined {
+		return { bytes: strToBytes(this.uid) };
+	}
 
 	public addToBytes({ bytes }: PassedDatum): PassedDatum {
 		for (let i=0; i<bytes!.length; i+=1) {

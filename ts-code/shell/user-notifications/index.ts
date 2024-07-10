@@ -19,8 +19,8 @@ import { Notification, NotificationConstructorOptions } from 'electron';
 import { Subject } from 'rxjs';
 import { share } from 'rxjs/operators';
 import { AppSetter } from '../../core/core-driver';
-import { Component } from '../../components';
-import { GUIComponent } from '../../components/gui-component';
+import { Component } from '../../app-n-components';
+import { GUIComponent } from '../../app-n-components/gui-component';
 import { toRxObserver } from '../../lib-common/utils-for-observables';
 
 type UserNotifications = web3n.shell.notifications.UserNotifications;

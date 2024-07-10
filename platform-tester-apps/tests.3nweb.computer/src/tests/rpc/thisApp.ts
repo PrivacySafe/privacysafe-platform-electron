@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,6 +15,8 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { sleep } from "../../lib-common/processes.js";
+import { strFromBytes } from "../../test-page-utils.js";
 import { bytesEqual } from "../libs-for-tests/bytes-equal.js";
 import { callSrvAtSecondUser } from "./second-user.js";
 
@@ -166,6 +168,16 @@ describe(`RPCConnection to GUI service for many connections`, () => {
 		]);
 	}, timeout);
 
+	it(`comes from the same instance`, async () => {
+		const uids = await Promise.all([ connection1, connection2, connection3 ]
+		.map(c => c.makeRequestReplyCall(
+			'getUniqueIdentifier', undefined
+		).then(r => strFromBytes(r!.bytes!))));
+		expect(uids[0]).toEqual(uids[0]);
+		expect(uids[1]).toEqual(uids[0]);
+		expect(uids[2]).toEqual(uids[0]);
+	}, timeout);
+
 });
 
 describe(`RPCConnection to non-GUI service for single connection`, () => {
@@ -229,6 +241,15 @@ describe(`RPCConnection to non-GUI service for many connections`, () => {
 			testCallWithoutArgs(connection3),
 			testCallWithArgsAndResult(connection3)
 		]);
+	}, timeout);
+
+	it(`comes from the same instance`, async () => {
+		const uids = await Promise.all([ connection1, connection2, connection3 ]
+		.map(c => c.makeRequestReplyCall(
+			'getUniqueIdentifier', undefined
+		).then(r => strFromBytes(r!.bytes!))));
+		expect(uids[1]).toEqual(uids[0]);
+		expect(uids[2]).toEqual(uids[0]);
 	}, timeout);
 
 });

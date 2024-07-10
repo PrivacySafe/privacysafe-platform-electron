@@ -24,7 +24,6 @@ export interface ExtCmd {
 	userId: string;
 	app: string;
 	component?: string;
-	isDevApp?: true;
 }
 
 
@@ -99,8 +98,7 @@ export class ExternallyTriggeredCmds {
 			token: this.generateNewToken(),
 			type: 'open-app',
 			userId,
-			app,
-			isDevApp
+			app
 		};
 	}
 

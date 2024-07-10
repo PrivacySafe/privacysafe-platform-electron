@@ -20,7 +20,7 @@ import { basename, dirname } from 'path';
 import { stat as fsStat } from '../../lib-common/async-fs-node';
 import { DeviceFS } from 'core-3nweb-client-lib';
 import { FileException } from '../../lib-common/exceptions/file';
-import { GUIComponent } from '../../components/gui-component';
+import { GUIComponent } from '../../app-n-components/gui-component';
 import { AppSetter } from '../../core/core-driver';
 
 export interface DialogOpeners {

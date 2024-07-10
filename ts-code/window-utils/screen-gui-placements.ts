@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 - 2023 3NSoft Inc.
+ Copyright (C) 2022 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -17,12 +17,11 @@
 
 import { screen, BrowserWindow } from 'electron';
 import { Observable, debounceTime, fromEvent, map, mergeWith } from 'rxjs';
-import { copyWinOpts } from '../components/gui-component';
+import { copyWinOpts } from '../app-n-components/gui-component';
 import { makeTimedCache } from '../lib-common/timed-cache';
 import { logError } from '../confs';
 
 type GUIComponentDef = web3n.caps.GUIComponent;
-type GUIServiceComponent = web3n.caps.GUIServiceComponent;
 type WindowOptions = web3n.ui.WindowOptions;
 type WritableFS = web3n.files.WritableFS;
 type FileException = web3n.files.FileException;
@@ -39,7 +38,7 @@ export interface Location {
 
 export interface Rectangle extends WindowSize, Location {}
 
-export function startupOpts(
+export function applyingStartupWindowPlacement(
 	windowOpts: GUIComponentDef['windowOpts']
 ): WindowOptions {
 	const opts = copyWinOpts(windowOpts) as WindowOptions;
@@ -72,7 +71,7 @@ export class ScreenGUIPlacements {
 
 	async windowLocationFor(
 		appDomain: string, entrypoint: string,
-		component: GUIComponentDef|GUIServiceComponent,
+		winOptsDef: GUIComponentDef['windowOpts'],
 		parentWindow: BrowserWindow|undefined
 	): Promise<{
 		windowOpts: WindowOptions,
@@ -82,10 +81,10 @@ export class ScreenGUIPlacements {
 			await this.initialization;
 		}
 		const windowOpts = await this.setInitialWindowGeometry(
-			appDomain, entrypoint, component, parentWindow
+			appDomain, entrypoint, winOptsDef, parentWindow
 		);
 		if (parentWindow
-		|| !component.windowOpts?.rememberWindowLocation) {
+		|| !winOptsDef?.rememberWindowLocation) {
 			return { windowOpts };
 		} else {
 			return {
@@ -97,10 +96,10 @@ export class ScreenGUIPlacements {
 
 	private async setInitialWindowGeometry(
 		appDomain: string, entrypoint: string,
-		component: GUIComponentDef|GUIServiceComponent,
+		windowOpts: GUIComponentDef['windowOpts'],
 		parentWindow: BrowserWindow|undefined
 	): Promise<WindowOptions> {
-		const opts = copyWinOpts(component.windowOpts) as WindowOptions;
+		const opts = copyWinOpts(windowOpts) as WindowOptions;
 		if (parentWindow) {
 			const geometry = childRelativeToParent(
 				parentWindow.getContentBounds(), opts as WindowSize

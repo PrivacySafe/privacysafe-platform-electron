@@ -66,6 +66,11 @@ function setupAndStartMainInstance(): InitProc {
 	lastValueFrom(fromEvent(app, 'ready').pipe(take(1)))
 	.then(async () => {
 
+		recordUnhandledRejectionsInProcess();
+
+		// Prevent closing when all windows are closed by setting listener
+		app.on('window-all-closed', () => {});
+
 		try {
 			await init.boot();
 		} catch (err) {
@@ -81,13 +86,8 @@ function setupAndStartMainInstance(): InitProc {
 
 		process.on('SIGINT', () => init.exit(0));
 		process.on('SIGTERM', () => init.exit(0));
-	
-		// Prevent closing when all windows are closed by setting listener
-		app.on('window-all-closed', () => {});
 
 	});
-
-	recordUnhandledRejectionsInProcess();
 
 	return init;
 }
@@ -98,7 +98,9 @@ try {
 	// Use if OPEN_APP_CMD to open only single app, talking via socket.
 	// Note that caller should give --data-dir (always?).
 
-	if (!MULTI_INSTANCE_FLAG) {
+	if (MULTI_INSTANCE_FLAG) {
+		setupAndStartMainInstance();
+	} else {
 		const isFstInstance = app.requestSingleInstanceLock();
 		if (isFstInstance) {
 			app.on('second-instance', async (event, argv, workDir) => {
@@ -111,8 +113,6 @@ try {
 		} else {
 			sleep(300).then(() => app.quit());
 		}
-	} else {
-		setupAndStartMainInstance();
 	}
 
 } catch (err) {

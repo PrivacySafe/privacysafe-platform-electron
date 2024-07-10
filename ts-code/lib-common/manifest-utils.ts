@@ -18,10 +18,15 @@
 import { makeRuntimeException } from './exceptions/runtime';
 
 type AppManifest = web3n.caps.AppManifest;
+type GeneralAppManifest = web3n.caps.GeneralAppManifest;
+type SimpleGUIAppManifest = web3n.caps.SimpleGUIAppManifest;
 type GUIComponentDef = web3n.caps.GUIComponent;
 type SrvDef = web3n.caps.ServiceComponent;
 type GUISrvDef = web3n.caps.GUIServiceComponent;
 type AllowedCallers = web3n.caps.AllowedCallers;
+type LauncherDef = web3n.caps.Launcher;
+type RPCException = web3n.rpc.RPCException;
+
 
 export interface AppManifestException extends web3n.RuntimeException {
 	type: 'app-manifest',
@@ -48,43 +53,42 @@ export async function checkAppManifest(
 			message: `Version value ${manifest.version} in manifest doesn't match expected value ${version}`
 		}, {});
 	}
-	if (manifest.components) {
-		ensureComponentsSettings(manifest.components);
+	if ((manifest as GeneralAppManifest).components) {
+		ensureComponentsSettings((manifest as GeneralAppManifest).components);
 	}
 }
 
-function ensureComponentsSettings(components: AppManifest['components']): void {
+function ensureComponentsSettings(
+	components: GeneralAppManifest['components']
+): void {
 
 	// XXX do an exhaustive check of components
 
 
 }
 
+function isSimpleGUIAppManifest(m: AppManifest): boolean {
+	return !(m as GeneralAppManifest).components;
+}
+
 export const MAIN_GUI_ENTRYPOINT = '/index.html';
 
-export function userStartedComponentFrom(
+export function getWebGUIComponent(
 	m: AppManifest, entrypoint: string
 ): GUIComponentDef {
-	if (!m.components) {
+	if (!(m as GeneralAppManifest).components) {
 		if (entrypoint !== MAIN_GUI_ENTRYPOINT) {
 			throw componentNotFoundExc(m.appDomain, entrypoint);
 		}
-		return {
-			runtime: 'web-gui',
-			startedBy: 'user',
-			capsRequested: m['capsRequested'],
-			windowOpts: m['windowOpts'],
-			name: (m.name ? m.name : m.appDomain),
-			icon: m.icon
-		};
+		return makeComponentForSimpleGUIApp(m);
 	}
 
-	const component = m.components[entrypoint] as GUIComponentDef;
+	const component = (m as GeneralAppManifest).components[entrypoint] as GUIComponentDef;
 	if (!component) {
 		throw componentNotFoundExc(m.appDomain, entrypoint);
 	}
 
-	if ((component.startedBy !== 'user') || (component.runtime !== 'web-gui')) {
+	if (component.runtime !== 'web-gui') {
 		throw makeRuntimeException<AppManifestException>('app-manifest', {
 			entrypoint, wrongComponentType: true
 		}, {});
@@ -97,6 +101,18 @@ export function userStartedComponentFrom(
 	return component;
 }
 
+function makeComponentForSimpleGUIApp(
+	m: SimpleGUIAppManifest
+): GUIComponentDef {
+	return {
+		runtime: 'web-gui',
+		capsRequested: (m as SimpleGUIAppManifest)['capsRequested'],
+		windowOpts: m['windowOpts'],
+		name: (m.name ? m.name : m.appDomain),
+		icon: m.icon
+	};
+}
+
 function componentNotFoundExc(
 	domain: string, entrypoint: string
 ): AppManifestException {
@@ -105,11 +121,46 @@ function componentNotFoundExc(
 	}, {});
 }
 
+export function getDefaultLauncher(m: AppManifest): LauncherDef {
+	return (isSimpleGUIAppManifest(m) ?
+		makeLauncherForSimpleGUIApp(m as SimpleGUIAppManifest) :
+		makeLauncherForGeneralAppManifest(m as GeneralAppManifest)
+	);
+}
+
+function makeLauncherForSimpleGUIApp(m: SimpleGUIAppManifest): LauncherDef {
+	return {
+		component: MAIN_GUI_ENTRYPOINT,
+		icon: m.icon,
+		name: m.name,
+		description: m.description
+	};
+}
+
+function makeLauncherForGeneralAppManifest(m: GeneralAppManifest): LauncherDef {
+	if (m.launchers && (m.launchers.length > 0)) {
+		throw new Error(`${m.appDomain} manifest already has launcher, and one of those should be used.`);
+	}
+	if (!m.components[MAIN_GUI_ENTRYPOINT]) {
+		throw new Error(`${m.appDomain} manifest has no component '${MAIN_GUI_ENTRYPOINT}' that can be used with a default launcher.`);
+	}
+	return {
+		component: MAIN_GUI_ENTRYPOINT,
+		icon: m.icon,
+		name: m.name,
+		description: m.description
+	};
+}
+
 export function getComponentForCommand(
 	m: AppManifest, cmd: string
 ): { entrypoint: string; component: GUIComponentDef } {
-	if (!m.components) { throw cmdNotFoundExc(m.appDomain, cmd); }
-	for (const [entrypoint, def] of Object.entries(m.components)) {
+	if (!(m as GeneralAppManifest).components) {
+		throw cmdNotFoundExc(m.appDomain, cmd);
+	}
+	for (const [entrypoint, def] of Object.entries(
+		(m as GeneralAppManifest).components
+	)) {
 		if ((def as GUIComponentDef).startCmds
 		&& (def as GUIComponentDef).startCmds![cmd]) {
 			return { entrypoint, component: def as GUIComponentDef };
@@ -129,21 +180,47 @@ function cmdNotFoundExc(
 export function getComponentForService(
 	m: AppManifest, service: string
 ): { entrypoint: string; component: SrvDef|GUISrvDef } {
-	if (!m.components) { throw serviceNotFoundExc(m.appDomain, service); }
-	for (const [entrypoint, def] of Object.entries(m.components)) {
-		if (((def as GUISrvDef).service === service)
-		|| ((def as SrvDef).services?.includes(service))) {
+	if (!(m as GeneralAppManifest).components) {
+		throw serviceNotFoundExc(m.appDomain, service);
+	}
+	for (const [entrypoint, def] of Object.entries(
+		(m as GeneralAppManifest).components)
+	) {
+		if (!(def as SrvDef).services) {
+			continue;
+		}
+		if ((def as SrvDef).services.includes(service)) {
 			return { entrypoint, component: def as SrvDef|GUISrvDef };
 		}
 	}
 	throw serviceNotFoundExc(m.appDomain, service);;
 }
 
+export function getAllGUIComponents(
+	m: AppManifest
+): { entrypoint: string; component: GUIComponentDef|GUISrvDef; }[] {
+	if (isSimpleGUIAppManifest(m)) {
+		return [ {
+			entrypoint: MAIN_GUI_ENTRYPOINT,
+			component: makeComponentForSimpleGUIApp(m)
+		} ];
+	}
+	const lst: ReturnType<typeof getAllGUIComponents> = [];
+	for (const [ entrypoint, c ] of Object.entries(
+		(m as GeneralAppManifest).components
+	)) {
+		if (c.runtime === 'web-gui') {
+			lst.push({ entrypoint, component: c as GUIComponentDef|GUISrvDef });
+		}
+	}
+	return lst;
+}
+
 function serviceNotFoundExc(
-	domain: string, service: string
-): AppManifestException {
-	return makeRuntimeException<AppManifestException>('app-manifest', {
-		domain, service, serviceNotFound: true
+	appDomain: string, service: string
+): RPCException {
+	return makeRuntimeException<RPCException>('rpc', {
+		appDomain, service, serviceNotFound: true
 	}, {});
 }
 
@@ -171,6 +248,18 @@ export function isCallerAllowed(
 		}
 	}
 	return false;
+}
+
+export function isMultiInstanceComponent(
+	c: GUIComponentDef|GUISrvDef|SrvDef
+) {
+	if ((c as GUIComponentDef).multiInstances) {
+		return true;
+	} else if ((c as GUISrvDef|SrvDef).forOneConnectionOnly) {
+		return true;
+	} else {
+		return false;
+	}
 }
 
 

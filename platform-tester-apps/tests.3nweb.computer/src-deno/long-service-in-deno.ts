@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -24,14 +24,16 @@ declare const w3n: web3n.testing.CommonW3N;
 const longNonGuiSrvInThisApp = 'LongServiceInDeno';
 
 // we start listening with a time gap to test initially buffered calls
-setTimeout(() => {
+setTimeout(async () => {
 
-	const stopListening = w3n.rpc!.exposeService!(longNonGuiSrvInThisApp, {
+	const syncFS = await w3n.storage!.getAppSyncedFS();
+	const localFS = await w3n.storage!.getAppLocalFS();
+	Service.singleton = new Service(true, syncFS, localFS);
+
+	w3n.rpc!.exposeService!(longNonGuiSrvInThisApp, {
 
 		next: async connection => {
-			const syncFS = await w3n.storage!.getAppSyncedFS();
-			const localFS = await w3n.storage!.getAppLocalFS();
-			Service.singleton = new Service(connection, syncFS, localFS);
+			Service.singleton!.handleConnection(connection);
 		},
 
 		complete: () => w3n.closeSelf!(),

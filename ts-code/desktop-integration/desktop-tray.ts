@@ -118,7 +118,7 @@ export class DeskTray {
 		apps = apps.filter(({ id }) => (id !== LAUNCHER_APP_DOMAIN));
 		for (const app of apps) {
 			appItems.push({
-				label: (app.isDevApp ? `${app.name} <- dev app` : app.name),
+				label: (app.isDevApp ? `${app.name} 🛠️ dev app` : app.name),
 				click: () => this.clicks.next({ userId, app: app.id })
 			})
 		}

@@ -86,7 +86,7 @@ export interface AppsRunnerForTesting {
 }
 
 export type WrapAppCAPsAndSetup = (
-	cap: AppCAPsAndSetup
+	entrypoint: string, cap: AppCAPsAndSetup
 ) => { w3n: web3n.testing.CommonW3N; close: () => void; setApp: AppSetter; };
 
 export type WrapSiteCAPsAndSetup = (
@@ -102,10 +102,10 @@ export type StartDevStartupApp = (
 	params: DevAppParams, wrapStandCAP: WrapStartupCAPs
 ) => Promise<void>;
 
-export type DevAppParamsGetter = (
-	appDomain: string,
-	start: { entrypoint?: string; service?: string; cmd?: string; }
-) => { params: DevAppParams; wrapCAPs: WrapAppCAPsAndSetup; }|undefined;
+export type DevAppParamsGetter = (appDomain: string) => {
+	params: DevAppParams;
+	capsWrapper: WrapAppCAPsAndSetup;
+}|undefined;
 
 export type DevSiteParamsGetter = (
 	appDomain: string, entrypoint: string|undefined
@@ -159,7 +159,7 @@ export class TestStand {
 			`No startupApp found in a test setup file.`
 		);
 		const basicTestStand = this.makeBasicTestStand(
-			testStartupApp!, 'default'
+			testStartupApp!, 'default', undefined
 		);
 		await startUserWithDevStartupApp(
 			{
@@ -197,7 +197,7 @@ export class TestStand {
 				`Test user #${userParams.userNum} should be used with startup test, but there is no startupApp in a setup file.`
 			);
 			const basicTestStand = this.makeBasicTestStand(
-				testStartupApp!, userParams.userId
+				testStartupApp!, userParams.userId, undefined
 			);
 			console.log(`🏁 starting ${testStartupApp} with 🗝️  login for test user ${userParams.userId}`);
 			await startUserWithDevStartupApp(
@@ -269,38 +269,33 @@ export class TestStand {
 			u => areAddressesEqual(u.userId, userId)
 		)!;
 		assert(!!userParams);
-		return (appDomain, { entrypoint, service, cmd }) => {
+		return appDomain => {
 			const params = this.devApps.get(appDomain);
 			if (!params) { return; }
-			if (service) {
-				({ entrypoint } = getComponentForService(params.manifest, service));
-			} else if (cmd) {
-				({ entrypoint } = getComponentForCommand(params.manifest, cmd));
-			} else {
-				assert(!!entrypoint, `entrypoint is needed when both service and command are undefined`);
-			}
-			const { testStand, closeCAP } = this.makeTestStandCAP(
-				userParams, appDomain, entrypoint
-			);
-			const rpcLogger = (params.logRPC ?
-				new RPCLogger(appDomain, entrypoint!) : undefined
-			);
-			const wrapCAPs: WrapAppCAPsAndSetup = ({ w3n, setApp, close }) => {
-				const w3nWithStand = { testStand } as web3n.testing.CommonW3N;
-				for (const cap in w3n) {
-					if ((cap === 'rpc') && rpcLogger) {
-						w3nWithStand[cap] = rpcLogger.wrapRPC(w3n[cap]!);
-					} else {
-						w3nWithStand[cap] = w3n[cap];
+			return {
+				params,
+				capsWrapper: (entrypoint, { w3n, setApp, close }) => {
+					const { testStand, closeCAP } = this.makeTestStandCAP(
+						userParams, appDomain, entrypoint
+					);
+					const rpcLogger = (params.logRPC ?
+						new RPCLogger(appDomain, entrypoint!) : undefined
+					);
+						const w3nWithStand = { testStand } as web3n.testing.CommonW3N;
+					for (const cap in w3n) {
+						if ((cap === 'rpc') && rpcLogger) {
+							w3nWithStand[cap] = rpcLogger.wrapRPC(w3n[cap]!);
+						} else {
+							w3nWithStand[cap] = w3n[cap];
+						}
 					}
+					const wrappedClose = () => {
+						close();
+						closeCAP();
+					};
+					return { w3n: w3nWithStand, setApp, close: wrappedClose };
 				}
-				const wrappedClose = () => {
-					close();
-					closeCAP();
-				};
-				return { w3n: w3nWithStand, setApp, close: wrappedClose };
-			}
-			return { params, wrapCAPs };
+			};
 		};
 	}
 
@@ -322,7 +317,7 @@ export class TestStand {
 			// const rpcLogger = (params.logRPC ?
 			// 	new RPCLogger(appDomain, entrypoint!) : undefined
 			// );
-			const wrapCAPs: WrapAppCAPsAndSetup = ({ w3n, setApp, close }) => {
+			const wrapCAPs: WrapSiteCAPsAndSetup = ({ w3n }) => {
 				const w3nWithStand = { testStand } as web3n.testing.CommonW3N;
 				for (const cap in w3n) {
 					// if ((cap === 'appRPC') && rpcLogger) {
@@ -336,28 +331,24 @@ export class TestStand {
 					// }
 					w3nWithStand[cap] = w3n[cap];
 				}
-				const wrappedClose = () => {
-					close();
-					closeCAP();
-				};
-				return { w3n: w3nWithStand, setApp, close: wrappedClose };
+				return { w3n: w3nWithStand, close: closeCAP };
 			}
 			return { params, wrapCAPs };
 		};
 	}
 
 	private makeBasicTestStand(
-		app: string, userId: string
+		app: string, userId: string, component: string|undefined
 	): web3n.testing.BasicTestStand {
 		return {
 
 			log: async (type, msg, err) => {
 				if (type === 'error') {
-					console.log(`ERROR in ${app}, user '${userId}'\n${msg}\n`, err);
+					console.log(`ERROR in ${app}${component ? component : ''}, user '${userId}'\n${msg}\n`, err);
 				} else if (type === 'info') {
-					console.log(`INFO from ${app}, user '${userId}'\n${msg}\n`);
+					console.log(`INFO from ${app}${component ? component : ''}, user '${userId}'\n${msg}\n`);
 				} else if (type === 'warning') {
-					console.log(`WARNING in ${app}, user '${userId}'\n${msg}\n`);
+					console.log(`WARNING in ${app}${component ? component : ''}, user '${userId}'\n${msg}\n`);
 				}
 			},
 
@@ -405,7 +396,7 @@ export class TestStand {
 		this.listeners.add(capId, listeners);
 
 		const { log, record, exitAll } = this.makeBasicTestStand(
-			appDomain, userId
+			appDomain, userId, component
 		);
 
 		const testStand: web3n.testing.TestStand = {

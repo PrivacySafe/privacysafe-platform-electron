@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { TitleGenerator } from '../components/gui-component';
+import { TitleGenerator } from '../app-n-components/gui-component';
 import { CoreConf } from 'core-3nweb-client-lib';
 import { makeCoreDriver } from '../core/core-driver';
 import { ElectronIPCConnectors, SocketIPCConnectors } from '../core/w3n-connectors';
@@ -38,7 +38,7 @@ export class InitProc {
 	// note that canonical form of user id is used for keys
 	private readonly userApps = new Map<string, UserApps>();
 	private startingUser: {
-		proc: Promise<void>; apps: UserApps;
+		proc: Promise<void>; focusWindow: () => void;
 	}|undefined = undefined;
 	private readonly guiConnectors = new ElectronIPCConnectors();
 	private readonly sockConnectors = new SocketIPCConnectors();
@@ -84,34 +84,43 @@ export class InitProc {
 	}
 
 	private startUser(): Promise<void> {
-		if (!this.startingUser) {
+		if (this.startingUser) {
+			this.startingUser.focusWindow();
+		} else {
 			const apps = new UserApps(
 				this.makeDriver, this.conf, this.guiConnectors, this.sockConnectors,
 				this.makeTitleGenerator, undefined, undefined,
 				this.devToolsAllowance, () => this.platformCAP
 			);
-			const proc = (async () => {
-				try {
-					const excIds = this.openedUsers(true);
-					await (await apps.openStartupApp(excIds)).coreInit;
-					this.userApps.set(toCanonicalAddress(apps.userId), apps);
-					this.observeUserApps(apps);
-
-					// open app menu as main ui and close startup window
-					await apps.openAppLauncher();
-					apps.closeStartupApp();
-
-					this.updateOpenWindows();
-					await this.deskUI.addUser(
-						apps.userId, await apps.listInstalled()
-					);
-				} finally {
-					this.startingUser = undefined;
-				}
-			})();
-			this.startingUser = { apps, proc };
+			const excIds = this.openedUsers(true);
+			const proc = apps.openStartupApp(excIds)
+			.then(async ({coreInit}) => {
+				await coreInit;
+				await this.attachAndSwitchFromStartupToLauncherApp(apps);
+			})
+			.finally(() => {
+				this.startingUser = undefined;
+			});
+			this.startingUser = {
+				proc, focusWindow: () => apps.focusStartupWindow()
+			};
 		}
 		return this.startingUser.proc;
+	}
+
+	private async attachAndSwitchFromStartupToLauncherApp(
+		apps: UserApps
+	): Promise<void> {
+		this.userApps.set(toCanonicalAddress(apps.userId), apps);
+		this.observeUserApps(apps);
+		// open app menu as main ui and close startup window
+		await apps.openAppLauncher()
+		.finally(() => apps.closeStartupApp());
+		// update desktop elements on addition of another user
+		this.updateOpenWindows();
+		await this.deskUI.addUser(
+			apps.userId, await apps.listInstalled()
+		);
 	}
 
 	private observeUserApps(apps: UserApps): void {
@@ -157,7 +166,10 @@ export class InitProc {
 		this.userApps.set(toCanonicalAddress(userId), apps);
 		this.observeUserApps(apps);
 		return {
-			runStartupDevApp: apps.openDevStartupApp.bind(apps),
+			runStartupDevApp: (devParams, wrapCaps) => {
+				const excIds = this.openedUsers(true);
+				return apps.openDevStartupApp(excIds, devParams, wrapCaps);
+			},
 			initForDirectStartup: apps.startCoreDirectly.bind(apps),
 			openApp: apps.openApp.bind(apps),
 			openSite: apps.openSite.bind(apps),
@@ -174,25 +186,20 @@ export class InitProc {
 				this.makeTitleGenerator, undefined, undefined,
 				this.devToolsAllowance, () => this.platformCAP
 			);
-			const proc = (async () => {
-				try {
-					await (await apps.openDevStartupApp(params, wrapStandCAP)).coreInit;
-					this.userApps.set(toCanonicalAddress(apps.userId), apps);
-					this.observeUserApps(apps);
-
-					// open app menu as main ui and close startup window
-					await apps.openAppLauncher();
-					apps.closeStartupApp();
-
-					this.updateOpenWindows();
-					await this.deskUI.addUser(
-						apps.userId, await apps.listInstalled()
-					);
-				} finally {
-					this.startingUser = undefined;
-				}
-			})();
-			this.startingUser = { apps, proc };
+			const excIds = this.openedUsers(true);
+			const proc = apps.openDevStartupApp(
+				excIds, params, wrapStandCAP
+			)
+			.then(async ({ coreInit }) => {
+				await coreInit;
+				await this.attachAndSwitchFromStartupToLauncherApp(apps);
+			})
+			.finally(() => {
+				this.startingUser = undefined;
+			});
+			this.startingUser = {
+				proc, focusWindow: () => apps.focusStartupWindow()
+			};
 		}
 		return this.startingUser.proc;
 	}
@@ -255,7 +262,7 @@ export class InitProc {
 		if (cmd.type === 'open-app') {
 			const userApps = this.userApps.get(toCanonicalAddress(cmd.userId));
 			if (!userApps) { return false; }
-			userApps.openApp(cmd.app, cmd.isDevApp);
+			userApps.openApp(cmd.app);
 			return true;
 		} else {
 			return false;

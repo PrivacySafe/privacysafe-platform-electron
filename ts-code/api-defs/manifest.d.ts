@@ -19,16 +19,26 @@
 
 declare namespace web3n.caps {
 
-	interface AppManifest {
+	type AppManifest = GeneralAppManifest | SimpleGUIAppManifest;
+
+	interface GeneralAppManifest {
 		appDomain: string;
 		version: string;
-		name?: string;
-		description?: string;
-		icon?: string;
-		components?: {
+		name: string;
+		description: string;
+		icon: string;
+		components: {
 			[entrypoint: string]: AppComponent;
 		};
 		launchers?: Launcher[];
+	}
+
+	interface SimpleGUIAppManifest {
+		appDomain: string;
+		version: string;
+		name: string;
+		description: string;
+		icon: string;
 		windowOpts?: ui.WindowOptions;
 		capsRequested?: RequestedCAPs;
 		sharedLibs?: SharedLibInfo[];
@@ -43,21 +53,20 @@ declare namespace web3n.caps {
 	 * cross-platform and cross-form-factor (has this ever existed?).
 	 */
 	interface Launcher {
-		// XXX
-		// - add env/device/form-factor
-		// - remove GUIComponent.startedBy and GUIComponent.name fields
 		name: string;
 		component?: string;
 		startCmd?: {
 			cmd: string;
-			params?: any[];
+			params: any[];
 		}
-		icon?: string;
-		description?: string;
+		icon: string;
+		description: string;
+		formFactor?: UserInterfaceFormFactor|UserInterfaceFormFactor[];
 	}
 
+	type UserInterfaceFormFactor = 'desktop' | 'table' | 'phone'
+
 	interface GUIComponent extends CommonComponentSetting {
-		startedBy?: 'user';
 		startCmds?: {
 			[cmd: string]: AllowedCallers;
 		};
@@ -66,19 +75,19 @@ declare namespace web3n.caps {
 		description?: string;
 		icon?: string;
 		windowOpts?: ui.WindowOptions;
+		multiInstances?: true;
 	}
 
 	interface ServiceComponent extends CommonComponentSetting {
 		allowedCallers: AllowedCallers;
-		service?: string;
-		services?: string[];
+		services: string[];
 		forOneConnectionOnly?: true;
 	}
 
 	interface GUIServiceComponent extends CommonComponentSetting {
 		runtime: GUIRuntime;
 		allowedCallers: AllowedCallers;
-		service: string;
+		services: string[];
 		icon?: string;
 		windowOpts?: ui.WindowOptions;
 		allowNonGUICaller?: true;
@@ -90,7 +99,6 @@ declare namespace web3n.caps {
 		runtime: NonGUIRuntime | GUIRuntime;
 		capsRequested?: RequestedCAPs;
 		sharedLibs?: SharedLibInfo[];
-		multiInstances?: true;
 	}
 
 	type GUIRuntime = 'web-gui';

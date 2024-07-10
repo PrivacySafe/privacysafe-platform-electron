@@ -25,12 +25,12 @@ import { makeServiceLocator } from "core-3nweb-client-lib";
 import { promises as dns } from 'dns';
 import { GetServiceToHandleNewCall, makeClientSideConnector, ClientSideConnector, ServiceConnector } from "../rpc";
 import { makeAppInitExc } from "../apps/installer/system-places";
-import { Component } from "../components";
+import { Component } from "../app-n-components";
 import { Notifications } from "../shell/user-notifications";
 import { makeConnectivity } from "../connectivity";
 import { Deferred, defer } from "../lib-common/processes";
 import { makeAppCmdsCaller, makeCmdsHandler, StartAppWithCmd } from "../shell/cmd-invocation";
-import { GUIComponent } from "../components/gui-component";
+import { GUIComponent } from "../app-n-components/gui-component";
 
 type W3N = web3n.caps.W3N;
 type SitesW3N = web3n.caps.sites.W3N;
@@ -479,11 +479,7 @@ function exposeServiceCAP(
 }
 
 function servicesIn(componentDef: AppComponent): string[]|undefined {
-	if ((componentDef as ServiceComponent).services) {
-		return (componentDef as ServiceComponent).services;
-	} else if ((componentDef as GUIServiceComponent).service) {
-		return [ (componentDef as GUIServiceComponent).service ];
-	}
+	return (componentDef as ServiceComponent).services;
 }
 
 function connectivityCAP(
