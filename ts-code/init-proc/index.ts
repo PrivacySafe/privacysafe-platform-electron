@@ -94,8 +94,11 @@ export class InitProc {
 			);
 			const excIds = this.openedUsers(true);
 			const proc = apps.openStartupApp(excIds)
-			.then(async ({coreInit}) => {
-				await coreInit;
+			.then(async ({ init }) => {
+				if (!(await init) && (this.userApps.size === 0)) {
+					this.exit(0);
+					return;
+				}
 				await this.attachAndSwitchFromStartupToLauncherApp(apps);
 			})
 			.finally(() => {
@@ -190,8 +193,11 @@ export class InitProc {
 			const proc = apps.openDevStartupApp(
 				excIds, params, wrapStandCAP
 			)
-			.then(async ({ coreInit }) => {
-				await coreInit;
+			.then(async ({ init }) => {
+				if (!(await init) && (this.userApps.size === 0)) {
+					this.exit(0);
+					return;
+				}
 				await this.attachAndSwitchFromStartupToLauncherApp(apps);
 			})
 			.finally(() => {

@@ -26,6 +26,7 @@ import { addDevToolsShortcuts } from '../init-proc/devtools';
 import { Component, Service } from '.';
 import { toBuffer } from '../lib-common/buffer-utils';
 import { CmdsHandler } from '../shell/cmd-invocation';
+import { PostponedValuesFixedKeysMap } from '../lib-common/postponed-values-map';
 
 type WindowOptions = web3n.ui.WindowOptions;
 type Session = Electron.Session;
@@ -46,7 +47,6 @@ export class GUIComponent implements Component {
 	public readonly w3n: W3N;
 	public readonly devToolsEnabled: boolean;
 	private contentTitle = '';
-	private serviceImpls: Component['services'] = undefined;
 	private cmdHandlerImpl: CmdsHandler|undefined = undefined;
 
 	protected constructor(
@@ -56,6 +56,7 @@ export class GUIComponent implements Component {
 		caps: AppCAPsAndSetup|undefined,
 		opts: Electron.BrowserWindowConstructorOptions,
 		protected readonly generateTitle: TitleGenerator,
+		private readonly services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	) {
 		this.window = new BrowserWindow(opts);
 		this.devToolsEnabled = !!opts.webPreferences!.devTools;
@@ -95,14 +96,17 @@ export class GUIComponent implements Component {
 	}
 
 	addService(name: string, service: Service): void {
-		if (!this.serviceImpls) {
-			this.serviceImpls = {};
+		if (!this.services) {
+			throw new Error(`Component is not expected to implement any services`);
 		}
-		this.serviceImpls[name] = service;
+		this.services.set(name, service);
 	}
 
-	get services(): Component['services'] {
-		return this.serviceImpls;
+	getService(name: string): Promise<Service> {
+		if (!this.services) {
+			throw new Error(`Component is not expected to implement any services`);
+		}
+		return this.services.get(name);
 	}
 
 	get stdOut(): NodeJS.ReadableStream {
@@ -139,7 +143,8 @@ export class GUIComponent implements Component {
 		caps: AppCAPsAndSetup,
 		winOpts: WindowOptions|undefined, icon: string|undefined,
 		parent: GUIComponent|undefined,
-		devTools: boolean, generateTitle: TitleGenerator
+		devTools: boolean, generateTitle: TitleGenerator,
+		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<GUIComponent> {
 		const session = makeSessionForApp(domain, appRoot, devTools);
 		const preload = ((Object.keys(caps.w3n).length > 0) ?
@@ -152,7 +157,7 @@ export class GUIComponent implements Component {
 			opts.icon = await nativeImageFromFile(appRoot, icon, domain);
 		}
 		const app = new GUIComponent(
-			domain, parent, entrypoint, caps, opts, generateTitle
+			domain, parent, entrypoint, caps, opts, generateTitle, services
 		);
 		await app.attachDevTools(session);
 		Object.seal(app);
@@ -172,7 +177,7 @@ export class GUIComponent implements Component {
 			opts.icon = await nativeImageFromFile(appRoot, icon, domain);
 		}
 		const app = new GUIComponent(
-			domain, undefined, entrypoint, undefined, opts, t => t
+			domain, undefined, entrypoint, undefined, opts, t => t, undefined
 		);
 		await app.attachDevTools(session);
 		Object.seal(app);
@@ -276,9 +281,10 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 		public readonly entrypoint: string,
 		caps: AppCAPsAndSetup|undefined,
 		opts: Electron.BrowserWindowConstructorOptions,
-		generateTitle: TitleGenerator
+		generateTitle: TitleGenerator,
+		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	) {
-		super(domain, parent, entrypoint, caps, opts, generateTitle);
+		super(domain, parent, entrypoint, caps, opts, generateTitle, services);
 	}
 
 	static async makeForUrl(
@@ -286,7 +292,8 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 		caps: AppCAPsAndSetup,
 		winOpts: WindowOptions|undefined, icon: string|undefined,
 		parent: GUIComponent|undefined,
-		generateTitle: TitleGenerator
+		generateTitle: TitleGenerator,
+		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<GUIComponent> {
 		const session = makeSessionForDevAppFromUrl(appUrl);
 		const preload = ((Object.keys(caps.w3n).length > 0) ?
@@ -299,7 +306,7 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 		}
 		const app = new DevAppInstanceFromUrl(
 			domain, parent, appUrl, entrypoint, caps, opts,
-			generateTitle
+			generateTitle, services
 		);
 		await app.attachDevTools(session);
 		Object.seal(app);
@@ -315,7 +322,8 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 			session, STARTUP_APP_PRELOAD, winOpts, undefined, true
 		);
 		const app = new DevAppInstanceFromUrl(
-			domain, undefined, appUrl, entrypoint, undefined, opts, t => t
+			domain, undefined, appUrl, entrypoint, undefined, opts, t => t,
+			undefined
 		);
 		if (icon) {
 			opts.icon = await nativeImageFromURL(appUrl, icon, domain);

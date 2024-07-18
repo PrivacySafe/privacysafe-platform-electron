@@ -20,7 +20,7 @@ import { CUSTOM_DATA_DIR, CUSTOM_DENO_RUNTIME, CUSTOM_SIGNUP_URL, toAbsolute } f
 import { homedir } from 'os';
 import { appDirs, makeLogger } from 'core-3nweb-client-lib';
 import { spawn } from 'child_process';
-import { defer, Deferred } from './lib-common/processes';
+import { defer, Deferred } from './lib-common/processes/deferred';
 import { DATA_DIR_NAME, DEFAULT_SIGNUP_URL, isInAsar, toAsarUnpacked } from './bundle-confs';
 
 export const SIGNUP_URL = (CUSTOM_SIGNUP_URL ?

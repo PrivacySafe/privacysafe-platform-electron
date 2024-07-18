@@ -2,7 +2,7 @@
 
 bundle() {
 	local src="$1"
-	deno eval "
+	deno eval --no-lock "
 	import { bundle } from 'https://deno.land/x/emit/mod.ts';
 	console.log(
 		(await bundle('$src')).code
@@ -10,6 +10,6 @@ bundle() {
 	" || return $?
 }
 
-bundle src-deno/service-in-deno.ts > app/service-in-deno.js || exit $?
-bundle src-deno/long-service-in-deno.ts > app/long-service-in-deno.js || exit $?
+bundle src-deno/service-instance-for-one-connection.ts > app/service-instance-for-one-connection.js || exit $?
+bundle src-deno/long-living-service-instance.ts > app/long-living-service-instance.js || exit $?
 

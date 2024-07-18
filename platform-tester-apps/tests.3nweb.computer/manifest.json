@@ -57,11 +57,12 @@
 		},
 
 		"/one-shot-dialog.html": {
-			"allowedCallers": {
-				"thisAppComponents": "*"
-			},
 			"runtime": "web-gui",
-			"services": [ "OneShotDialog" ],
+			"services": {
+				"OneShotDialog": {
+					"thisAppComponents": "*"
+				}
+			},
 			"childOfGUICaller": true,
 			"forOneConnectionOnly": true,
 			"capsRequested": {
@@ -79,11 +80,12 @@
 		},
 
 		"/long-dialog.html": {
-			"allowedCallers": {
-				"thisAppComponents": "*"
-			},
 			"runtime": "web-gui",
-			"services": [ "LongDialog" ],
+			"services": {
+				"LongDialog": {
+					"thisAppComponents": "*"
+				}
+			},
 			"childOfGUICaller": true,
 			"capsRequested": {
 				"mailerid": true,
@@ -98,12 +100,13 @@
 			}
 		},
 
-		"/service-in-deno.js": {
-			"allowedCallers": {
-				"thisAppComponents": "*"
-			},
+		"/service-instance-for-one-connection.js": {
 			"runtime": "deno",
-			"services": [ "ServiceInDeno" ],
+			"services": {
+				"ServiceInDeno": {
+					"thisAppComponents": "*"
+				}
+			},
 			"forOneConnectionOnly": true,
 			"capsRequested": {
 				"mailerid": true,
@@ -113,12 +116,13 @@
 			}
 		},
 
-		"/long-service-in-deno.js": {
-			"allowedCallers": {
-				"thisAppComponents": "*"
-			},
+		"/long-living-service-instance.js": {
 			"runtime": "deno",
-			"services": [ "LongServiceInDeno" ],
+			"services": {
+				"LongServiceInDeno": {
+					"thisAppComponents": "*"
+				}
+			},
 			"capsRequested": {
 				"mailerid": true,
 				"storage": {

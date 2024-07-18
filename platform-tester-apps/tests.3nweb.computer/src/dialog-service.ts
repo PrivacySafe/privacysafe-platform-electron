@@ -23,14 +23,16 @@ const guiSrvInThisApp = 'OneShotDialog';
 addMsgToPage(`Service's window`);
 
 // we start listening with a time gap to test initially buffered calls
-setTimeout(() => {
+setTimeout(async () => {
+
+	const syncFS = await w3n.storage!.getAppSyncedFS();
+	const localFS = await w3n.storage!.getAppLocalFS();
 
 	const stopListening = w3n.rpc!.exposeService!(guiSrvInThisApp, {
 
-		next: async connection => {
-			const syncFS = await w3n.storage!.getAppSyncedFS();
-			const localFS = await w3n.storage!.getAppLocalFS();
-			Service.singleton = new Service(false, syncFS, localFS);
+		next: connection => {
+			// note parameter 0 tells service to closeSelf() when connection closes
+			Service.singleton = new Service(syncFS, localFS, 0);
 			Service.singleton.handleConnection(connection);
 			stopListening(); // we expect to serve only one connection
 		},
@@ -39,7 +41,8 @@ setTimeout(() => {
 
 		error: async err => {
 			await w3n.testStand.log(
-				'error', `Error in listening for incoming connections`, err);
+				'error', `Error in listening for incoming connections`, err
+			);
 			w3n.closeSelf!();
 		}
 

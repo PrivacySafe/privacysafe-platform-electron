@@ -16,8 +16,7 @@
 */
 
 import { Observable, share, Subject } from "rxjs";
-import { makeShellCmdException } from "../../app-n-components";
-import { isCallerAllowed } from "../../lib-common/manifest-utils";
+import { isCallerAllowed, makeShellCmdException } from "../../lib-common/manifest-utils";
 
 type StartAppWithParams = web3n.shell.commands.StartAppWithParams;
 type CmdParams = web3n.shell.commands.CmdParams;

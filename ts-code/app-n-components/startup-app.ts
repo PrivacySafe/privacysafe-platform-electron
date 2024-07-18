@@ -132,6 +132,10 @@ export class StartupApp {
 		this.gui?.window.focus();
 	}
 
+	doWhenWindowCompletes(handler: () => void): void {
+		this.gui!.window.once('closed', handler);
+	}
+
 	close(): void {
 		if (this.gui) {
 			this.gui.window.close();

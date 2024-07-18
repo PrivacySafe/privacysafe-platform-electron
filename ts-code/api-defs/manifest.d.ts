@@ -79,20 +79,17 @@ declare namespace web3n.caps {
 	}
 
 	interface ServiceComponent extends CommonComponentSetting {
-		allowedCallers: AllowedCallers;
-		services: string[];
+		services: {
+			[srv: string]: AllowedCallers;
+		};
 		forOneConnectionOnly?: true;
 	}
 
-	interface GUIServiceComponent extends CommonComponentSetting {
+	interface GUIServiceComponent extends ServiceComponent {
 		runtime: GUIRuntime;
-		allowedCallers: AllowedCallers;
-		services: string[];
 		icon?: string;
 		windowOpts?: ui.WindowOptions;
-		allowNonGUICaller?: true;
 		childOfGUICaller?: true;
-		forOneConnectionOnly?: true;
 	}
 
 	interface CommonComponentSetting {

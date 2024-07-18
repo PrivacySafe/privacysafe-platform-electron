@@ -15,7 +15,6 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { sleep } from "../../lib-common/processes.js";
 import { strFromBytes } from "../../test-page-utils.js";
 import { bytesEqual } from "../libs-for-tests/bytes-equal.js";
 import { callSrvAtSecondUser } from "./second-user.js";

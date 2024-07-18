@@ -17,7 +17,7 @@
 
 import { Socket } from "net";
 import { makeRuntimeException } from "./exceptions/runtime";
-import { defer, Deferred } from "./processes";
+import { defer, Deferred } from "./processes/deferred";
 
 
 export interface Reader {

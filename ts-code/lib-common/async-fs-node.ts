@@ -20,10 +20,11 @@ import { createReadStream, createWriteStream, statSync } from 'fs';
 import { Readable, Writable } from 'stream';
 import { FileException, Code as excCode, makeFileException, makeFileExceptionFromCode }
 	from './exceptions/file';
-import { SingleProc, defer, Deferred } from './processes';
 import { BytesFIFOBuffer } from './byte-streaming/bytes-fifo-buffer';
 import { toBuffer } from './buffer-utils';
 import { normalize as normalizePath } from 'path';
+import { SingleProc } from './processes/single';
+import { Deferred, defer } from './processes/deferred';
 
 export { Stats } from 'fs';
 export { FileException } from './exceptions/file';

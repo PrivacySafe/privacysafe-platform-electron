@@ -27,7 +27,7 @@ setTimeout(async () => {
 
 	const syncFS = await w3n.storage!.getAppSyncedFS();
 	const localFS = await w3n.storage!.getAppLocalFS();
-	Service.singleton = new Service(true, syncFS, localFS);
+	Service.singleton = new Service(syncFS, localFS, 5000);
 
 	w3n.rpc!.exposeService!(guiLongSrvInThisApp, {
 
@@ -42,7 +42,8 @@ setTimeout(async () => {
 
 		error: async err => {
 			await w3n.testStand.log(
-				'error', `Error in listening for incoming connections`, err);
+				'error', `Error in listening for incoming connections`, err
+			);
 			w3n.closeSelf!();
 		}
 

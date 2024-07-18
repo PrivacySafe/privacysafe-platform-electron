@@ -17,7 +17,7 @@
 
 import { DeviceFS } from "core-3nweb-client-lib";
 import { SystemPlaces } from "../apps/installer/system-places";
-import { SingleProc } from "../lib-common/processes";
+import { SingleProc } from "../lib-common/processes/single";
 import { DevAppParamsGetter } from "../test-stand";
 import { App } from "./app";
 import { appAndManifestOnDev } from "./utils";
@@ -40,9 +40,7 @@ export interface Component {
 	setCloseListener(onClose: () => void): void;
 	close(): void;
 	addService(name: string, service: Service): void;
-	readonly services?: {
-		[name: string]: Service;
-	};
+	getService(name: string): Promise<Service>;
 	readonly stdOut: NodeJS.ReadableStream;
 	readonly stdErr: NodeJS.ReadableStream;
 }
@@ -53,23 +51,11 @@ export interface Service {
 
 	ensureCallerAllowed(callerApp: string, callerComponent: string): void;
 
-	connect(): Promise<RPCConnection>;
+	connect(): Promise<{
+		connection: RPCConnection;
+		doOnClose: (cleanup: ()=>void) => void;
+	}>;
 
-}
-
-type ShellCmdException = web3n.shell.commands.ShellCmdException;
-
-export function makeShellCmdException(
-	appDomain: string, command: string,
-	flags: Partial<ShellCmdException>, params?: Partial<ShellCmdException>
-): ShellCmdException {
-	if (params) {
-		params.appDomain = appDomain;
-		params.command = command;
-	} else {
-		params = { appDomain, command };
-	}
-	return makeRuntimeException('shell-command', params, flags);
 }
 
 

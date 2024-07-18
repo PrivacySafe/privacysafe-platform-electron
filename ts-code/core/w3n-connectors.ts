@@ -29,7 +29,8 @@ import { EnvelopesBuffer, makeSocketIPCException, MsgOnCoreSide, readMsgOnCoreSi
 import { logError } from "../confs";
 import { platform } from "process";
 import { assert } from "../lib-common/assert";
-import { defer, Deferred, SingleProc } from "../lib-common/processes";
+import { defer, Deferred } from "../lib-common/processes/deferred";
+import { SingleProc } from "../lib-common/processes/single";
 import { DenoLikeSocket } from "../lib-common/deno-like-socket";
 import { getPortPromise } from "portfinder";
 import { exposeConnectivityCAP } from "../connectivity/connectivity-cap-ipc";

@@ -27,13 +27,15 @@ import { UserAppInfo } from '../desktop-integration';
 import { Observable, Subject, lastValueFrom } from 'rxjs';
 import { WrapStartupCAPs, DevAppParams, DevAppParamsGetter, DevSiteParamsGetter } from '../test-stand';
 import { Component, Service, AppsByDomain } from '../app-n-components';
-import { NamedProcs, sleep } from '../lib-common/processes';
+import { sleep } from '../lib-common/processes/sleep';
+import { NamedProcs } from '../lib-common/processes/named-procs';
 import { MAIN_GUI_ENTRYPOINT } from '../lib-common/manifest-utils';
 import { LAUNCHER_APP_DOMAIN, STARTUP_APP_DOMAIN } from '../bundle-confs';
 import { Sites } from '../site-runner';
 import { ScreenGUIPlacements } from '../window-utils/screen-gui-placements';
 import { InitProc } from '.';
 import { StartupApp } from '../app-n-components/startup-app';
+import { defer } from '../lib-common/processes/deferred';
 
 
 type UserAppsEvents = 'start-closing' | {
@@ -142,7 +144,7 @@ export class UserApps {
 
 	openStartupApp(
 		usersToFilterOut: string[]
-	): Promise<{ coreInit: Promise<void>; }> {
+	): Promise<{ init: Promise<boolean>; }> {
 		return this.openRegularOrDevelopmentStartupApp(
 			() => StartupApp.instantiate(
 				usersToFilterOut, this.devToolsAllowance(STARTUP_APP_DOMAIN),
@@ -155,7 +157,7 @@ export class UserApps {
 	openDevStartupApp(
 		usersToFilterOut: string[],
 		devParams: DevAppParams, wrapCAP: WrapStartupCAPs
-	): Promise<{ coreInit: Promise<void>; }> {
+	): ReturnType<UserApps['openStartupApp']> {
 		return this.openRegularOrDevelopmentStartupApp(
 			() => StartupApp.instantiateDev(
 				usersToFilterOut, devParams,
@@ -174,7 +176,13 @@ export class UserApps {
 		const { coreInit, startProc, startupApp } = instantiate();
 		this.startupApp = startupApp;
 		await startProc;
-		return { coreInit };
+		const windowClosed = defer<false>();
+		this.startupApp.doWhenWindowCompletes(() => windowClosed.resolve(false));
+		const init = Promise.race([
+			coreInit.then(() => true),
+			windowClosed.promise
+		]);
+		return { init };
 	}
 
 	closeStartupApp(): void {

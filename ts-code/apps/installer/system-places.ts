@@ -27,7 +27,7 @@ import { makeRuntimeException } from '../../lib-common/exceptions/runtime';
 import { checkAppManifest } from '../../lib-common/manifest-utils';
 import { toRxObserver } from '../../lib-common/utils-for-observables';
 import { readManifestFromZip, unzipAppVersion, APP_ROOT_FOLDER, MANIFEST_FILE, readFileBytesFromZip } from './unpack-zipped-app';
-import { SingleProc } from '../../lib-common/processes';
+import { SingleProc } from '../../lib-common/processes/single';
 
 type Observer<T> = web3n.Observer<T>;
 type ReadonlyFS = web3n.files.ReadonlyFS;

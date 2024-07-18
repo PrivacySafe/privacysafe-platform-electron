@@ -28,7 +28,7 @@ import { makeAppInitExc } from "../apps/installer/system-places";
 import { Component } from "../app-n-components";
 import { Notifications } from "../shell/user-notifications";
 import { makeConnectivity } from "../connectivity";
-import { Deferred, defer } from "../lib-common/processes";
+import { Deferred, defer } from "../lib-common/processes/deferred";
 import { makeAppCmdsCaller, makeCmdsHandler, StartAppWithCmd } from "../shell/cmd-invocation";
 import { GUIComponent } from "../app-n-components/gui-component";
 
@@ -331,37 +331,79 @@ Object.freeze(Driver.prototype);
 Object.freeze(Driver);
 
 
+class ClientSideRPCConnections {
+
+	private readonly connections = new Set<web3n.rpc.client.RPCConnection>();
+
+	constructor(
+		private readonly caller: Component,
+		private readonly rpcClientSide: ClientSideConnector
+	) {
+		Object.freeze(this);
+	}
+
+	async makeConnection(
+		appDomain: string|undefined, service: string
+	): Promise<web3n.rpc.client.RPCConnection> {
+		const { connection, doOnClose } = await this.rpcClientSide(
+			this.caller,
+			(appDomain ? appDomain : this.caller.domain),
+			service
+		);
+		this.connections.add(connection);
+		doOnClose(() => this.connections.delete(connection));
+		return connection;
+	}
+
+	close(): void {
+		if (this.connections.size > 0) {
+			for (const c of this.connections) {
+				c.close();
+			}
+			this.connections.clear();
+		}
+	}
+
+}
+Object.freeze(ClientSideRPCConnections.prototype);
+Object.freeze(ClientSideRPCConnections);
+
+
 type RPC = NonNullable<W3N['rpc']>;
 
 function makeAppRPC(
 	rpcClientSide: ClientSideConnector, capsReq: RequestedCAPs
 ): {
-	cap: NonNullable<RPC['thisApp']>; setApp: AppSetter;
+	cap: NonNullable<RPC['thisApp']>; setApp: AppSetter; close(): void;
 }|undefined {
 	if (!capsReq.appRPC) { return; }
 	if (capsReq.appRPC.serviceComponents.length === 0) { return; }
-	let caller: Component|undefined = undefined;
+	let connections: ClientSideRPCConnections|undefined = undefined;
 	return {
-		cap: service => rpcClientSide(caller!, caller!.domain, service),
+		cap: service => connections!.makeConnection(undefined, service),
 		setApp: app => {
-			caller = app;
+			connections = new ClientSideRPCConnections(app, rpcClientSide);
 		},
+		close: () => connections?.close()
 	};
 }
 
 function makeOtherAppsRPC(
 	rpcClientSide: ClientSideConnector, capsReq: RequestedCAPs
 ): {
-	cap: NonNullable<RPC['otherAppsRPC']>; setApp: AppSetter;
+	cap: NonNullable<RPC['otherAppsRPC']>; setApp: AppSetter; close(): void;
 }|undefined {
 	if (!capsReq.otherAppsRPC) { return; }
 	if (capsReq.otherAppsRPC.callable.length === 0) { return; }
-	let caller: Component|undefined = undefined;
+	let connections: ClientSideRPCConnections|undefined = undefined;
 	return {
-		cap: (appDomain, service) => rpcClientSide(caller!, appDomain, service),
+		cap: (appDomain, service) => connections!.makeConnection(
+			appDomain, service
+		),
 		setApp: app => {
-			caller = app;
+			connections = new ClientSideRPCConnections(app, rpcClientSide);
 		},
+		close: () => connections?.close()
 	};
 }
 
@@ -391,6 +433,8 @@ function makeRpcCAP(
 		},
 		close: () => {
 			exposeService?.close();
+			appRPC?.close();
+			otherAppsRPC?.close();
 		}
 	};
 }
@@ -444,15 +488,15 @@ function fileDialogShellCAP(
 }
 
 function exposeServiceCAP(
-	appDomain: string, componentDef: GUIServiceComponent|ServiceComponent
+	appDomain: string, componentDef: ServiceComponent
 ): { cap: ExposeService; setApp: AppSetter; close: () => void; }|undefined {
 	const expectedSrvs = servicesIn(componentDef);
 	if (!expectedSrvs) { return; }
 	const connectors: { [srvName: string]: ServiceConnector; } = {};
 	for (const srvName of expectedSrvs) {
 		connectors[srvName] = new ServiceConnector(
-			appDomain, srvName,
-			componentDef.allowedCallers, !!componentDef.forOneConnectionOnly
+			appDomain, srvName, componentDef.services[srvName],
+			!!componentDef.forOneConnectionOnly
 		);
 	}
 	const setApp: AppSetter = app => {
@@ -478,8 +522,13 @@ function exposeServiceCAP(
 	return { cap, setApp, close };
 }
 
-function servicesIn(componentDef: AppComponent): string[]|undefined {
-	return (componentDef as ServiceComponent).services;
+function servicesIn(componentDef: ServiceComponent): string[]|undefined {
+	if (componentDef.services) {
+		const serviceNames = Object.keys(componentDef.services);
+		return ((serviceNames.length === 0) ? undefined : serviceNames);
+	} else {
+		return;
+	}
 }
 
 function connectivityCAP(

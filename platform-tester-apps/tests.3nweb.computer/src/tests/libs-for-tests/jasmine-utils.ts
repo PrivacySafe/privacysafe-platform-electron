@@ -16,7 +16,7 @@
 */
 
 import { stringifyErr } from "../../lib-common/exceptions/error.js";
-import { callWithTimeout } from "../../lib-common/processes.js";
+import { callWithTimeout } from "../../lib-common/processes/timeouts.js";
 
 export function itCond(
 	expectation: string, assertion?: () => Promise<void>, timeout?: number,

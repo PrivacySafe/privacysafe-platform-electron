@@ -22,7 +22,7 @@ import { IncomingMessage, IncomingHttpHeaders, ClientRequest } from 'http';
 import { parse as parseUrl } from 'url';
 import { firstValueFrom, fromEvent, merge } from 'rxjs';
 import { toBuffer, utf8 } from '../lib-common/buffer-utils';
-import { defer } from '../lib-common/processes';
+import { defer } from '../lib-common/processes/deferred';
 import { stringifyErr } from '../lib-common/exceptions/error';
 import { HTTP_LOG_TO_CONSOLE_FLAG } from '../process-args';
 import { take, map, takeUntil, mergeMap } from 'rxjs/operators';

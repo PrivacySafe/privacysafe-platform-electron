@@ -17,13 +17,15 @@
 
 import { errWithCause } from '../../../lib-common/exceptions/error';
 import { constants as masks } from 'fs';
-import { sleep, NamedProcs, Action } from '../../../lib-common/processes';
 import { makeFileException, Code as excCode } from '../../../lib-common/exceptions/file';
 import { MountOptions } from 'fuse-bindings';
 import { Descriptors, Roots } from './descriptors';
 import { Descriptor } from './descriptor';
 import { logError } from '../../../confs';
 import { makeRuntimeException } from '../../../lib-common/exceptions/runtime';
+import { NamedProcs } from '../../../lib-common/processes/named-procs';
+import { sleep } from '../../../lib-common/processes/sleep';
+import { Action } from '../../../lib-common/processes/single';
 
 const fuse = (function() {
 	try {

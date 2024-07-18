@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -23,7 +23,8 @@ import { AppCAPsAndSetup } from "../core/core-driver";
 import { SocketConnectInfo } from "../ipc-with-core/socket-ipc";
 import { assert } from "../lib-common/assert";
 import { utf8 } from "../lib-common/buffer-utils";
-import { defer, Deferred, SingleProc, sleep } from "../lib-common/processes";
+import { defer, Deferred } from "../lib-common/processes/deferred";
+import { PostponedValuesFixedKeysMap } from "../lib-common/postponed-values-map";
 
 type ReadonlyFS = web3n.files.ReadonlyFS;
 type FileByteSource = web3n.files.FileByteSource;
@@ -34,8 +35,7 @@ export class DenoComponent implements Component {
 
 	public readonly runtime = 'deno';
 	private proc: ChildProcess|undefined = undefined;
-	private serviceImpls: Component['services'] = undefined;
-	private readonly closureListeners: (() => void)[] = [];
+	private readonly closureListeners: ((code: number|null, signal: NodeJS.Signals|null) => void)[] = [];
 	public readonly w3n: W3N;
 	private srvFileToLoad: FileByteSource|undefined = undefined;
 	private deferredLoad: Deferred<void>|undefined = defer();
@@ -45,7 +45,8 @@ export class DenoComponent implements Component {
 		public readonly entrypoint: string,
 		public readonly connectInfo: SocketConnectInfo,
 		private readonly denoBin: DenoParams,
-		srvFile: FileByteSource, caps: AppCAPsAndSetup
+		srvFile: FileByteSource, caps: AppCAPsAndSetup,
+		private readonly services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	) {
 		this.srvFileToLoad = srvFile;
 		this.w3n = caps.w3n;
@@ -57,10 +58,11 @@ export class DenoComponent implements Component {
 	static async makeLoadConnectAndStart(
 		domain: string, appRoot: ReadonlyFS, entrypoint: string,
 		caps: AppCAPsAndSetup, connectInfo: SocketConnectInfo,
-		connect: (caps: W3N) => (() => void)
+		connect: (caps: W3N) => (() => void),
+		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<DenoComponent> {
 		const component = await DenoComponent.make(
-			domain, appRoot, entrypoint, caps, connectInfo
+			domain, appRoot, entrypoint, caps, connectInfo, services
 		);
 		const disconnectIPC = connect(component.w3n);
 		component.setCloseListener(disconnectIPC);
@@ -70,13 +72,14 @@ export class DenoComponent implements Component {
 
 	private static async make(
 		domain: string, appRoot: ReadonlyFS, entrypoint: string,
-		caps: AppCAPsAndSetup, connectInfo: SocketConnectInfo
+		caps: AppCAPsAndSetup, connectInfo: SocketConnectInfo,
+		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<DenoComponent> {
 		const srvFile = await appRoot.getByteSource(entrypoint);
 		const denoBin = await denoBinParams();
 		if (!denoBin) { throw new Error(`Deno runtime is not available`); }
 		return new DenoComponent(
-			domain, entrypoint, connectInfo, denoBin, srvFile, caps
+			domain, entrypoint, connectInfo, denoBin, srvFile, caps, services
 		);
 	}
 
@@ -123,7 +126,7 @@ export class DenoComponent implements Component {
 				createReadStream(this.denoBin.preload, { encoding: 'utf8' }),
 				stdin
 			);
-			await injectCode(`\nwindow.w3n.then(function(){\n`, stdin);
+			await injectCode(`\nwindow.w3n.then(async function(){\n`, stdin);
 			await pipeBytesTo(srvFile, stdin);
 			await injectCode(`\n});\n`, stdin);
 			stdin.end();
@@ -139,7 +142,7 @@ export class DenoComponent implements Component {
 			this.deferredLoad = undefined;
 		}
 		if (!this.proc) { return; }
-		this.triggerClosureListeners();
+		this.triggerClosureListeners(null, null);
 		this.proc = undefined;
 		logError(err, `Deno component ${this.domain}:${this.entrypoint}`);
 	}
@@ -152,7 +155,7 @@ export class DenoComponent implements Component {
 			this.deferredLoad = undefined;
 		}
 		if (!this.proc) { return; }
-		this.triggerClosureListeners();
+		this.triggerClosureListeners(code, signal);
 		this.proc = undefined;
 	}
 
@@ -170,7 +173,7 @@ export class DenoComponent implements Component {
 		}
 	}
 
-	setCloseListener(onClose: () => void): void {
+	setCloseListener(onClose: (code: number|null, signal: NodeJS.Signals|null) => void): void {
 		this.closureListeners.push(onClose);
 	}
 
@@ -181,11 +184,13 @@ export class DenoComponent implements Component {
 		}
 	}
 
-	private triggerClosureListeners(): void {
+	private triggerClosureListeners(
+		code: number|null, signal: NodeJS.Signals|null
+	): void {
 		if (this.closureListeners.length === 0) { return; }
 		for (const onClose of this.closureListeners) {
 			try {
-				onClose();
+				onClose(code, signal);
 			} catch (err) {
 				logError(err, `Error in closing deno component ${
 					this.domain}:${this.entrypoint}`);
@@ -195,14 +200,17 @@ export class DenoComponent implements Component {
 	}
 
 	addService(name: string, service: Service): void {
-		if (!this.serviceImpls) {
-			this.serviceImpls = {};
+		if (!this.services) {
+			throw new Error(`Component is not expected to implement any services`);
 		}
-		this.serviceImpls[name] = service;
+		this.services.set(name, service);
 	}
 
-	get services(): Component['services'] {
-		return this.serviceImpls;
+	getService(name: string): Promise<Service> {
+		if (!this.services) {
+			throw new Error(`Component is not expected to implement any services`);
+		}
+		return this.services.get(name);
 	}
 
 	get stdOut(): NodeJS.ReadableStream {

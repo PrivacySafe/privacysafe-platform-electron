@@ -25,10 +25,12 @@ type WritableFile = web3n.files.WritableFile;
 
 export class Service {
 
+	private scheduledClosure: number | undefined = undefined;
+
 	constructor(
-		private readonly serveManyConnections: boolean,
 		public readonly syncFS: WritableFS,
-		public readonly localFS: WritableFS
+		public readonly localFS: WritableFS,
+		private readonly waitMillisBeforeClosing: number
 	) {
 		Object.seal(this);
 	}
@@ -46,9 +48,15 @@ export class Service {
 				}
 			},
 			complete: () => {
-				if (!this.serveManyConnections) {
+				if (this.waitMillisBeforeClosing === 0) {
 					w3n.closeSelf!();
 				}
+				if (this.scheduledClosure !== undefined) {
+					clearTimeout(this.scheduledClosure);
+				}
+				this.scheduledClosure = setTimeout(
+					() => w3n.closeSelf!(), this.waitMillisBeforeClosing
+				) as any as number;
 			},
 			error: async err => {
 				await w3n.testStand.log(

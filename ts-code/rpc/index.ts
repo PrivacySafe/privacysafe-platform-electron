@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -16,9 +16,8 @@
 */
 
 import { Component, Service } from '../app-n-components';
-import { makeRuntimeException } from '../lib-common/exceptions/runtime';
-import { isCallerAllowed } from '../lib-common/manifest-utils';
-import { defer, Deferred } from '../lib-common/processes';
+import { isCallerAllowed, makeRPCException } from '../lib-common/manifest-utils';
+import { Deferred, defer } from '../lib-common/processes/deferred';
 
 type PassedDatum = web3n.rpc.PassedDatum;
 type Datum = PassedDatum|undefined;
@@ -30,26 +29,16 @@ type Observer<T> = web3n.Observer<T>;
 type AllowedCallers = web3n.caps.AllowedCallers;
 type RPCException = web3n.rpc.RPCException;
 
-export function makeRPCException(
-	appDomain: string, service: string, flags: Partial<RPCException>,
-	params?: Partial<RPCException>
-): RPCException {
-	if (params) {
-		params.appDomain = appDomain;
-		params.service = service;
-	} else {
-		params = { appDomain, service };
-	}
-	return makeRuntimeException('rpc', params, flags);
-}
-
 export type GetServiceToHandleNewCall = (
 	caller: Component, appDomain: string, service: string
 ) => Promise<Service>;
 
 export type ClientSideConnector = (
 	caller: Component, appDomain: string, service: string
-) => Promise<RPCConnection>;
+) => Promise<{
+	connection: RPCConnection;
+	doOnClose: (cleanup: ()=>void) => void;
+}>;
 
 export function makeClientSideConnector(
 	srvToHandleCall: GetServiceToHandleNewCall
@@ -68,6 +57,7 @@ class Connection {
 	private readonly calls = new Map<number, Deferred<Datum>|Observer<Datum>>();
 	private initBuffer: IncomingMsg[]|undefined = [];
 	private srvSink: Observer<IncomingMsg>|undefined = undefined;
+	private readonly onCloseFns = new Set<()=>void>();
 	private constructor(
 		public readonly appDomain: string,
 		public readonly srvName: string
@@ -77,6 +67,7 @@ class Connection {
 
 	static makePair(appDomain: string, srvName: string): {
 		clientSide: RPCConnection; srvSide: IncomingConnection;
+		doOnClose: (cleanup: ()=>void) => void;
 	} {
 		const connection = new Connection(appDomain, srvName);
 		const close = connection.close.bind(connection);
@@ -90,7 +81,10 @@ class Connection {
 			makeRequestReplyCall: connection.makeRequestReplyCall.bind(connection),
 			startObservableCall: connection.startObservableCall.bind(connection),
 		};
-		return { clientSide, srvSide };
+		return {
+			clientSide, srvSide,
+			doOnClose: cleanup => connection.onCloseFns.add(cleanup)
+		};
 	}
 
 	async close(): Promise<void> {
@@ -109,6 +103,9 @@ class Connection {
 			} else {
 				(call as Observer<PassedDatum>).error!(exc);
 			}
+		}
+		for (const cleanup of this.onCloseFns) {
+			cleanup();
 		}
 	}
 
@@ -279,10 +276,15 @@ export class ServiceConnector implements Service {
 	}
 
 	ensureCallerAllowed(callerApp: string, callerComponent: string): void {
-		ensureCallerAllowed(
-			this.appDomain, this.srvName, this.allowedCallers,
-			callerApp, callerComponent
-		);
+		if (!isCallerAllowed(
+			this.appDomain, this.allowedCallers, callerApp, callerComponent
+		)) {
+			throw makeRPCException(
+				this.appDomain, this.srvName,
+				{ callerNotAllowed: true },
+				{ callerApp, callerComponent }
+			);
+		}	
 	}
 
 	setSinkForConnections(sink: Observer<IncomingConnection>): void {
@@ -299,7 +301,10 @@ export class ServiceConnector implements Service {
 		return makeRPCException(this.appDomain, this.srvName, flags);
 	}
 
-	async connect(): Promise<RPCConnection> {
+	async connect(): Promise<{
+		connection: RPCConnection;
+		doOnClose: (cleanup: ()=>void) => void;
+	}> {
 		if (this.acceptingCalls) {
 			if (this.forOneConnectionOnly) {
 				this.acceptingCalls = false;
@@ -309,10 +314,10 @@ export class ServiceConnector implements Service {
 		}
 		const srvSideSink = await this.getConnectionSink();
 		const {
-			clientSide, srvSide
+			clientSide: connection, srvSide, doOnClose
 		} = Connection.makePair(this.appDomain, this.srvName);
 		srvSideSink.next!(srvSide);
-		return clientSide;
+		return { connection, doOnClose };
 	}
 
 	close(): void {
@@ -332,19 +337,6 @@ export class ServiceConnector implements Service {
 Object.freeze(ServiceConnector.prototype);
 Object.freeze(ServiceConnector);
 
-
-export function ensureCallerAllowed(
-	appDomain: string, service: string, conf: AllowedCallers,
-	callerApp: string, callerComponent: string
-): void {
-	if (!isCallerAllowed(appDomain, conf, callerApp, callerComponent)) {
-		throw makeRPCException(
-			appDomain, service,
-			{ callerNotAllowed: true },
-			{ callerApp, callerComponent }
-		);
-	}
-}
 
 function noop() {}
 

@@ -15,18 +15,18 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Component, Service, makeShellCmdException } from "./index";
-import { getAllGUIComponents, getComponentForCommand, getComponentForService, getDefaultLauncher, getWebGUIComponent, isCallerAllowed, isMultiInstanceComponent } from "../lib-common/manifest-utils";
-import { NamedProcs } from "../lib-common/processes";
+import { Component, Service } from "./index";
+import { getAllGUIComponents, getComponentForCommand, getComponentForService, getDefaultLauncher, getWebGUIComponent, isCallerAllowed, isMultiInstanceComponent, makeRPCException, makeShellCmdException, servicesImplementedBy } from "../lib-common/manifest-utils";
+import { NamedProcs } from "../lib-common/processes/named-procs";
 import { WrapAppCAPsAndSetup } from "../test-stand";
 import { DevAppInstanceFromUrl, GUIComponent, TitleGenerator } from "./gui-component";
 import { CoreDriver } from "../core/core-driver";
 import { ScreenGUIPlacements } from "../window-utils/screen-gui-placements";
 import { assert } from "../lib-common/assert";
 import { ElectronIPCConnectors, SocketIPCConnectors } from "../core/w3n-connectors";
-import { ensureCallerAllowed, makeRPCException } from "../rpc";
 import { makeAppInitExc } from "../apps/installer/system-places";
 import { DenoComponent } from "./deno-component";
+import { PostponedValuesFixedKeysMap } from "../lib-common/postponed-values-map";
 
 
 type ReadonlyFS = web3n.files.ReadonlyFS;
@@ -72,10 +72,12 @@ export class App {
 	async handleCmd(
 		cmd: CmdParams, callerApp: string, callerComponent: string
 	): Promise<void> {
-		const {
-			entrypoint, component
-		} = getComponentForCommand(this.manifest, cmd.cmd);
 		const appDomain = this.manifest.appDomain;
+		const c = getComponentForCommand(this.manifest, cmd.cmd);
+		if (!c) {
+			throw makeShellCmdException(appDomain, cmd.cmd, { cmdNotFound: true });
+		}
+		const { entrypoint, component } = c;
 		if (!isCallerAllowed(
 			appDomain, component.startCmds![cmd.cmd], callerApp, callerComponent
 		)) {
@@ -147,19 +149,20 @@ export class App {
 		const {
 			windowOpts, watchWindowGeometry
 		} = await this.guiPlacement.windowLocationFor(
-			appDomain,entrypoint, component.windowOpts, guiParent?.window
+			appDomain, entrypoint, component.windowOpts, guiParent?.window
 		);
+		const services = servicesContainerFor(this.manifest, entrypoint);
 		let gui:GUIComponent;
 		if (this.devRootUrl) {
 			gui = await DevAppInstanceFromUrl.makeForUrl(
 				appDomain, this.devRootUrl, entrypoint, caps,
-				windowOpts, component.icon, guiParent, this.titleMaker
+				windowOpts, component.icon, guiParent, this.titleMaker, services
 			);
 		} else {
 			gui = await GUIComponent.make(
 				appDomain, this.appRoot, entrypoint, caps,
 				windowOpts, component.icon, guiParent,
-				this.devTools, this.titleMaker
+				this.devTools, this.titleMaker, services
 			);
 		}
 		this.guiConnectors.connectW3N(gui.w3n, gui.window.webContents);
@@ -211,23 +214,29 @@ export class App {
 		caller: Component, service: string
 	): Promise<Service> {
 		const appDomain = this.manifest.appDomain;
-		const {
-			entrypoint, component
-		} = getComponentForService(this.manifest, service);
-		ensureCallerAllowed(
-			appDomain, service, component.allowedCallers,
+		const c = getComponentForService(this.manifest, service);
+		if (!c) {
+			throw makeRPCException(appDomain, service, { serviceNotFound: true });
+		}
+		const { entrypoint, component } = c;
+		if (!isCallerAllowed(
+			appDomain, component.services[service],
 			caller.domain, caller.entrypoint
-		);
+		)) {
+			throw makeRPCException(
+				appDomain, service,
+				{ callerNotAllowed: true },
+				{ callerApp: caller.domain, callerComponent: caller.entrypoint }
+			);
+		}	
 		await this.whenNoStartProc(entrypoint);
 		const existing = this.instances.get(entrypoint);
-
 // DEBUG
-// console.log(`existing instance is`, existing, `
+// console.log(`🧐 ${existing ? `have` : `there is no`} existing component to provide ${service} from ${this.domain}
 // `);
-
 		if (existing && !isMultiInstanceComponent(component)) {
 			(existing as GUIComponent).window?.focus();
-			return (existing as Component).services![service];
+			return (existing as Component).getService(service);
 		}
 		return await this.startProcs.addStarted(
 			entrypoint,
@@ -239,36 +248,25 @@ export class App {
 
 	private async makeAndStartComponentServiceInstance(
 		caller: Component, service: string,
-		component: GUISrvDef|SrvDef, entrypoint: string
+		component: SrvDef, entrypoint: string
 	): Promise<Service> {
 		this.ensureCanStartComponent();
 		const appDomain = this.manifest.appDomain;
 		if (component.runtime === 'web-gui') {
-			let parent: GUIComponent|undefined = undefined;
-			if (caller.runtime === 'web-gui') {
-				if ((component as GUISrvDef).childOfGUICaller) {
-					parent = caller as GUIComponent;
-				}
-			} else if (!(component as GUISrvDef).allowNonGUICaller) {
-				throw makeRPCException(
-					appDomain, service, {
-						callerNotAllowed: true
-					}, {
-						callerApp: caller.domain,
-						callerComponent: caller.entrypoint,
-						message: `Non-gui service can't call this service`
-					}
-				);
-			}
-			const gui = await this.makeAndStartGUIComponentInstance(
-				entrypoint, component as GUISrvDef, undefined, undefined
+			const parent = ((
+				(caller.runtime === 'web-gui') &&
+				(component as GUISrvDef).childOfGUICaller) ?
+				caller as GUIComponent : undefined
 			);
-			return gui.services![service];
+			const gui = await this.makeAndStartGUIComponentInstance(
+				entrypoint, component as GUISrvDef, undefined, parent
+			);
+			return gui.getService(service);
 		} else if (component.runtime === 'deno') {
 			const deno = await this.makeAndStartDenoComponentInstance(
 				entrypoint, service, component
 			);
-			return deno.services![service];
+			return deno.getService(service);
 		} else if (component.runtime === 'wasm,mp1') {
 			// XXX
 			throw new Error(`Starting ${component.runtime} component is not implemented, yet.`);
@@ -293,10 +291,13 @@ export class App {
 			connectInfo, connect
 		} = await this.sockConnectors.createConnector();
 		if (this.devTools) {
-			console.log(`▶️ ${appDomain}${entrypoint} service ${service} starts`);
+			console.log(`▶️ 🏁 ${appDomain}${entrypoint} component starts, on request to provide service ${service}
+			`);
 		}
+		const services = servicesContainerFor(this.manifest, entrypoint);
 		const deno = await DenoComponent.makeLoadConnectAndStart(
-			appDomain, this.appRoot, entrypoint, caps, connectInfo, connect
+			appDomain, this.appRoot, entrypoint, caps, connectInfo, connect,
+			services
 		).catch((exc: FileException) => {
 			if ((exc.type === 'file') && exc.notFound) {
 				throw makeAppInitExc(appDomain, {}, {
@@ -308,14 +309,17 @@ export class App {
 			}
 		});
 		if (this.devTools) {
+			const pidStr = (deno.pid ? deno.pid : '**');
+			console.log(`▶️ ✔️ ${appDomain}${entrypoint} component has started, pid ${pidStr}
+			`);
 			deno.stdOut.on('data', chunk => console.log(`${
-				appDomain}${entrypoint} pid ${deno.pid ? deno.pid : '**'}: ${chunk}
+				appDomain}${entrypoint} pid ${pidStr}: ${chunk}
 			`));
 			deno.stdErr.on('data', chunk => console.error(`${
-				appDomain}${entrypoint} pid ${deno.pid ? deno.pid : '**'}: ${chunk}
+				appDomain}${entrypoint} pid ${pidStr}: ${chunk}
 			`));
-			deno.setCloseListener(() => console.log(`🏁 ${
-				appDomain}${entrypoint} pid ${deno.pid ? deno.pid : '**'} exited
+			deno.setCloseListener((code, signal) => console.log(`🚩 ${
+				appDomain}${entrypoint} pid ${pidStr} exited (code: ${code}, signal: ${signal})
 			`));
 		}
 		this.addToInstances(entrypoint, component, deno);
@@ -354,3 +358,11 @@ export class App {
 }
 Object.freeze(App.prototype);
 Object.freeze(App);
+
+
+function servicesContainerFor(
+	manifest: AppManifest, entrypoint: string
+): PostponedValuesFixedKeysMap<string, Service>|undefined {
+	const services = servicesImplementedBy(manifest, entrypoint);
+	return (services ? new PostponedValuesFixedKeysMap(services) : undefined);
+}

@@ -18,32 +18,34 @@
 /// <reference path="../../../ts-code/api-defs/w3n.d.ts" />
 
 import { Service } from './service.ts';
+import { sleep } from './sleep.ts';
 
 declare const w3n: web3n.testing.CommonW3N;
 
-const longNonGuiSrvInThisApp = 'LongServiceInDeno';
+const nonGuiSrvInThisApp = 'ServiceInDeno';
 
-// we start listening with a time gap to test initially buffered calls
-setTimeout(async () => {
+const syncFS = await w3n.storage!.getAppSyncedFS();
+const localFS = await w3n.storage!.getAppLocalFS();
 
-	const syncFS = await w3n.storage!.getAppSyncedFS();
-	const localFS = await w3n.storage!.getAppLocalFS();
-	Service.singleton = new Service(true, syncFS, localFS);
+// we start listening with a delay to test initially buffered/awaiting calls
+await sleep(100);
 
-	w3n.rpc!.exposeService!(longNonGuiSrvInThisApp, {
+const stopListening = w3n.rpc!.exposeService!(nonGuiSrvInThisApp, {
 
-		next: async connection => {
-			Service.singleton!.handleConnection(connection);
-		},
+	next: async connection => {
+		// note parameter 0 tells service to closeSelf() when connection closes
+		Service.singleton = new Service(syncFS, localFS, 0);
+		Service.singleton.handleConnection(connection);
+		stopListening(); // we expect to serve only one connection
+	},
 
-		complete: () => w3n.closeSelf!(),
+	complete: () => w3n.closeSelf!(),
 
-		error: async err => {
-			await w3n.testStand.log(
-				'error', `Error in listening for incoming connections`, err);
-			w3n.closeSelf!();
-		}
+	error: async err => {
+		await w3n.testStand.log(
+			'error', `Error in listening for incoming connections`, err
+		);
+		w3n.closeSelf!();
+	}
 
-	});
-
-}, 100);
+});

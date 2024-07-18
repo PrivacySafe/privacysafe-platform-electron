@@ -20,8 +20,9 @@
 import { Envelope, makeIPCException, ObjectsConnector } from "core-3nweb-client-lib/build/ipc";
 import { SocketConnectInfo, makeSocketIPCException, toAuthRequestChunk, readMsgOnClientSide, toListObjRequestChunk, EnvelopesBuffer, SocketIPCException, MsgOnClientSide, toChunksForSending, MAX_MSG_SIZE, MAX_NONACK_WRITES, MAX_NONACK_READS, ACK_CHUNK } from "../ipc-with-core/socket-ipc";
 import { Subject, Unsubscribable } from "rxjs";
-import { defer, Deferred, SingleProc } from "../lib-common/processes";
 import { DenoLikeSocket } from "../lib-common/deno-like-socket";
+import { defer, Deferred } from "../lib-common/processes/deferred";
+import { SingleProc } from "../lib-common/processes/single";
 
 // ts -> js compilation will be done before browserification, needing this type
 namespace Deno {

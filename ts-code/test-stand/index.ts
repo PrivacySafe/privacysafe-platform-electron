@@ -24,7 +24,7 @@ import { errWithCause } from "../lib-common/exceptions/error";
 import { AppCAPsAndSetup, AppSetter, CoreDriver, SiteCAPsAndSetup } from "../core/core-driver";
 import { Code } from "../lib-common/exceptions/file";
 import { stringOfB64CharsSync, stringOfB64UrlSafeCharsSync } from "../lib-common/random-node";
-import { getComponentForCommand, getComponentForService, MAIN_GUI_ENTRYPOINT } from "../lib-common/manifest-utils";
+import { MAIN_GUI_ENTRYPOINT } from "../lib-common/manifest-utils";
 import { MapOfSets } from "../lib-common/map-of-sets";
 import { DesktopUI, UserAppInfo } from "../desktop-integration";
 import { RPCLogger } from "./log-rpc";
@@ -78,7 +78,7 @@ export interface DevUserParams {
 export interface AppsRunnerForTesting {
 	runStartupDevApp: (
 		params: DevAppParams, addTestStandCAP: WrapStartupCAPs
-	) => Promise<{ coreInit: Promise<void>; }>;
+	) => Promise<{ init: Promise<boolean>; }>;
 	initForDirectStartup: () => ReturnType<CoreDriver['start']>;
 	openApp: (appDomain: string) => Promise<void>;
 	openSite: (siteDomain: string) => Promise<void>;
@@ -709,7 +709,7 @@ async function startUserWithDevStartupApp(
 		return { signIn, signUp, testStand };
 	};
 	const initSteps = await runStartupDevApp(appParams, addTestCAP);
-	await initSteps?.coreInit;
+	await initSteps?.init;
 	console.log(`▶ core started for ${userId}\n`);
 }
 

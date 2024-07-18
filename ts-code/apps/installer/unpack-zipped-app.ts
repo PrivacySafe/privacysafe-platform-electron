@@ -19,7 +19,7 @@ import { utf8 } from '../../lib-common/buffer-utils';
 import { makeRuntimeException } from '../../lib-common/exceptions/runtime';
 import { Worker } from 'worker_threads';
 import { assert } from '../../lib-common/assert';
-import { defer, Deferred } from '../../lib-common/processes';
+import { defer, Deferred } from '../../lib-common/processes/deferred';
 import { errWithCause } from '../../lib-common/exceptions/error';
 import { ListRequest, ReadRequest, ReplyMsg, ZipEntryInfo } from './unzip-worker';
 import { join } from 'path';

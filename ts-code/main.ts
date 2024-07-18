@@ -29,7 +29,7 @@ import { take } from 'rxjs/operators';
 import { makeCoreDriver } from './core/core-driver';
 import { clearDefaultWindowMenu } from './window-utils/window-menu';
 import { mkdirSync } from 'fs';
-import { sleep } from './lib-common/processes';
+import { sleep } from './lib-common/processes/sleep';
 import { EventEmitter } from 'events';
 
 EventEmitter.defaultMaxListeners = 100;

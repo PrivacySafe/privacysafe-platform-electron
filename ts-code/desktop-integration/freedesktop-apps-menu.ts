@@ -19,7 +19,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { AppInfoGetter } from ".";
 import { readdir, unlink, writeFile } from "../lib-common/async-fs-node";
-import { SingleProc } from "../lib-common/processes";
+import { SingleProc } from "../lib-common/processes/single";
 import { PLATFORM_CALL_CMD } from "../process-args";
 import { ExtCmd } from "./external-cmds";
 
