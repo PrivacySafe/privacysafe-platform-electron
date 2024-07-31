@@ -14,9 +14,11 @@
 			"runtime": "web-gui",
 			"capsRequested": {
 				"apps": "all",
-				"appRPC": {
-					"serviceComponents": [ "OneShotDialog" ]
-				},
+				"appRPC": [
+					"allowed_but_unknown",
+					"OneShotDialog", "LongDialog",
+					"ServiceInDeno", "LongServiceInDeno"
+				],
 				"mail": {
 					"receivingFrom": "all",
 					"sendingTo": "all"

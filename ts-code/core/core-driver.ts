@@ -31,6 +31,7 @@ import { makeConnectivity } from "../connectivity";
 import { Deferred, defer } from "../lib-common/processes/deferred";
 import { makeAppCmdsCaller, makeCmdsHandler, StartAppWithCmd } from "../shell/cmd-invocation";
 import { GUIComponent } from "../app-n-components/gui-component";
+import { makeRPCException } from "../lib-common/manifest-utils";
 
 type W3N = web3n.caps.W3N;
 type SitesW3N = web3n.caps.sites.W3N;
@@ -337,7 +338,9 @@ class ClientSideRPCConnections {
 
 	constructor(
 		private readonly caller: Component,
-		private readonly rpcClientSide: ClientSideConnector
+		private readonly rpcClientSide: ClientSideConnector,
+		private readonly appRPC: RequestedCAPs['appRPC'],
+		private readonly otherAppsRPC: RequestedCAPs['otherAppsRPC']
 	) {
 		Object.freeze(this);
 	}
@@ -345,6 +348,23 @@ class ClientSideRPCConnections {
 	async makeConnection(
 		appDomain: string|undefined, service: string
 	): Promise<web3n.rpc.client.RPCConnection> {
+
+		if (appDomain) {
+			if (!this.otherAppsRPC || !this.otherAppsRPC.find(
+				r => ((r.app === appDomain) && (r.service === service))
+			)) {
+				throw makeRPCException(
+					appDomain, service, { callerNotAllowed: true }
+				);
+			}
+		} else {
+			if (!this.appRPC || !this.appRPC.includes(service)) {
+				throw makeRPCException(
+					this.caller.domain, service, { callerNotAllowed: true }
+				);
+			}
+		}
+
 		const { connection, doOnClose } = await this.rpcClientSide(
 			this.caller,
 			(appDomain ? appDomain : this.caller.domain),
@@ -376,13 +396,14 @@ function makeAppRPC(
 ): {
 	cap: NonNullable<RPC['thisApp']>; setApp: AppSetter; close(): void;
 }|undefined {
-	if (!capsReq.appRPC) { return; }
-	if (capsReq.appRPC.serviceComponents.length === 0) { return; }
+	if (!capsReq.appRPC || (capsReq.appRPC.length === 0)) { return; }
 	let connections: ClientSideRPCConnections|undefined = undefined;
 	return {
 		cap: service => connections!.makeConnection(undefined, service),
 		setApp: app => {
-			connections = new ClientSideRPCConnections(app, rpcClientSide);
+			connections = new ClientSideRPCConnections(
+				app, rpcClientSide, capsReq.appRPC, undefined
+			);
 		},
 		close: () => connections?.close()
 	};
@@ -393,15 +414,16 @@ function makeOtherAppsRPC(
 ): {
 	cap: NonNullable<RPC['otherAppsRPC']>; setApp: AppSetter; close(): void;
 }|undefined {
-	if (!capsReq.otherAppsRPC) { return; }
-	if (capsReq.otherAppsRPC.callable.length === 0) { return; }
+	if (!capsReq.otherAppsRPC || (capsReq.otherAppsRPC.length === 0)) { return; }
 	let connections: ClientSideRPCConnections|undefined = undefined;
 	return {
 		cap: (appDomain, service) => connections!.makeConnection(
 			appDomain, service
 		),
 		setApp: app => {
-			connections = new ClientSideRPCConnections(app, rpcClientSide);
+			connections = new ClientSideRPCConnections(
+				app, rpcClientSide, undefined, capsReq.otherAppsRPC
+			);
 		},
 		close: () => connections?.close()
 	};

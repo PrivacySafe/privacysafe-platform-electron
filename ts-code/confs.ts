@@ -31,15 +31,19 @@ export const UTIL_DIR = 'util';
 
 export const appDir = (() => {
 	// either get value from parameters
-	if (CUSTOM_DATA_DIR) { return toAbsolute(CUSTOM_DATA_DIR.folder); }
+	if (CUSTOM_DATA_DIR) {
+		return toAbsolute(CUSTOM_DATA_DIR.folder);
+	}
 	// or generate default, based on platform version
 	if (process.platform === 'win32') {
 		const parentFolder = (process.env.PORTABLE_EXECUTABLE_DIR ?
 			process.env.PORTABLE_EXECUTABLE_DIR :
-			process.env.LOCALAPPDATA);
+			process.env.LOCALAPPDATA
+		);
 		return (parentFolder ?
 			join(parentFolder, DATA_DIR_NAME) :
-			join(homedir(), DATA_DIR_NAME));
+			join(homedir(), DATA_DIR_NAME)
+		);
 	} else {
 		return toAbsolute(join(homedir(), DATA_DIR_NAME));
 	}

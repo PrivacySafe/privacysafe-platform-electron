@@ -31,6 +31,9 @@ declare namespace web3n.caps {
 			[entrypoint: string]: AppComponent;
 		};
 		launchers?: Launcher[];
+		fsResourceServices?: {
+			[srv: string]: FSResourceDescriptor;
+		};
 	}
 
 	interface SimpleGUIAppManifest {
@@ -64,7 +67,15 @@ declare namespace web3n.caps {
 		formFactor?: UserInterfaceFormFactor|UserInterfaceFormFactor[];
 	}
 
-	type UserInterfaceFormFactor = 'desktop' | 'table' | 'phone'
+	type UserInterfaceFormFactor = 'desktop' | 'table' | 'phone';
+
+	interface FSResourceDescriptor {
+		allow: AllowedCallers;
+		// XXX here goes all details to construct such service
+		//  - we may want to stick with get/set/watch as methods/verbs
+		//  - define here location of files in app's data folder(s)
+		//  
+	}
 
 	interface GUIComponent extends CommonComponentSetting {
 		startCmds?: {
@@ -117,8 +128,8 @@ declare namespace web3n.caps {
 	interface RequestedCAPs extends common.RequestedCAPs {
 		apps?: AppsCAPSetting;
 		logout?: LogoutCAPSetting;
-		appRPC?: AppRPCCAPSetting;
-		otherAppsRPC?: OtherAppsRPCCAPSetting;
+		appRPC?: string[];
+		otherAppsRPC?: { app: string; service: string; }[];
 		shell?: ShellCAPsSetting;
 		connectivity?: ConnectivityCAPSetting;
 	}
@@ -126,17 +137,6 @@ declare namespace web3n.caps {
 	type AppsCAPSetting = 'all' | (keyof apps.Apps)[];
 
 	type LogoutCAPSetting = 'all';
-
-	interface AppRPCCAPSetting {
-		serviceComponents: string[];
-	}
-
-	interface OtherAppsRPCCAPSetting {
-		callable: {
-			app: string;
-			component: string;
-		}[];
-	}
 
 	interface ShellCAPsSetting {
 		fileDialog?: FileDialogsCAPSettings;

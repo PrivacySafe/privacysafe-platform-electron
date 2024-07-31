@@ -19,7 +19,7 @@ import { Deferred, defer } from "./processes/deferred";
 
 export class PostponedValuesFixedKeysMap<K, T> {
 
-	private slots = new Map<K, { value?: T, deferred?: Deferred<T> }>();
+	private readonly slots = new Map<K, { value?: T, deferred?: Deferred<T> }>();
 
 	constructor(possibleKeys: K[]) {
 		for (const k of possibleKeys) {

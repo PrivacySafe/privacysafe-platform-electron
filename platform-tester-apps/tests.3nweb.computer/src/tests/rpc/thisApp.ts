@@ -37,7 +37,7 @@ describe(`rpc.thisApp`, () => {
 	});
 
 	it(`connects to service with GUI`, async () => {
-		await w3n.rpc!.thisApp!(`unknown_service`).then(
+		await w3n.rpc!.thisApp!(`allowed_but_unknown`).then(
 			() => fail(`should throw when connecting to unknown service`),
 			(exc: RPCException) => {
 				expect(exc.runtimeException).toBeTrue();
@@ -46,17 +46,35 @@ describe(`rpc.thisApp`, () => {
 			}
 		);
 
+		await w3n.rpc!.thisApp!(`not_in_cap`).then(
+			() => fail(`should throw when connecting to service that isn't explicitly allowed in a cap`),
+			(exc: RPCException) => {
+				expect(exc.runtimeException).toBeTrue();
+				expect(exc.type).toBe('rpc');
+				expect(exc.callerNotAllowed).toBeTrue();
+			}
+		);
+
 		const connection = await w3n.rpc!.thisApp!(guiSrvInThisApp);
 		await connection.close();
 	}, timeout);
 
 	it(`connects to service without GUI`, async () => {
-		await w3n.rpc!.thisApp!(`unknown_service`).then(
+		await w3n.rpc!.thisApp!(`allowed_but_unknown`).then(
 			() => fail(`should throw when connecting to unknown service`),
 			(exc: RPCException) => {
 				expect(exc.runtimeException).toBeTrue();
 				expect(exc.type).toBe('rpc');
 				expect(exc.serviceNotFound).toBeTrue();
+			}
+		);
+
+		await w3n.rpc!.thisApp!(`not_in_cap`).then(
+			() => fail(`should throw when connecting to service that isn't explicitly allowed in a cap`),
+			(exc: RPCException) => {
+				expect(exc.runtimeException).toBeTrue();
+				expect(exc.type).toBe('rpc');
+				expect(exc.callerNotAllowed).toBeTrue();
 			}
 		);
 

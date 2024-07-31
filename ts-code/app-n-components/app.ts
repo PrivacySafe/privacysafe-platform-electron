@@ -27,6 +27,7 @@ import { ElectronIPCConnectors, SocketIPCConnectors } from "../core/w3n-connecto
 import { makeAppInitExc } from "../apps/installer/system-places";
 import { DenoComponent } from "./deno-component";
 import { PostponedValuesFixedKeysMap } from "../lib-common/postponed-values-map";
+import { wrapWithTimeout } from "../lib-common/processes/timeouts";
 
 
 type ReadonlyFS = web3n.files.ReadonlyFS;
@@ -99,12 +100,22 @@ export class App {
 			(existing as GUIComponent).window.focus();
 			return;
 		}
-		await this.startProcs.addStarted(
+		await this.syncStartProc(
 			entrypoint!,
 			this.makeAndStartGUIComponentInstance(
 				entrypoint!, component, cmd, undefined
 			)
 		);
+	}
+
+	private async syncStartProc<T>(
+		entrypoint: string, proc: Promise<T>
+	): Promise<T> {
+		return wrapWithTimeout(
+			this.startProcs.addStarted(entrypoint, proc),
+			10000,
+			() => `Timeout reached in starting ${this.manifest.appDomain}${entrypoint}`
+		)
 	}
 
 	private async whenNoStartProc(entrypoint: string): Promise<void> {
@@ -128,7 +139,7 @@ export class App {
 			(existing as GUIComponent).window.focus();
 			return;
 		}
-		await this.startProcs.addStarted(
+		await this.syncStartProc(
 			entrypoint!,
 			this.makeAndStartGUIComponentInstance(
 				entrypoint!, component, undefined, undefined
@@ -231,14 +242,11 @@ export class App {
 		}	
 		await this.whenNoStartProc(entrypoint);
 		const existing = this.instances.get(entrypoint);
-// DEBUG
-// console.log(`🧐 ${existing ? `have` : `there is no`} existing component to provide ${service} from ${this.domain}
-// `);
 		if (existing && !isMultiInstanceComponent(component)) {
 			(existing as GUIComponent).window?.focus();
 			return (existing as Component).getService(service);
 		}
-		return await this.startProcs.addStarted(
+		return await this.syncStartProc(
 			entrypoint,
 			this.makeAndStartComponentServiceInstance(
 				caller, service, component, entrypoint

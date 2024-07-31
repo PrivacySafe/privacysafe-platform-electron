@@ -18,6 +18,7 @@
 import { Component, Service } from '../app-n-components';
 import { isCallerAllowed, makeRPCException } from '../lib-common/manifest-utils';
 import { Deferred, defer } from '../lib-common/processes/deferred';
+import { callWithTimeout } from '../lib-common/processes/timeouts';
 
 type PassedDatum = web3n.rpc.PassedDatum;
 type Datum = PassedDatum|undefined;
@@ -46,7 +47,11 @@ export function makeClientSideConnector(
 	return async (caller, appDomain, service) => {
 		const instance = await srvToHandleCall(caller, appDomain, service);
 		instance.ensureCallerAllowed(caller.domain, caller.entrypoint);
-		return await instance.connect();
+		return await callWithTimeout(
+			() => instance.connect(),
+			10000,
+			() => `Timeout in connecting to service ${service} from app ${appDomain}`
+		);
 	};
 }
 

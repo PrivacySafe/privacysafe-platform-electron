@@ -1,3 +1,3 @@
-deno version 1.44.4 comes from zip at https://github.com/denoland/deno/releases/download/v1.44.4/deno-aarch64-apple-darwin.zip
+deno version 1.45.2 comes from zip at https://github.com/denoland/deno/releases/download/v1.45.2/deno-aarch64-apple-darwin.zip
 Sha512 hashes are
-a7db6bea1a8576ac5f46e8ec6b4547848bc57d7ea5bea50079efe0a07635467d4344eb130fbcd75003c0131f46a461e81dc466ba560d6d64ebd7a29f806cc3f8  deno
+e0b178e648062c1f94b8418d649e7c48ce3a6a1757f4acf39191c4d4d361d541aa67b4eb1ba2fbbffeb2c74a839401c92567db5a4d15e4cdcabc5ab7237096c6  deno
