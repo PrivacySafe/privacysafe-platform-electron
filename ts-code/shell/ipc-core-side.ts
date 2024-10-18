@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2023 3NSoft Inc.
+ Copyright (C) 2020 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,10 +15,10 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedObj, ExposedServices } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedObj, ExposedServices, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
 import { exposeFileDialogsCAP } from "../shell/file-dialogs/file-dialogs-cap-ipc";
 import { exposeUserNotificationsCAP } from "../shell/user-notifications/user-notifications-cap-ipc";
-import { exposeGetStartedCmdCAP, exposeStartAppWithParams, exposeWatchStartCmdsCAP } from './cmd-invocation/cmds-caps-ipc';
+import { exposeGetFSResourceCAP } from './fs-resource/fs-resource-caps-ipc';
 
 type ShellCAPs = web3n.shell.ShellCAPs;
 
@@ -35,14 +35,21 @@ export function exposeShellCAPs(
 		);
 	}
 	if (cap.getStartedCmd) {
-		wrap.getStartedCmd = exposeGetStartedCmdCAP(cap.getStartedCmd);
+		wrap.getStartedCmd = jsonSrv.wrapReqReplySrvMethod(cap, 'getStartedCmd');
 	}
 	if (cap.watchStartCmds) {
-		wrap.watchStartCmds = exposeWatchStartCmdsCAP(cap.watchStartCmds);
+		wrap.watchStartCmds = jsonSrv.wrapObservingFunc(
+			cap, obs => cap.watchStartCmds!(obs)
+		);
 	}
 	if (cap.startAppWithParams) {
-		wrap.startAppWithParams = exposeStartAppWithParams(
-			cap.startAppWithParams
+		wrap.startAppWithParams = jsonSrv.wrapReqReplySrvMethod(
+			cap, 'startAppWithParams'
+		);
+	}
+	if (cap.getFSResource) {
+		wrap.getFSResource = exposeGetFSResourceCAP(
+			cap.getFSResource, expServices
 		);
 	}
 	return wrap;

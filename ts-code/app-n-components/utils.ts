@@ -16,10 +16,12 @@
 */
 
 import { join } from "path";
-import { appAndManifestFrom } from "../apps/installer/system-places";
+import { appAndManifestFrom } from "../system/apps/installer/system-places";
 import { BUNDLED_APPS_FOLDER } from "../bundle-confs";
 import { DeviceFS, reverseDomain } from "core-3nweb-client-lib";
+import { MANIFEST_FILE } from "../system/apps/installer/unpack-zipped-app";
 
+type AppManifest = web3n.caps.AppManifest;
 
 export async function appAndManifestOnDev(
 	appDomain: string
@@ -29,4 +31,14 @@ export async function appAndManifestOnDev(
 	);
 	const appFS = await DeviceFS.makeReadonly(path);
 	return appAndManifestFrom(appFS);
+}
+
+export async function appManifestOnDev(
+	appDomain: string
+): Promise<AppManifest> {
+	const path = join(
+		BUNDLED_APPS_FOLDER, reverseDomain(appDomain)
+	);
+	const appFS = await DeviceFS.makeReadonly(path);
+	return await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
 }

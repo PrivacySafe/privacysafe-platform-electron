@@ -16,15 +16,14 @@
 */
 
 import { CoreConf } from 'core-3nweb-client-lib';
-import { CoreDriver, makeCoreDriver } from '../core/core-driver';
+import { CoreDriver, makeCoreDriver } from '../core';
 import { ElectronIPCConnectors, SocketIPCConnectors } from '../core/w3n-connectors';
 import { logError } from '../confs';
 import { DevToolsAppAllowance } from '../process-args';
-import { SystemPlaces, AppInitException } from '../apps/installer/system-places';
-import { AppDownloader } from '../apps/downloader';
-import { latestVersionIn } from '../apps/downloader/versions';
+import { SystemPlaces } from '../system/apps/installer/system-places';
+import { AppDownloader } from '../system/apps/downloader';
 import { UserAppInfo } from '../desktop-integration';
-import { Observable, Subject, lastValueFrom } from 'rxjs';
+import { Subject } from 'rxjs';
 import { WrapStartupCAPs, DevAppParams, DevAppParamsGetter, DevSiteParamsGetter } from '../test-stand';
 import { Component, Service, AppsByDomain } from '../app-n-components';
 import { sleep } from '../lib-common/processes/sleep';
@@ -36,6 +35,7 @@ import { ScreenGUIPlacements } from '../window-utils/screen-gui-placements';
 import { InitProc } from '.';
 import { StartupApp } from '../app-n-components/startup-app';
 import { defer } from '../lib-common/processes/deferred';
+import { GetAppStorage } from '../app-n-components/app';
 
 
 type UserAppsEvents = 'start-closing' | {
@@ -49,10 +49,10 @@ type UserAppsEvents = 'start-closing' | {
 	appId: string;
 };
 
+type SysUtils = web3n.system.SysUtils;
+type Apps = web3n.system.apps.Apps;
+type Platform = web3n.system.platform.Platform;
 type CmdParams = web3n.shell.commands.CmdParams;
-type Platform = web3n.apps.Platform;
-type BundleUnpackProgress = web3n.apps.BundleUnpackProgress;
-type DownloadProgress = web3n.apps.DownloadProgress;
 
 const platformComponentName = {
 	guiPlacement: 'gui.placement'
@@ -63,16 +63,14 @@ export class UserApps {
 
 	private readonly core: CoreDriver;
 	private readonly sysPlaces: SystemPlaces;
-	private readonly appDownloader: AppDownloader;
 
 	private startupApp: StartupApp|undefined = undefined;
 	private readonly apps: AppsByDomain;
 
 	// XXX sites should get similar treatment to app
 	private readonly siteStartingProcs = new NamedProcs();
-
-
 	private readonly sites: Sites;
+
 	private readonly broadcast = new Subject<UserAppsEvents>();
 	readonly event$ = this.broadcast.asObservable();
 
@@ -85,23 +83,33 @@ export class UserApps {
 		devApps: DevAppParamsGetter|undefined,
 		private readonly devSites: DevSiteParamsGetter|undefined,
 		private readonly devToolsAllowance: DevToolsAppAllowance,
-		private readonly getPlatform: () => Platform
+		getPlatform: () => Platform
 	) {
 		this.sysPlaces = new SystemPlaces(() => this.core.storages);
-		this.appDownloader = new AppDownloader(this.sysPlaces);
+		const appDownloader = new AppDownloader(this.sysPlaces);
+		const makeSystemCapFns = () => systemCAPsFrom(
+			this.sysPlaces,
+			appDownloader,
+			this.openApp.bind(this),
+			this.executeCommand.bind(this),
+			this.apps.closeAppToUninstall.bind(this.apps),
+			getPlatform()
+		);
 		this.core = makeDriver(
-			conf, this.appsCapFns(),
+			conf, makeSystemCapFns,
 			this.startAppWithCmd.bind(this),
 			this.logout.bind(this),
-			this.getServiceToHandleCall.bind(this)
+			this.getServiceToHandleCall.bind(this),
+			this.getAppFSResourceFor.bind(this)
 		);
 		const guiPlacementFS = this.core.whenReady()
 		.then(() => this.sysPlaces.getPlatformComponentFS(
 			'local', platformComponentName.guiPlacement
 		));
 		this.apps = new AppsByDomain(
-			this.getAppFiles.bind(this),
+			this.sysPlaces.findInstalledApp.bind(this.sysPlaces),
 			this.core.makeCAPsForAppComponent.bind(this.core),
+			this.getAppStorage.bind(this),
 			this.guiConnectors, sockConnectors,
 			makeTitleGenerator(() => this.userId),
 			new ScreenGUIPlacements(guiPlacementFS),
@@ -198,15 +206,40 @@ export class UserApps {
 		}
 	}
 
-	async openApp(appDomain: string): Promise<void> {
-		const app = await this.apps.get(
-			appDomain, this.devToolsAllowance(appDomain)
-		);
-		app.launchDefault();
+	async openApp(
+		appDomain: string,
+		entrypoint = MAIN_GUI_ENTRYPOINT,
+		devTools = false
+	): Promise<void> {
+		devTools = devTools || this.devToolsAllowance(appDomain);
+		const app = await this.apps.get(appDomain, devTools);
+		await app.launchWebGUI(entrypoint, devTools);
+	}
+
+	private async executeCommand(
+		appDomain: string, cmd: CmdParams, devTools?: boolean
+	): Promise<void> {
+		devTools = devTools || this.devToolsAllowance(appDomain);
+		const app = await this.apps.get(appDomain, devTools);
+		await app.handleCmdFromUser(cmd, devTools);
 	}
 
 	async openAppLauncher(): Promise<void> {
 		await this.openApp(LAUNCHER_APP_DOMAIN);
+	}
+
+	async doUserSystemStartup(): Promise<void> {
+		await this.openApp(LAUNCHER_APP_DOMAIN);
+		// XXX need a more dynamic choice of what should be loaded on startup 
+		const chatAppDomain = 'chat.app.privacysafe.io';
+		const contactsAppDomain = 'contacts.app.privacysafe.io';
+		[ chatAppDomain, contactsAppDomain ]
+		.map(domain =>
+			this.apps.get(domain, this.devToolsAllowance(domain))
+			.then(chat => chat.loadOnStartup())
+			.catch(err => console.error(err))
+		);
+
 	}
 
 	private async startAppWithCmd(
@@ -249,71 +282,6 @@ export class UserApps {
 		return await app.getServiceToHandleCall(caller, service);
 	}
 
-	private async getAppFiles(
-		appDomain: string
-	): ReturnType<SystemPlaces['findInstalledApp']> {
-		try {
-			return await this.sysPlaces.findInstalledApp(appDomain);
-		} catch (exc) {
-			if ((exc as  AppInitException).notInstalled) {
-				const {
-					bundleUnpack$, download$, version
-				} = await this.checkAppPackPresenceOrStartToGetIt(appDomain);
-				// XXX note that we may want to add process observation to openApp's
-				//     instead of just non-responsive await below
-				if (bundleUnpack$) {
-					await lastValueFrom(bundleUnpack$);
-				} else if (download$) {
-					await lastValueFrom(download$);
-				}
-				await this.sysPlaces.installApp(appDomain, version);
-				return this.sysPlaces.findInstalledApp(appDomain);
-			} else {
-				throw exc;
-			}
-		}
-	}
-
-	private async checkAppPackPresenceOrStartToGetIt(
-		appDomain: string
-	): Promise<{
-		version: string;
-		bundleUnpack$?: Observable<BundleUnpackProgress>;
-		download$?: Observable<DownloadProgress>;
-	}> {
-		const info = await this.sysPlaces.getAppVersions(appDomain);
-		if (info) {
-			// check if pack is already present
-			if (info.packs) {
-				const version = latestVersionIn(info.packs);
-				if (version) {
-					return { version };
-				}
-			}
-			// check if there is a bundle to unpack
-			if (info.bundled) {
-				const bundleUnpackProgress = new Subject<BundleUnpackProgress>();
-				this.sysPlaces.unpackBundledApp(appDomain, bundleUnpackProgress);
-				return {
-					version: info.bundled,
-					bundleUnpack$: bundleUnpackProgress.asObservable()
-				};
-			}
-		}
-		// download pack
-		const channels = await this.appDownloader.getAppChannels(appDomain);
-		const channel = (channels.main ? channels.main : 'latest');
-		const version = await this.appDownloader.getLatestAppVersion(
-			appDomain, channel
-		);
-		const download = new Subject<DownloadProgress>();
-		this.appDownloader.downloadWebApp(appDomain, version, download);
-		return {
-			version,
-			download$: download.asObservable()
-		};
-	}
-
 	async closeAllApps(): Promise<void> {
 		await this.apps.stopAndCloseAllApps();
 	}
@@ -333,51 +301,93 @@ export class UserApps {
 		this.exit(closePlatform);	// we don't wait for this to end
 	};
 
-	// XXX apps CAP should be switched to service from system.3nweb.computer
-	private appsCapFns(): web3n.apps.Apps {
-		return {
-			opener: {
-				listApps: this.sysPlaces.listApps.bind(this.sysPlaces),
-				openApp: this.openApp.bind(this),
-				getAppVersions: this.sysPlaces.getAppVersions.bind(this.sysPlaces),
-				getAppManifest: this.sysPlaces.getAppManifest.bind(this.sysPlaces),
-				getAppFileBytes: this.sysPlaces.getAppFileBytes.bind(
-					this.sysPlaces
-				),
-				watchApps: this.sysPlaces.watchApps.bind(this.sysPlaces)
-			},
-			downloader: {
-				downloadWebApp: this.appDownloader.downloadWebApp.bind(
-					this.appDownloader
-				),
-				getAppChannels: this.appDownloader.getAppChannels.bind(
-					this.appDownloader
-				),
-				getLatestAppVersion: this.appDownloader.getLatestAppVersion.bind(
-					this.appDownloader
-				),
-				getAppVersionFilesList: this.appDownloader.getAppVersionFilesList.bind(
-					this.appDownloader
-				)
-			},
-			installer: {
-				unpackBundledApp: this.sysPlaces.unpackBundledApp.bind(
-					this.sysPlaces
-				),
-				installApp: this.sysPlaces.installApp.bind(this.sysPlaces),
-				uninstallApp: async id => {
-					await this.apps.closeAppToUninstall(id);
-					await this.sysPlaces.uninstallApp(id);
-				},
-				removeAppPack: this.sysPlaces.removeAppPack.bind(this.sysPlaces)
-			},
-			platform: this.getPlatform()
+	private async getAppFSResourceFor(
+		resourceAppDomain: string|null|undefined, resourceName: string,
+		requestingApp: string, requestingComponent: string
+	): ReturnType<web3n.shell.GetFSResource> {
+		if (!resourceAppDomain) {
+			resourceAppDomain = requestingApp;
+		}
+		const app = await this.apps.get(
+			resourceAppDomain, this.devToolsAllowance(resourceAppDomain)
+		);
+		return await app.exposedFSResource(
+			resourceName, requestingApp, requestingComponent
+		);
+	}
+
+	private getAppStorage(appDomain: string): GetAppStorage {
+		return type => {
+			if (type === 'local') {
+				return this.core.storages.makeLocalFSForApp(
+					reverseDomain(appDomain)
+				);
+			} else if (type === 'synced') {
+				return this.core.storages.makeSyncedFSForApp(
+					reverseDomain(appDomain)
+				);
+			} else {
+				throw new Error(`Unknown storage type ${type}`);
+			}
 		};
 	}
 
 }
 Object.freeze(UserApps.prototype);
 Object.freeze(UserApps);
+
+
+function reverseDomain(domain: string): string {
+	return domain.split('.').reverse().join('.');
+}
+
+function systemCAPsFrom(
+	sysPlaces: SystemPlaces, appDownloader: AppDownloader,
+	openApp: UserApps['openApp'],
+	executeCommand: UserApps['executeCommand'],
+	closeAppToUninstall: AppsByDomain['closeAppToUninstall'],
+	platform: Platform
+): SysUtils {
+	const apps: Apps = {
+		opener: {
+			listApps: sysPlaces.listApps.bind(sysPlaces),
+			openApp,
+			executeCommand,
+			getAppVersions: sysPlaces.getAppVersions.bind(sysPlaces),
+			getAppManifest: sysPlaces.getAppManifest.bind(sysPlaces),
+			getAppFileBytes: sysPlaces.getAppFileBytes.bind(
+				sysPlaces
+			),
+			watchApps: sysPlaces.watchApps.bind(sysPlaces)
+		},
+		downloader: {
+			downloadWebApp: appDownloader.downloadWebApp.bind(
+				appDownloader
+			),
+			getAppChannels: appDownloader.getAppChannels.bind(
+				appDownloader
+			),
+			getLatestAppVersion: appDownloader.getLatestAppVersion.bind(
+				appDownloader
+			),
+			getAppVersionFilesList: appDownloader.getAppVersionFilesList.bind(
+				appDownloader
+			)
+		},
+		installer: {
+			unpackBundledApp: sysPlaces.unpackBundledApp.bind(
+				sysPlaces
+			),
+			installApp: sysPlaces.installApp.bind(sysPlaces),
+			uninstallApp: async id => {
+				await closeAppToUninstall(id);
+				await sysPlaces.uninstallApp(id);
+			},
+			removeAppPack: sysPlaces.removeAppPack.bind(sysPlaces)
+		}
+	};
+	return { apps, platform };
+}
 
 
 Object.freeze(exports);

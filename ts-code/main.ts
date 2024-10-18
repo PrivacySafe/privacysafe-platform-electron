@@ -26,7 +26,7 @@ import { registerAllProtocolShemas } from "./electron/protocols";
 import { fromEvent, lastValueFrom } from 'rxjs';
 import { appDir, logError, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './confs';
 import { take } from 'rxjs/operators';
-import { makeCoreDriver } from './core/core-driver';
+import { makeCoreDriver } from './core';
 import { clearDefaultWindowMenu } from './window-utils/window-menu';
 import { mkdirSync } from 'fs';
 import { sleep } from './lib-common/processes/sleep';

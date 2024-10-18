@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2023 3NSoft Inc.
+ Copyright (C) 2021 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -27,14 +27,16 @@ declare const w3n: web3n.testing.CommonW3N;
 		} as ClosingParams;
 		addMsgToPage(`Main test user '${userId}'`);
 		document.getElementById('cancel-autoclose')!.hidden = false;
+		await import('./tests/common-caps.js');
 		await import('./tests/mailerid.js');
 		await import('./tests/storage.js');
 		await import('./tests/asmail.js');
 		await import('./tests/rpc/thisApp.js');
-		await import('./tests/apps.js');
 		await import('./tests/services/fs-usage.js');
 		await import('./tests/rpc/transferable-objects.js');
 		await import('./tests/shell.js');
+		await import('./tests/fs-resource.js');
+		await import('./tests/system/apps.js');
 	} else {
 		(window as any).skipW3NTests = true;
 		addMsgToPage(`Secondary test user '${userId}'`);

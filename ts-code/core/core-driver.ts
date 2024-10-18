@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2023 3NSoft Inc.
+ Copyright (C) 2020 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,75 +15,37 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Core, CoreConf, FactoryOfFSs } from "core-3nweb-client-lib";
+import { Core, CoreConf } from "core-3nweb-client-lib";
 import { makeInWorkerWasmCryptor } from "core-3nweb-client-lib/build/cryptors";
 import { makeNetClient } from "../electron/net";
-import { makeAllFileDialogOpeners } from "../shell/file-dialogs";
 import { prepareUserDataMntPath, prepareDebugAppsDataMntPaths, MountsInOS } from "../shell/mounts/mounts-in-os";
 import { logError } from "../confs";
 import { makeServiceLocator } from "core-3nweb-client-lib";
 import { promises as dns } from 'dns';
-import { GetServiceToHandleNewCall, makeClientSideConnector, ClientSideConnector, ServiceConnector } from "../rpc";
-import { makeAppInitExc } from "../apps/installer/system-places";
+import { GetServiceToHandleNewCall, makeClientSideConnector, ClientSideConnector } from "../rpc";
 import { Component } from "../app-n-components";
 import { Notifications } from "../shell/user-notifications";
-import { makeConnectivity } from "../connectivity";
 import { Deferred, defer } from "../lib-common/processes/deferred";
-import { makeAppCmdsCaller, makeCmdsHandler, StartAppWithCmd } from "../shell/cmd-invocation";
-import { GUIComponent } from "../app-n-components/gui-component";
-import { makeRPCException } from "../lib-common/manifest-utils";
+import { StartAppWithCmd } from "../shell/cmd-invocation";
+import { GetAppFSResourceFor } from "../shell/fs-resource";
+import { AppSetter, CoreDriver, SiteCAPsAndSetup } from "./index";
+import { makeRpcCAP } from "./caps/rpc";
+import { connectivityCAP } from "./caps/connectivity";
+import { makeLogoutCAP } from "./caps/logout";
+import { makeSystemCAP } from "./caps/system";
+import { makeShellCAPs } from "./caps/shell";
 
-type W3N = web3n.caps.W3N;
+type W3N = web3n.system.W3N;
 type SitesW3N = web3n.caps.sites.W3N;
-type Apps = web3n.apps.Apps;
+type SysUtils = web3n.system.SysUtils;
 type Logout = web3n.caps.Logout;
 type AppComponent = web3n.caps.AppComponent;
-type GUIServiceComponent = web3n.caps.GUIServiceComponent;
 type GUIComponentDef = web3n.caps.GUIComponent;
-type ServiceComponent = web3n.caps.ServiceComponent;
-type RequestedCAPs = web3n.caps.RequestedCAPs;
-type ExposeService = web3n.rpc.service.ExposeService;
 type SiteComponent = web3n.caps.SiteComponent;
 type CmdParams = web3n.shell.commands.CmdParams;
-type CmdHandlerDef = NonNullable<GUIComponentDef['startCmds']>;
-
-export interface CoreDriver {
-	close(): Promise<void>;
-	makeCAPsForAppComponent(
-		appDomain: string, component: string, componentDef: AppComponent,
-		startCmd: CmdParams|undefined
-	): AppCAPsAndSetup;
-	makeCAPsForSiteComponent(
-		appDomain: string, component: string, componentDef: SiteComponent
-	): SiteCAPsAndSetup;
-	start(): { capsForStartup: web3n.startup.W3N; coreInit: Promise<void>; };
-	isStarted(): boolean;
-	storages: FactoryOfFSs;
-	getUserId(): string;
-	whenReady(): Promise<void>;
-}
-
-export interface AppCAPsAndSetup {
-	w3n: W3N;
-	close: () => void;
-	setApp: AppSetter;
-}
-
-export interface SiteCAPsAndSetup {
-	w3n: W3N;
-}
-
-export type AppSetter = (app: Component) => void;
-
-export function makeCoreDriver(
-	conf: CoreConf, appsCapFns: Apps, startAppWithCmd: StartAppWithCmd, 
-	logout: Logout, getService: GetServiceToHandleNewCall
-): CoreDriver {
-	return new Driver(conf, appsCapFns, startAppWithCmd, logout, getService);
-}
 
 
-class Driver implements CoreDriver {
+export class Driver implements CoreDriver {
 
 	private readonly core: Core;
 	private signedUser: string|undefined = undefined;
@@ -94,10 +56,11 @@ class Driver implements CoreDriver {
 
 	constructor(
 		conf: CoreConf,
-		private readonly appsCapFns: Apps,
+		private readonly makeSystemCapFns: () => SysUtils,
 		private readonly startAppWithCmd: StartAppWithCmd,
 		private readonly logout: Logout,
 		getService: GetServiceToHandleNewCall,
+		private readonly getAppFSResourceFor: GetAppFSResourceFor
 	) {
 		this.core = Core.make(
 			conf,
@@ -193,8 +156,8 @@ class Driver implements CoreDriver {
 	}
 
 	makeCAPsForAppComponent(
-		appDomain: string, component: string, componentDef: AppComponent,
-		startCmd: CmdParams|undefined
+		appDomain: string, appVersion: string, component: string,
+		componentDef: AppComponent, startCmd: CmdParams|undefined
 	): { w3n: W3N; close: () => void; setApp: AppSetter; } {
 		if (!this.core) { throw new Error(`Core is already closed`); }
 		const capsReq = (componentDef.capsRequested ?
@@ -202,9 +165,12 @@ class Driver implements CoreDriver {
 		);
 		const baseW3N = this.core.makeCAPsForApp(appDomain, capsReq);
 		const closeSelf = this.closeSelfCAP();
-		const shell = this.shellCAPs(
+		const shell = makeShellCAPs(
 			appDomain, component, capsReq,
-			(componentDef as GUIComponentDef).startCmds, startCmd
+			(componentDef as GUIComponentDef).startCmds, startCmd,
+			this.getAppFSResourceFor,
+			this.userNotifications,
+			this.startAppWithCmd
 		);
 		const rpc = makeRpcCAP(
 			this.rpcClientSide, appDomain, componentDef, capsReq
@@ -221,11 +187,12 @@ class Driver implements CoreDriver {
 		};
 		const w3n: W3N = {
 			log: baseW3N.caps.log,
+			myVersion: async () => appVersion,
 			storage: baseW3N.caps.storage,
 			mail: baseW3N.caps.mail,
 			mailerid: baseW3N.caps.mailerid,
 			closeSelf: closeSelf.cap,
-			apps: makeAppsCAP(this.appsCapFns, capsReq),
+			system: makeSystemCAP(this.makeSystemCapFns(), capsReq),
 			logout: makeLogoutCAP(this.logout, capsReq),
 			shell: shell?.cap,
 			rpc: rpc?.cap,
@@ -252,339 +219,9 @@ class Driver implements CoreDriver {
 		return { cap, setApp };
 	}
 
-	private shellCAPs(
-		appDomain: string, component: string, capsReq: RequestedCAPs,
-		cmdHandlerDef: GUIComponentDef['startCmds'], startCmd: CmdParams|undefined
-	): {
-		cap: NonNullable<W3N['shell']>; setApp: AppSetter; close: () => void;
-	}|undefined {
-		if (!capsReq.shell && !cmdHandlerDef) { return; }
-		const cap: NonNullable<W3N['shell']> = {};
-		const closeFns: (() => void)[] = [];
-		const setAppFns: AppSetter[] = [];
-		if (capsReq.shell) {
-			const fileDialogs = fileDialogShellCAP(capsReq.shell.fileDialog);
-			if (fileDialogs) {
-				cap.fileDialogs = fileDialogs.cap;
-				closeFns.push(fileDialogs.close);
-				setAppFns.push(fileDialogs.setApp);
-			}
-			const userNotifications = this.userNotificationsShellCAP(
-				appDomain, component, capsReq.shell.userNotifications
-			);
-			if (userNotifications) {
-				cap.userNotifications = userNotifications.cap;
-				closeFns.push(userNotifications.close);
-				setAppFns.push(userNotifications.setApp);
-			}
-			const startAppWithParamsShell = this.startAppWithParamsShellCAP(
-				appDomain, component, capsReq.shell.startAppCmds
-			);
-			if (startAppWithParamsShell) {
-				cap.startAppWithParams = startAppWithParamsShell.cap;
-			}
-		}
-		if (cmdHandlerDef) {
-			const {
-				getStartedCmd, watchStartCmds, setApp
-			} = makeCmdHandlerCAP(appDomain, cmdHandlerDef, startCmd);
-			cap.getStartedCmd = getStartedCmd;
-			cap.watchStartCmds = watchStartCmds;
-			setAppFns.push(setApp);
-		}
-		return {
-			cap,
-			setApp: app => setAppFns.forEach(setApp => setApp(app)),
-			close: () => closeFns.forEach(close => close()),
-		};
-	}
-
-	private userNotificationsShellCAP(
-		appDomain: string, component: string,
-		notifCAPsReq: web3n.caps.ShellCAPsSetting['userNotifications']
-	): {
-		cap: web3n.shell.notifications.UserNotifications;
-		setApp: AppSetter; close(): void;
-	}|undefined {
-		if (!notifCAPsReq) { return; }
-		const {
-			notifications: cap, setApp, close
-		} = this.userNotifications.makeFor(appDomain, component);
-		return { cap, setApp, close };
-	}
-
-	private startAppWithParamsShellCAP(
-		appDomain: string, component: string,
-		capsReq: web3n.caps.ShellCAPsSetting['startAppCmds']
-	): {
-		cap: web3n.shell.ShellCAPs['startAppWithParams'];
-	}|undefined {
-		if (!capsReq?.otherApps && !capsReq?.thisApp) { return; }
-		return {
-			cap: makeAppCmdsCaller(
-				this.startAppWithCmd, appDomain, component, capsReq
-			)
-		};
-	}
-
 }
 Object.freeze(Driver.prototype);
 Object.freeze(Driver);
-
-
-class ClientSideRPCConnections {
-
-	private readonly connections = new Set<web3n.rpc.client.RPCConnection>();
-
-	constructor(
-		private readonly caller: Component,
-		private readonly rpcClientSide: ClientSideConnector,
-		private readonly appRPC: RequestedCAPs['appRPC'],
-		private readonly otherAppsRPC: RequestedCAPs['otherAppsRPC']
-	) {
-		Object.freeze(this);
-	}
-
-	async makeConnection(
-		appDomain: string|undefined, service: string
-	): Promise<web3n.rpc.client.RPCConnection> {
-
-		if (appDomain) {
-			if (!this.otherAppsRPC || !this.otherAppsRPC.find(
-				r => ((r.app === appDomain) && (r.service === service))
-			)) {
-				throw makeRPCException(
-					appDomain, service, { callerNotAllowed: true }
-				);
-			}
-		} else {
-			if (!this.appRPC || !this.appRPC.includes(service)) {
-				throw makeRPCException(
-					this.caller.domain, service, { callerNotAllowed: true }
-				);
-			}
-		}
-
-		const { connection, doOnClose } = await this.rpcClientSide(
-			this.caller,
-			(appDomain ? appDomain : this.caller.domain),
-			service
-		);
-		this.connections.add(connection);
-		doOnClose(() => this.connections.delete(connection));
-		return connection;
-	}
-
-	close(): void {
-		if (this.connections.size > 0) {
-			for (const c of this.connections) {
-				c.close();
-			}
-			this.connections.clear();
-		}
-	}
-
-}
-Object.freeze(ClientSideRPCConnections.prototype);
-Object.freeze(ClientSideRPCConnections);
-
-
-type RPC = NonNullable<W3N['rpc']>;
-
-function makeAppRPC(
-	rpcClientSide: ClientSideConnector, capsReq: RequestedCAPs
-): {
-	cap: NonNullable<RPC['thisApp']>; setApp: AppSetter; close(): void;
-}|undefined {
-	if (!capsReq.appRPC || (capsReq.appRPC.length === 0)) { return; }
-	let connections: ClientSideRPCConnections|undefined = undefined;
-	return {
-		cap: service => connections!.makeConnection(undefined, service),
-		setApp: app => {
-			connections = new ClientSideRPCConnections(
-				app, rpcClientSide, capsReq.appRPC, undefined
-			);
-		},
-		close: () => connections?.close()
-	};
-}
-
-function makeOtherAppsRPC(
-	rpcClientSide: ClientSideConnector, capsReq: RequestedCAPs
-): {
-	cap: NonNullable<RPC['otherAppsRPC']>; setApp: AppSetter; close(): void;
-}|undefined {
-	if (!capsReq.otherAppsRPC || (capsReq.otherAppsRPC.length === 0)) { return; }
-	let connections: ClientSideRPCConnections|undefined = undefined;
-	return {
-		cap: (appDomain, service) => connections!.makeConnection(
-			appDomain, service
-		),
-		setApp: app => {
-			connections = new ClientSideRPCConnections(
-				app, rpcClientSide, undefined, capsReq.otherAppsRPC
-			);
-		},
-		close: () => connections?.close()
-	};
-}
-
-function makeRpcCAP(
-	rpcClientSide: ClientSideConnector,
-	appDomain: string, componentDef: AppComponent, capsReq: RequestedCAPs
-): {
-	cap: RPC; setApp: AppSetter; close: () => void;
-}|undefined {
-	const exposeService = exposeServiceCAP(
-		appDomain, componentDef as GUIServiceComponent|ServiceComponent
-	);
-	const appRPC = makeAppRPC(rpcClientSide, capsReq);
-	const otherAppsRPC = makeOtherAppsRPC(rpcClientSide, capsReq);
-	if (!exposeService && !appRPC && !otherAppsRPC) { return; }
-	const cap: RPC = {
-		thisApp: appRPC?.cap,
-		otherAppsRPC: otherAppsRPC?.cap,
-		exposeService: exposeService?.cap,
-	};
-	return {
-		cap,
-		setApp: app => {
-			exposeService?.setApp(app);
-			appRPC?.setApp(app);
-			otherAppsRPC?.setApp(app);
-		},
-		close: () => {
-			exposeService?.close();
-			appRPC?.close();
-			otherAppsRPC?.close();
-		}
-	};
-}
-
-function makeAppsCAP(
-	appsCapFns: Driver['appsCapFns'], capsReq: RequestedCAPs
-): W3N['apps'] {
-	if (capsReq.apps === 'all') {
-		return appsCapFns;
-	} else if (capsReq.apps) {
-		const apps: W3N['apps'] = {};
-		if (Array.isArray(capsReq.apps)) {
-			for (const key of capsReq.apps) {
-				apps[key] = appsCapFns[key] as any;
-			}
-		} else if ((typeof capsReq.apps === 'string')
-		&& appsCapFns[capsReq.apps]) {
-			const key = capsReq.apps as any;
-			apps[key] = appsCapFns[key] as any;
-		}
-		return ((Object.keys(apps).length > 0) ? apps : undefined);
-	}
-}
-
-function makeLogoutCAP(
-	logout: Driver['logout'], capsReq: RequestedCAPs
-): W3N['logout'] {
-	if (capsReq.logout === 'all') {
-		return logout;
-	}
-}
-
-function fileDialogShellCAP(
-	fileDialogCAPsReq: web3n.caps.ShellCAPsSetting['fileDialog']
-): {
-	cap: web3n.shell.files.Dialogs; setApp: AppSetter; close(): void;
-}|undefined {
-	if (!fileDialogCAPsReq) { return; }
-	if (fileDialogCAPsReq === 'all') {
-		const { openers: cap, close, setApp } = makeAllFileDialogOpeners();
-		return { cap, close, setApp };
-	} else if (fileDialogCAPsReq ===  'readonly') {
-		const { openers, close, setApp } = makeAllFileDialogOpeners();
-		return {
-			setApp, close, cap: {
-				openFileDialog: openers.openFileDialog,
-				openFolderDialog: openers.openFolderDialog,
-			},
-		};
-	}
-}
-
-function exposeServiceCAP(
-	appDomain: string, componentDef: ServiceComponent
-): { cap: ExposeService; setApp: AppSetter; close: () => void; }|undefined {
-	const expectedSrvs = servicesIn(componentDef);
-	if (!expectedSrvs) { return; }
-	const connectors: { [srvName: string]: ServiceConnector; } = {};
-	for (const srvName of expectedSrvs) {
-		connectors[srvName] = new ServiceConnector(
-			appDomain, srvName, componentDef.services[srvName],
-			!!componentDef.forOneConnectionOnly
-		);
-	}
-	const setApp: AppSetter = app => {
-		for (const [srvName, connector] of Object.entries(connectors)) {
-			app.addService(srvName, connector.wrap());
-		}
-	};
-	const close = (): void => {
-		for (const connector of Object.values(connectors)) {
-			connector.close();
-		}
-	};
-	const cap: ExposeService = (service, obs) => {
-		const connector = connectors[service];
-		if (!connector) {
-			throw makeAppInitExc(appDomain, {}, {
-				message: `Service ${service} is not found in app setting`
-			});
-		}
-		connector.setSinkForConnections(obs);
-		return () => connector.close();
-	};
-	return { cap, setApp, close };
-}
-
-function servicesIn(componentDef: ServiceComponent): string[]|undefined {
-	if (componentDef.services) {
-		const serviceNames = Object.keys(componentDef.services);
-		return ((serviceNames.length === 0) ? undefined : serviceNames);
-	} else {
-		return;
-	}
-}
-
-function connectivityCAP(
-	connectivityCAPsReq: RequestedCAPs['connectivity']
-): W3N['connectivity'] {
-	if (connectivityCAPsReq === 'check') {
-		return makeConnectivity();
-	}
-}
-
-function makeCmdHandlerCAP(
-	appDomain: string, cmdHandlerDef: CmdHandlerDef,
-	startCmd: CmdParams|undefined
-): {
-	getStartedCmd: NonNullable<web3n.shell.ShellCAPs['getStartedCmd']>;
-	watchStartCmds: NonNullable<web3n.shell.ShellCAPs['watchStartCmds']>;
-	setApp: AppSetter;
-} {
-	const cmdHandler = makeCmdsHandler(appDomain, cmdHandlerDef);
-	return {
-		getStartedCmd: async () => startCmd,
-		watchStartCmds: obs => {
-			const sub = cmdHandler.cmd$.subscribe(obs);
-			return () => sub.unsubscribe();
-		},
-		setApp: app => {
-			if (!cmdHandlerDef) {
-				// XXX add some proper app
-				throw new Error(``);
-			}
-			(app as GUIComponent).setCmdHandler(cmdHandler);
-		}
-	};
-}
 
 
 Object.freeze(exports);

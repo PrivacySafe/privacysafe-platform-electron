@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2022 3NSoft Inc.
+ Copyright (C) 2020 - 2022, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -16,12 +16,10 @@
 */
 
 import { Subject, Unsubscribable } from "rxjs";
-import { Envelope, ObjectsConnector, exposeStartupW3N, exposeW3N } from 'core-3nweb-client-lib/build/ipc';
+import { Envelope, ExposedFn, ObjectsConnector, exposeStartupW3N, exposeW3N, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
 import { ipcMain, WebContents } from 'electron';
 import { IPC_CORE_SIDE, IPC_CLIENT_SIDE, IPC_SYNCED_W3N_LIST } from "../ipc-with-core/electron-ipc";
-import { closeSelf } from "../init-proc/close-cap-ipc";
 import { base64, toBuffer } from "../lib-common/buffer-utils";
-import { exposeLogoutCAP } from "../init-proc/logout-cap-ipc";
 import { exposeStartupTestStandCAP, exposeTestStandCAP } from "../test-stand/test-stand-cap-ipc";
 import { bytes as randomBytes, stringOfB64UrlSafeChars } from "../lib-common/random-node";
 import { createServer, Server, Socket } from "net";
@@ -34,7 +32,7 @@ import { SingleProc } from "../lib-common/processes/single";
 import { DenoLikeSocket } from "../lib-common/deno-like-socket";
 import { getPortPromise } from "portfinder";
 import { exposeConnectivityCAP } from "../connectivity/connectivity-cap-ipc";
-import { exposeAppsCAP } from "../apps/ipc-core-side";
+import { exposeSystemCAP } from "../system/apps/ipc-core-side";
 import { exposeShellCAPs } from "../shell/ipc-core-side";
 import { exposeRpcCAP } from "../rpc/ipc-core-side";
 
@@ -118,10 +116,15 @@ const extraStartupCAPs = Object.freeze({
 	testStand: exposeStartupTestStandCAP,
 });
 
+function exposeJSONFunc<F extends Function>(fn: F): ExposedFn {
+	return jsonSrv.wrapReqReplyFunc(fn as any);
+}
+
 const extraCAPs = Object.freeze({
-	closeSelf: closeSelf.expose,
-	apps: exposeAppsCAP,
-	logout: exposeLogoutCAP,
+	closeSelf: exposeJSONFunc,
+	myVersion: exposeJSONFunc,
+	system: exposeSystemCAP,
+	logout: exposeJSONFunc,
 	testStand: exposeTestStandCAP,
 	shell: exposeShellCAPs,
 	rpc: exposeRpcCAP,

@@ -80,8 +80,11 @@ Object.freeze(SingleProc);
  * This wraps given function/method into syncing wrap.
  */
 export function makeSyncedFunc<T extends Function>(
-		syncProc: SingleProc, thisArg: any, func: T): T {
-	return ((...args: any[]) => syncProc.startOrChain(() => func.apply(thisArg, args))) as any as T;
+	syncProc: SingleProc, thisArg: any, func: T
+): T {
+	return ((...args: any[]) => syncProc.startOrChain(
+		() => func.apply(thisArg, args))
+	) as any as T;
 }
 
 /**
@@ -100,8 +103,9 @@ export class SingleCyclicProc {
 	 * @param action is an async cycle body to run at each iteration.
 	 */
 	constructor(
-			private cycleWhile: () => boolean,
-			private action: () => Promise<void>) {
+		private cycleWhile: () => boolean,
+		private action: () => Promise<void>
+	) {
 		Object.seal(this);
 	}
 

@@ -22,6 +22,8 @@ import { appDirs, makeLogger } from 'core-3nweb-client-lib';
 import { spawn } from 'child_process';
 import { defer, Deferred } from './lib-common/processes/deferred';
 import { DATA_DIR_NAME, DEFAULT_SIGNUP_URL, isInAsar, toAsarUnpacked } from './bundle-confs';
+import { app } from 'electron';
+import { parse as parseSemVer } from 'semver';
 
 export const SIGNUP_URL = (CUSTOM_SIGNUP_URL ?
 	CUSTOM_SIGNUP_URL : DEFAULT_SIGNUP_URL
@@ -71,6 +73,13 @@ export function findPackInfo(): PackInfo|undefined {
 		return;
 	}
 }
+
+export const platformVersion = (() => {
+	const v = parseSemVer(app.getVersion());
+	const platformVer = `${v!.major}.${v!.minor}.${Math.floor(v!.patch/1000)}`;
+	const bundleNum = v!.patch%1000;
+	return `${platformVer}+${bundleNum}`;
+})();
 
 export const iconsFolder = toAsarUnpacked(join(__dirname, 'icons',
 	(process.platform === 'win32') ?

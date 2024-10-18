@@ -16,18 +16,17 @@
 */
 
 import { DeviceFS } from "core-3nweb-client-lib";
-import { SystemPlaces } from "../apps/installer/system-places";
+import { SystemPlaces } from "../system/apps/installer/system-places";
 import { SingleProc } from "../lib-common/processes/single";
 import { DevAppParamsGetter } from "../test-stand";
-import { App } from "./app";
+import { App, GetAppStorage } from "./app";
 import { appAndManifestOnDev } from "./utils";
 import { isBundledApp } from "../bundle-confs";
-import { CoreDriver } from "../core/core-driver";
+import { CoreDriver } from "../core";
 import { ElectronIPCConnectors, SocketIPCConnectors } from "../core/w3n-connectors";
 import { TitleGenerator } from "./gui-component";
 import { ScreenGUIPlacements } from "../window-utils/screen-gui-placements";
 import { logError } from "../confs";
-import { makeRuntimeException } from "../lib-common/exceptions/runtime";
 
 type RPCConnection = web3n.rpc.client.RPCConnection;
 type CommonDef = web3n.caps.CommonComponentSetting;
@@ -68,6 +67,7 @@ export class AppsByDomain {
 	constructor(
 		private readonly findInstalledApp: SystemPlaces['findInstalledApp'],
 		private readonly makeAppCAPs: CoreDriver['makeCAPsForAppComponent'],
+		private readonly getAppStorage: (appDomain: string) => GetAppStorage,
 		private readonly guiConnectors: ElectronIPCConnectors,
 		private readonly sockConnectors: SocketIPCConnectors,
 		private readonly titleMaker: TitleGenerator,
@@ -95,13 +95,14 @@ export class AppsByDomain {
 			}
 			this.ensureCanAddApp();
 			const devAppParams = this.devApps?.(appDomain);
+			const getAppStorage = this.getAppStorage(appDomain);
 			if (devAppParams) {
 				const {
 					params: { dir, manifest, url }, capsWrapper
 				} = devAppParams;
 				const appRoot = await DeviceFS.makeReadonly(dir);
 				app = new App(
-					manifest, appRoot, this.makeAppCAPs,
+					manifest, appRoot, this.makeAppCAPs, getAppStorage,
 					this.guiConnectors, this.sockConnectors,
 					this.guiPlacement, this.titleMaker,
 					devTools, url, capsWrapper
@@ -112,7 +113,7 @@ export class AppsByDomain {
 					this.findInstalledApp(appDomain)
 				);
 				app = new App(
-					manifest, appRoot, this.makeAppCAPs,
+					manifest, appRoot, this.makeAppCAPs, getAppStorage,
 					this.guiConnectors, this.sockConnectors,
 					this.guiPlacement, this.titleMaker,
 					devTools, undefined, undefined

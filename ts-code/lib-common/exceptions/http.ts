@@ -47,5 +47,3 @@ export function makeHTTPException(
 		url, method, status, message: msg, cause
 	}, {});
 }
-
-Object.freeze(exports);

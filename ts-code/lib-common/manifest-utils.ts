@@ -26,8 +26,13 @@ type GUISrvDef = web3n.caps.GUIServiceComponent;
 type AppComponent = web3n.caps.AppComponent;
 type AllowedCallers = web3n.caps.AllowedCallers;
 type LauncherDef = web3n.caps.Launcher;
+type DynamicLaunchers = web3n.caps.DynamicLaunchers;
 type RPCException = web3n.rpc.RPCException;
 type ShellCmdException = web3n.shell.commands.ShellCmdException;
+type FSResourceDescriptor = web3n.caps.FSResourceDescriptor;
+type FSResourceException = web3n.shell.FSResourceException;
+type ResourcesRequest = web3n.caps.ResourcesRequest;
+type UserInterfaceFormFactor = web3n.caps.UserInterfaceFormFactor;
 
 
 export interface AppManifestException extends web3n.RuntimeException {
@@ -117,9 +122,51 @@ function makeComponentForSimpleGUIApp(
 		runtime: 'web-gui',
 		capsRequested: (m as SimpleGUIAppManifest)['capsRequested'],
 		windowOpts: m['windowOpts'],
-		name: (m.name ? m.name : m.appDomain),
 		icon: m.icon
 	};
+}
+
+/**
+ * Collects app's launchers that can be started directly by user.
+ * @param m app's manifest
+ * @param formFactor an optional form factor filter
+ * @returns an array of launcher, or undefined if there's none defined
+ */
+export function getLaunchersForUser(
+	m: AppManifest, formFactor?: UserInterfaceFormFactor
+): LauncherDef[]|undefined {
+	const manifestLauncher = (m as GeneralAppManifest).launchers;
+	if (Array.isArray(manifestLauncher)) {
+		let lst = (manifestLauncher
+		.filter(l => !(l as DynamicLaunchers).appStorage) as LauncherDef[])
+		.filter(l => (l.component || l.startCmd));
+		if (formFactor) {
+			lst = lst
+			.filter(l => (
+				!l.formFactor ||
+				(Array.isArray(l.formFactor) ?
+					l.formFactor.includes(formFactor) :
+					(l.formFactor === formFactor)
+				)
+			));
+		}
+		return ((lst && (lst.length > 0)) ? lst : undefined);
+	} else {
+		return [ getDefaultLauncher(m) ];
+	}
+}
+
+export function getDynamicLaunchersLocations(
+	m: AppManifest
+): DynamicLaunchers[]|undefined {
+	const manifestLauncher = (m as GeneralAppManifest).launchers;
+	if (Array.isArray(manifestLauncher)) {
+		let lst = (manifestLauncher
+		.filter(l => !!(l as DynamicLaunchers).appStorage) as DynamicLaunchers[]);
+		return ((lst && (lst.length > 0)) ? lst : undefined);
+	} else {
+		return;
+	}
 }
 
 export function getDefaultLauncher(m: AppManifest): LauncherDef {
@@ -290,6 +337,25 @@ export function makeShellCmdException(
 	return makeRuntimeException('shell-command', params, flags);
 }
 
+export function makeAppFSResourceException(
+	resourceAppDomain: string, resourceName: string,
+	requestingAppDomain: string, requestingComponent: string,
+	flags: Partial<FSResourceException>, params?: Partial<FSResourceException>
+): FSResourceException {
+	if (params) {
+		params.requestingAppDomain = requestingAppDomain;
+		params.requestingComponent = requestingComponent;
+		params.resourceAppDomain = resourceAppDomain;
+		params.resourceName = resourceName;
+	} else {
+		params = {
+			requestingAppDomain, requestingComponent,
+			resourceAppDomain, resourceName
+		};
+	}
+	return makeRuntimeException('fs-resource', params, flags);
+}
+
 function makeAppManifestException(
 	appDomain: string|undefined,
 	flags: Partial<AppManifestException>, params?: Partial<AppManifestException>
@@ -303,5 +369,51 @@ function makeAppManifestException(
 
 }
 
+export function getComponentsForSystemStartup(
+	m: AppManifest
+): { entrypoint: string; component: AppComponent; }[]|undefined {
+	const { components, launchOnSystemStartup } = (m as GeneralAppManifest);
+	const lst = launchOnSystemStartup?.filter(c => !!c.component)
+	.map(({ component: entrypoint }) => ({
+		entrypoint: entrypoint!,
+		component: components[entrypoint!]
+	}));
+	return ((lst && (lst.length > 0)) ? lst : undefined);
+}
 
-Object.freeze(exports);
+export function getExposedFSResource(
+	m: AppManifest, resourceName: string,
+	requestingApp: string, requestingComponent: string
+): FSResourceDescriptor {
+	const { appDomain, exposedFSResources } = m as GeneralAppManifest
+	const descriptor = exposedFSResources?.[resourceName];
+	if (!descriptor) {
+		throw makeAppFSResourceException(
+			appDomain, resourceName, requestingApp, requestingComponent, {
+				resourceNotFound: true
+			}
+		);
+	}
+	if (isCallerAllowed(
+		appDomain, descriptor.allow, requestingApp, requestingComponent
+	)) {
+		return descriptor;
+	} else {
+		throw makeAppFSResourceException(
+			appDomain, resourceName, requestingApp, requestingComponent, {
+				notAllowed: true
+			}
+		);
+	}
+}
+
+export function isResourceInRequest(
+	request: ResourcesRequest, appDomain: string|undefined|null, resource: string
+): boolean {
+	const resources = (!appDomain ?
+		request.thisApp : request.otherApps?.[appDomain]
+	);
+	return (Array.isArray(resources) ?
+		resources.includes(resource) : (resources === resource)
+	);
+}

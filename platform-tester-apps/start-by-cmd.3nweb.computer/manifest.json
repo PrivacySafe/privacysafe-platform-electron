@@ -23,9 +23,29 @@
 				"useContentSize": true,
 				"width": 600,
 				"height": 400
+			},
+			"capsRequested": {
+				"storage": {
+					"appFS": [{
+						"domain": "start-by-cmd.3nweb.computer",
+						"storage": "local"
+					}]
+				}
 			}
 		}
 
+	},
+
+	"exposedFSResources": {
+		"sample-config": {
+			"allow": {
+				"otherApps": [ "tests.3nweb.computer" ]
+			},
+			"appStorage": "local",
+			"path": "config/useful/to/others.json",
+			"itemType": "file",
+			"initValueSrc": "assets/init-conf-value.json"
+		}
 	}
 
 }

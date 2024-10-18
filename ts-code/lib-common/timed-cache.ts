@@ -58,6 +58,3 @@ function getWeakCacheConstructor() {
 		return;
 	}
 }
-
-
-Object.freeze(exports);

@@ -16,7 +16,7 @@
 */
 
 import { Observable, share, Subject } from "rxjs";
-import { isCallerAllowed, makeShellCmdException } from "../../lib-common/manifest-utils";
+import { isCallerAllowed, isResourceInRequest, makeShellCmdException } from "../../lib-common/manifest-utils";
 
 type StartAppWithParams = web3n.shell.commands.StartAppWithParams;
 type CmdParams = web3n.shell.commands.CmdParams;
@@ -29,6 +29,7 @@ export type StartAppWithCmd = (
 
 export interface CmdsHandler {
 	handle(cmd: CmdParams, callerApp: string, callerComponent: string): void,
+	handleFromUser(cmd: CmdParams): void,
 	canHandleCmd(cmd: string): boolean,
 	complete(): void;
 	cmd$: Observable<CmdParams>;
@@ -40,7 +41,10 @@ export function makeAppCmdsCaller(
 	allowedApps: NonNullable<web3n.caps.ShellCAPsSetting['startAppCmds']>
 ): StartAppWithParams {
 	return async (appDomain, cmd, ...params) => {
-		if (!isCmdIn(appDomain, cmd, allowedApps)) {
+		if (appDomain === callerApp) {
+			appDomain = null
+		}
+		if (!isResourceInRequest(allowedApps, appDomain, cmd)) {
 			throw makeShellCmdException(
 				(appDomain === null) ? callerApp : appDomain,
 				cmd, {
@@ -54,22 +58,6 @@ export function makeAppCmdsCaller(
 			cmd, ...params
 		);
 	};
-}
-
-function isCmdIn(
-	appDomain: string|null, cmd: string,
-	allowedCmds: NonNullable<web3n.caps.ShellCAPsSetting['startAppCmds']>
-): boolean {
-	const allowCmds = ((appDomain === null) ?
-		allowedCmds.thisApp : (allowedCmds.otherApps ?
-			allowedCmds.otherApps[appDomain] : undefined
-		)
-	);
-	return (
-		(typeof allowCmds === 'string') && (allowCmds === cmd)
-	) || (
-		Array.isArray(allowCmds) && allowCmds.includes(cmd)
-	);
 }
 
 export function makeCmdsHandler(
@@ -90,6 +78,7 @@ export function makeCmdsHandler(
 				});
 			}
 		},
+		handleFromUser: cmd => cmdSink.next(cmd),
 		canHandleCmd: cmd => !!cmdHandlerDef[cmd],
 		complete: () => cmdSink.complete()
 	};

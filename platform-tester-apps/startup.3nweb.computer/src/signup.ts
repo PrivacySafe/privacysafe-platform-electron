@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016, 2018, 2020 - 2021 3NSoft Inc.
+ Copyright (C) 2016, 2018, 2020 - 2021, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -58,6 +58,30 @@ describe('Startup process', () => {
 		expect(Array.isArray(addresses)).toBe(true);
 		userExists = !addresses.find(addr => (addr === creds.userId));
 	});
+
+	it(`fails for user id with wrong domain`, async () => {
+		try {
+			const unknownId = `${name}@unknown.local`;
+			await w3n.signIn.startLoginToRemoteStorage(unknownId);
+			fail(`Case with bad domain should throw an exception`);
+		} catch (exc) {
+			expect((exc as web3n.RuntimeException).runtimeException).toBe(true);
+			expect((exc as web3n.RuntimeException).cause).toBeTruthy();
+		}
+	});
+
+	it(`fails signin start with unknown user id`, async () => {
+		let unknownId: string;
+		if (userExists === undefined) {
+			throw new Error(`userExists is not set`);
+		} else if (userExists) {
+			unknownId = `${Math.floor(Math.random()*1000)} ${creds.userId}`;
+		} else {
+			unknownId = creds.userId;
+		}
+		const started = await w3n.signIn.startLoginToRemoteStorage(unknownId);
+		expect(started).toBe(false);
+});
 
 	it('creates new user or signs in existing one', async () => {
 		let prevP: number|undefined = undefined;

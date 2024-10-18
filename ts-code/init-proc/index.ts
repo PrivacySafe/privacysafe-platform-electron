@@ -17,20 +17,19 @@
 
 import { TitleGenerator } from '../app-n-components/gui-component';
 import { CoreConf } from 'core-3nweb-client-lib';
-import { makeCoreDriver } from '../core/core-driver';
+import { makeCoreDriver } from '../core';
 import { ElectronIPCConnectors, SocketIPCConnectors } from '../core/w3n-connectors';
 import { app } from 'electron';
-import { logError } from '../confs';
+import { logError, platformVersion } from '../confs';
 import { setTimeout } from 'timers';
 import { DevToolsAppAllowance } from '../process-args';
-import { PlatformDownloader } from '../apps/platform';
+import { PlatformDownloader } from '../system/platform';
 import { UserAppOpenCmd, UserSystemCmd, UserCmd, AppInfoForUI } from '../desktop-integration';
 import { WrapStartupCAPs, AppsRunnerForTesting, DevAppParams, TestStand, TestStandConfig } from '../test-stand';
 import { toCanonicalAddress } from '../lib-common/canonical-address';
 import { DesktopUI } from '../desktop-integration';
 import { UserApps } from './user-apps';
 import { assert } from '../lib-common/assert';
-import { parse as parseSemVer } from 'semver';
 
 
 export class InitProc {
@@ -99,11 +98,16 @@ export class InitProc {
 					this.exit(0);
 					return;
 				}
-				await this.attachAndSwitchFromStartupToLauncherApp(apps);
+				this.userApps.set(toCanonicalAddress(apps.userId), apps);
+				this.watchUserAppsEvents(apps);
+				apps.closeStartupApp();
 			})
 			.finally(() => {
 				this.startingUser = undefined;
-			});
+			})
+			.then(() => (
+				(this.userApps.size > 0) ? this.loadUserSystem(apps) : undefined)
+			);
 			this.startingUser = {
 				proc, focusWindow: () => apps.focusStartupWindow()
 			};
@@ -111,22 +115,7 @@ export class InitProc {
 		return this.startingUser.proc;
 	}
 
-	private async attachAndSwitchFromStartupToLauncherApp(
-		apps: UserApps
-	): Promise<void> {
-		this.userApps.set(toCanonicalAddress(apps.userId), apps);
-		this.observeUserApps(apps);
-		// open app menu as main ui and close startup window
-		await apps.openAppLauncher()
-		.finally(() => apps.closeStartupApp());
-		// update desktop elements on addition of another user
-		this.updateOpenWindows();
-		await this.deskUI.addUser(
-			apps.userId, await apps.listInstalled()
-		);
-	}
-
-	private observeUserApps(apps: UserApps): void {
+	private watchUserAppsEvents(apps: UserApps): void {
 		apps.event$.subscribe(ev => {
 			if (ev === 'start-closing') {
 				if (apps.coreStarted) {
@@ -139,6 +128,17 @@ export class InitProc {
 				this.deskUI.addOrUpdateApp(apps.userId, ev.app);
 			}
 		});
+	}
+
+	private async loadUserSystem(apps: UserApps): Promise<void> {
+		this.updateOpenWindows();
+		await Promise.all([
+			// open app menu as main ui and close startup window
+			apps.doUserSystemStartup(),
+			// update desktop elements on addition of another user
+			apps.listInstalled()
+			.then(appsLst => this.deskUI.addUser(apps.userId, appsLst))
+		]);
 	}
 
 	private updateOpenWindows(): void {
@@ -167,7 +167,7 @@ export class InitProc {
 			this.devToolsAllowance, () => this.platformCAP
 		);
 		this.userApps.set(toCanonicalAddress(userId), apps);
-		this.observeUserApps(apps);
+		this.watchUserAppsEvents(apps);
 		return {
 			runStartupDevApp: (devParams, wrapCaps) => {
 				const excIds = this.openedUsers(true);
@@ -198,11 +198,15 @@ export class InitProc {
 					this.exit(0);
 					return;
 				}
-				await this.attachAndSwitchFromStartupToLauncherApp(apps);
+				this.watchUserAppsEvents(apps);
+				apps.closeStartupApp()
 			})
 			.finally(() => {
 				this.startingUser = undefined;
-			});
+			})
+			.then(
+				() => this.loadUserSystem(apps)
+			);
 			this.startingUser = {
 				proc, focusWindow: () => apps.focusStartupWindow()
 			};
@@ -275,8 +279,8 @@ export class InitProc {
 		}
 	}
 
-	private readonly platformCAP: web3n.apps.Platform = {
-		getCurrentVersion: getBundleVersionFromElectronApp,
+	private readonly platformCAP: web3n.system.platform.Platform = {
+		getCurrentVersion: async () => platformVersion,
 		getChannels: this.platform.getChannels.bind(this.platform),
 		getLatestVersion: this.platform.getLatestVersion.bind(
 			this.platform),
@@ -304,14 +308,6 @@ export class InitProc {
 }
 Object.freeze(InitProc.prototype);
 Object.freeze(InitProc);
-
-
-async function getBundleVersionFromElectronApp(): Promise<string> {
-	const v = parseSemVer(app.getVersion());
-	const platformVer = `${v!.major}.${v!.minor}.${Math.floor(v!.patch/1000)}`;
-	const bundleNum = v!.patch%1000;
-	return `${platformVer}+${bundleNum}`;
-}
 
 
 Object.freeze(exports);

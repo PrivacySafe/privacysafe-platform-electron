@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2023 3NSoft Inc.
+ Copyright (C) 2020 - 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,24 +15,31 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ObjectsConnector, makeW3Nclient, promiseW3Nclient } from 'core-3nweb-client-lib/build/ipc';
-import { closeSelf } from "../init-proc/close-cap-ipc";
-import { makeLogoutCaller } from "../init-proc/logout-cap-ipc";
+import { ObjectsConnector, makeW3Nclient, promiseW3Nclient, callerSideJSONWrap as jsonCall } from 'core-3nweb-client-lib/build/ipc';
 import { makeTestStandCaller } from "../test-stand/test-stand-cap-ipc";
 import { makeConnectivity } from '../connectivity/connectivity-cap-ipc';
-import { makeAppsCaller, promiseAppsCaller } from '../apps/ipc-client-side';
+import { makeSystemCaller, promiseSystemCaller } from '../system/apps/ipc-client-side';
 import { makeShellCaller, promiseShellCaller } from '../shell/ipc-client-side';
 import { makeRpcCaller, promiseRpcCaller } from '../rpc/ipc-client-side';
 
-type W3N = web3n.caps.W3N;
+type W3N = web3n.system.W3N;
+
+const jsonFuncCall = jsonCall.makeReqRepFuncCaller;
+const jsonFuncCallSwallowingErrs: typeof jsonFuncCall<any> = (a, b, c) => {
+	const fn = jsonFuncCall(a,b,c);
+	return function() {
+		return fn.call(undefined, ...arguments).catch(noop);
+	}
+};
 
 export function makeClientSideW3N(clientSide: ObjectsConnector): W3N {
-	const clientW3N = makeW3Nclient<web3n.testing.CommonW3N>(
+	const clientW3N = makeW3Nclient<W3N & web3n.testing.CommonW3N>(
 		clientSide.caller,
 		{
-			closeSelf: closeSelf.makeClient,
-			apps: makeAppsCaller,
-			logout: makeLogoutCaller,
+			closeSelf: jsonFuncCall,
+			myVersion: jsonFuncCall,
+			system: makeSystemCaller,
+			logout: jsonFuncCall,
 			testStand: makeTestStandCaller,
 			shell: makeShellCaller,
 			rpc: makeRpcCaller,
@@ -46,12 +53,13 @@ export function makeClientSideW3N(clientSide: ObjectsConnector): W3N {
 export async function promiseClientSideW3N(
 	clientSide: ObjectsConnector
 ): Promise<W3N> {
-	const clientW3N = await promiseW3Nclient<web3n.testing.CommonW3N>(
+	const clientW3N = await promiseW3Nclient<W3N & web3n.testing.CommonW3N>(
 		clientSide.caller,
 		{
-			closeSelf: closeSelf.makeClient,
-			apps: promiseAppsCaller,
-			logout: makeLogoutCaller,
+			closeSelf: jsonFuncCallSwallowingErrs,
+			myVersion: jsonFuncCall,
+			system: promiseSystemCaller,
+			logout: jsonFuncCall,
 			testStand: makeTestStandCaller,
 			shell: promiseShellCaller,
 			rpc: promiseRpcCaller,
@@ -97,6 +105,8 @@ function wrapExistingFn<F extends Function>(fn: F, warnMsg: string): F {
 		return fn.apply(undefined, args);
 	} as Function as F;
 }
+
+function noop() {}
 
 
 Object.freeze(exports);

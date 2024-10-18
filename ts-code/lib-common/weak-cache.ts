@@ -155,6 +155,3 @@ implements TimedCache<TKey, TVal> {
 }
 Object.freeze(WeakCacheWithMinLifeTime.prototype);
 Object.freeze(WeakCacheWithMinLifeTime);
-
-
-Object.freeze(exports);

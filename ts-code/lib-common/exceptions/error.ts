@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2017, 2020 3NSoft Inc.
+ Copyright (C) 2016 - 2017, 2020, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -60,7 +60,7 @@ export function stringifyErr(err: any): string {
 			errStr = ((typeof json === 'string') ?
 				json : `${JSON.stringify(json, null, '  ')}\n`);
 		} catch (jsonErr) {
-			errStr = `<report-error>${jsonErr.message}</report-error>\n`;
+			errStr = `<report-error>${(jsonErr as Error).message}</report-error>\n`;
 		}
 	} else {
 		errStr = `\nError message: ${json.message}\n`;
@@ -73,7 +73,7 @@ export function stringifyErr(err: any): string {
 					json.cause : JSON.stringify(json.cause, null, '  '));
 				errStr +=  `Caused by: ${causeStr}\n`;
 			} catch (jsonErr) {
-				errStr +=  `Caused by:\n<report-error>${jsonErr.message}</report-error>\n`;
+				errStr +=  `Caused by:\n<report-error>${(jsonErr as Error).message}</report-error>\n`;
 			}
 		}
 	}

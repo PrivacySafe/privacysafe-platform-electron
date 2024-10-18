@@ -3,7 +3,7 @@
 	
 	"appDomain": "tests.3nweb.computer",
 
-	"version": "0.1.0",
+	"version": "1.2.3",
 
 	"icon": "./assets/logo.png",
 
@@ -13,7 +13,6 @@
 			"startedBy": "user",
 			"runtime": "web-gui",
 			"capsRequested": {
-				"apps": "all",
 				"appRPC": [
 					"allowed_but_unknown",
 					"OneShotDialog", "LongDialog",
@@ -49,9 +48,19 @@
 						"otherApps": {
 							"start-by-cmd.3nweb.computer": [ "app-cmd-1", "app-cmd-2" ]
 						}
+					},
+					"fsResource": {
+						"otherApps": {
+							"start-by-cmd.3nweb.computer": "sample-config",
+							"unknown.example.local": "some-resource"
+						}
 					}
 				},
-				"connectivity": "check"
+				"connectivity": "check",
+				"system": {
+					"apps": "all",
+					"platform": "all"
+				}
 			},
 			"windowOpts": {
 				"rememberWindowLocation": true

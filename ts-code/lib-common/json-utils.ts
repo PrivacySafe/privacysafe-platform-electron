@@ -12,7 +12,8 @@
  See the GNU General Public License for more details.
  
  You should have received a copy of the GNU General Public License along with
- this program. If not, see <http://www.gnu.org/licenses/>. */
+ this program. If not, see <http://www.gnu.org/licenses/>.
+*/
 
 
 /**
@@ -43,11 +44,11 @@ export function copy<T>(orig: T, excludeTopFields?: string[]): T {
 		if (excludeTopFields) {
 			for (const f of fields) {
 				if (excludeTopFields.includes(f)) { continue; }
-				c[f] = copy<any>((orig as any)[f]);
+				c[f as keyof T] = copy<any>((orig as any)[f]);
 			}
 		} else {
 			for (const f of fields) {
-				c[f] = copy<any>((orig as any)[f]);
+				c[f as keyof T] = copy<any>((orig as any)[f]);
 			}
 		}
 		return c;
@@ -119,11 +120,9 @@ export function applyChangesToJSON<T>(json: T, changes: Partial<T>): void {
 	for (const f of Object.keys(changes)) {
 		const newValue = changes[f as keyof T];
 		if (newValue === undefined) {
-			delete json[f];
+			delete json[f as keyof T];
 		} else {
-			json[f] = newValue;
+			json[f as keyof T] = newValue as any;
 		}
 	}
 }
-
-Object.freeze(exports);

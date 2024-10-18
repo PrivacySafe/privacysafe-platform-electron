@@ -16,27 +16,32 @@
 */
 
 import { Component, Service } from "./index";
-import { getAllGUIComponents, getComponentForCommand, getComponentForService, getDefaultLauncher, getWebGUIComponent, isCallerAllowed, isMultiInstanceComponent, makeRPCException, makeShellCmdException, servicesImplementedBy } from "../lib-common/manifest-utils";
+import { getAllGUIComponents, getComponentForCommand, getComponentForService, getDefaultLauncher, getWebGUIComponent, isCallerAllowed, isMultiInstanceComponent, makeRPCException, makeShellCmdException, servicesImplementedBy, getComponentsForSystemStartup, getExposedFSResource, makeAppFSResourceException } from "../lib-common/manifest-utils";
 import { NamedProcs } from "../lib-common/processes/named-procs";
 import { WrapAppCAPsAndSetup } from "../test-stand";
 import { DevAppInstanceFromUrl, GUIComponent, TitleGenerator } from "./gui-component";
-import { CoreDriver } from "../core/core-driver";
+import { CoreDriver } from "../core";
 import { ScreenGUIPlacements } from "../window-utils/screen-gui-placements";
 import { assert } from "../lib-common/assert";
 import { ElectronIPCConnectors, SocketIPCConnectors } from "../core/w3n-connectors";
-import { makeAppInitExc } from "../apps/installer/system-places";
+import { makeAppInitExc } from "../system/apps/installer/system-places";
 import { DenoComponent } from "./deno-component";
 import { PostponedValuesFixedKeysMap } from "../lib-common/postponed-values-map";
 import { wrapWithTimeout } from "../lib-common/processes/timeouts";
 
 
 type ReadonlyFS = web3n.files.ReadonlyFS;
+type WritableFS = web3n.files.WritableFS;
 type AppManifest = web3n.caps.AppManifest;
+type AppComponent = web3n.caps.AppComponent;
 type CmdParams = web3n.shell.commands.CmdParams;
 type GUIComponentDef = web3n.caps.GUIComponent;
 type SrvDef = web3n.caps.ServiceComponent;
 type GUISrvDef = web3n.caps.GUIServiceComponent;
 type FileException = web3n.files.FileException;
+type GetFSResource = web3n.shell.GetFSResource;
+
+export type GetAppStorage = (type: 'local'|'synced') => Promise<WritableFS>;
 
 
 export class App {
@@ -58,6 +63,7 @@ export class App {
 		private readonly manifest: AppManifest,
 		private readonly appRoot: ReadonlyFS,
 		private readonly makeAppCAPs: CoreDriver['makeCAPsForAppComponent'],
+		private readonly getAppStorage: GetAppStorage,
 		private readonly guiConnectors: ElectronIPCConnectors,
 		private readonly sockConnectors: SocketIPCConnectors,
 		private readonly guiPlacement: ScreenGUIPlacements,
@@ -73,40 +79,64 @@ export class App {
 	async handleCmd(
 		cmd: CmdParams, callerApp: string, callerComponent: string
 	): Promise<void> {
-		const appDomain = this.manifest.appDomain;
-		const c = getComponentForCommand(this.manifest, cmd.cmd);
-		if (!c) {
-			throw makeShellCmdException(appDomain, cmd.cmd, { cmdNotFound: true });
-		}
-		const { entrypoint, component } = c;
-		if (!isCallerAllowed(
-			appDomain, component.startCmds![cmd.cmd], callerApp, callerComponent
-		)) {
-			throw makeShellCmdException(appDomain, cmd.cmd, {
-				callerNotAllowed: true
-			});
-		}
+		const { entrypoint, component } = this.componentForCmd(cmd.cmd);
+		this.ensureCmdCallerIsAllowed(
+			component, cmd.cmd, callerApp, callerComponent
+		);
 		await this.whenNoStartProc(entrypoint);
-		const existing = this.instances.get(entrypoint);
+		const existing = this.instances.get(entrypoint) as GUIComponent;
 		if (existing && !isMultiInstanceComponent(component)) {
-
-			// XXX pass command into existing, and do something else if it can't,
-			//     or there may be some other handler setup and dynamic?
-			(existing as GUIComponent).cmdsHandler!.canHandleCmd(cmd.cmd);
-
-			(existing as GUIComponent).cmdsHandler!.handle(
+			this.ensureCmdHandlePresence(existing, cmd.cmd);
+			existing.cmdsHandler!.handle(
 				cmd, callerApp, callerComponent
 			);
-			(existing as GUIComponent).window.focus();
+			existing.window.focus();
 			return;
 		}
 		await this.syncStartProc(
-			entrypoint!,
+			entrypoint,
 			this.makeAndStartGUIComponentInstance(
-				entrypoint!, component, cmd, undefined
+				entrypoint, component, cmd, undefined
 			)
 		);
 	}
+
+	private componentForCmd(cmd: string): {
+		component: GUIComponentDef; entrypoint: string;
+	} {
+		const c = getComponentForCommand(this.manifest, cmd);
+		if (c) {
+			return c;
+		} else {
+			throw makeShellCmdException(this.manifest.appDomain, cmd, {
+				cmdNotFound: true
+			});
+		}
+	}
+
+	private ensureCmdCallerIsAllowed(
+		component: GUIComponentDef, cmd: string,
+		callerApp: string, callerComponent: string
+	): void {
+		const appDomain = this.manifest.appDomain;
+		if (!isCallerAllowed(
+			appDomain, component.startCmds![cmd], callerApp, callerComponent
+		)) {
+			throw makeShellCmdException(appDomain, cmd, {
+				callerNotAllowed: true
+			});
+		}
+	}
+
+	private ensureCmdHandlePresence(
+		existing: GUIComponent, cmd: string
+	): void {
+		if (!existing.cmdsHandler!.canHandleCmd(cmd)) {
+			throw makeShellCmdException(this.manifest.appDomain, cmd, {
+				cause: `Command handler is not found on implementation`
+			});
+		}
+	}	
 
 	private async syncStartProc<T>(
 		entrypoint: string, proc: Promise<T>
@@ -130,30 +160,75 @@ export class App {
 		}
 	}
 
-	async launchDefault(): Promise<void> {
-		const { component: entrypoint  } = getDefaultLauncher(this.manifest);
-		const component = getWebGUIComponent(this.manifest, entrypoint!);
-		await this.whenNoStartProc(entrypoint!);
-		const existing = this.instances.get(entrypoint!);
+	async handleCmdFromUser(cmd: CmdParams, devTools: boolean): Promise<void> {
+		const { entrypoint, component } = this.componentForCmd(cmd.cmd);
+		await this.whenNoStartProc(entrypoint);
+		const existing = this.instances.get(entrypoint) as GUIComponent;
 		if (existing && !isMultiInstanceComponent(component)) {
-			(existing as GUIComponent).window.focus();
+			this.ensureCmdHandlePresence(existing, cmd.cmd);
+			existing.cmdsHandler!.handleFromUser(cmd);
+			existing.window.focus();
 			return;
 		}
 		await this.syncStartProc(
-			entrypoint!,
+			entrypoint,
 			this.makeAndStartGUIComponentInstance(
-				entrypoint!, component, undefined, undefined
+				entrypoint, component, cmd, undefined, devTools
 			)
 		);
 	}
 
+	async launchWebGUI(entrypoint: string, devTools: boolean): Promise<void> {
+		const component = getWebGUIComponent(this.manifest, entrypoint);
+		await this.launchComponent(entrypoint!, component, devTools);
+	}
+
+	private async launchComponent(
+		entrypoint: string, component: AppComponent, devTools?: boolean
+	): Promise<void> {
+		await this.whenNoStartProc(entrypoint);
+		const existing = this.instances.get(entrypoint);
+		if (existing && !isMultiInstanceComponent(component)) {
+			(existing as GUIComponent)?.window.focus();
+			return;
+		}
+		if (component.runtime === 'web-gui') {
+			await this.syncStartProc(
+				entrypoint,
+				this.makeAndStartGUIComponentInstance(
+					entrypoint, component as GUIComponentDef, undefined, undefined,
+					devTools
+				)
+			);
+		} else if (component.runtime === 'deno') {
+			await this.syncStartProc(
+				entrypoint,
+				this.makeAndStartDenoComponentInstance(entrypoint, component)
+			);
+
+		}
+	}
+
+	async loadOnStartup(): Promise<void> {
+		const toStart = getComponentsForSystemStartup(this.manifest)
+		if (!toStart) {
+			return;
+		}
+		for (const { entrypoint, component } of toStart) {
+			await this.launchComponent(entrypoint!, component, this.devTools)
+		}
+	}
+
 	private async makeAndStartGUIComponentInstance(
 		entrypoint: string, component: GUIComponentDef|GUISrvDef,
-		startCmd: CmdParams|undefined, guiParent: GUIComponent|undefined
+		startCmd: CmdParams|undefined, guiParent: GUIComponent|undefined,
+		devTools?: boolean
 	): Promise<GUIComponent> {
 		this.ensureCanStartComponent();
-		const appDomain = this.manifest.appDomain;
-		let caps = this.makeAppCAPs(appDomain, entrypoint, component, startCmd);
+		const { appDomain, version } = this.manifest;
+		let caps = this.makeAppCAPs(
+			appDomain, version, entrypoint, component, startCmd
+		);
 		if (this.devCAPsWrapper) {
 			caps = this.devCAPsWrapper(entrypoint, caps);
 		}
@@ -173,7 +248,7 @@ export class App {
 			gui = await GUIComponent.make(
 				appDomain, this.appRoot, entrypoint, caps,
 				windowOpts, component.icon, guiParent,
-				this.devTools, this.titleMaker, services
+				devTools || this.devTools, this.titleMaker, services
 			);
 		}
 		this.guiConnectors.connectW3N(gui.w3n, gui.window.webContents);
@@ -248,16 +323,16 @@ export class App {
 		}
 		return await this.syncStartProc(
 			entrypoint,
-			this.makeAndStartComponentServiceInstance(
+			this.makeAndStartServiceComponentInstance(
 				caller, service, component, entrypoint
-			)
+			).then(c => c.getService(service))
 		);
 	}
 
-	private async makeAndStartComponentServiceInstance(
+	private async makeAndStartServiceComponentInstance(
 		caller: Component, service: string,
 		component: SrvDef, entrypoint: string
-	): Promise<Service> {
+	): Promise<GUIComponent|DenoComponent> {
 		this.ensureCanStartComponent();
 		const appDomain = this.manifest.appDomain;
 		if (component.runtime === 'web-gui') {
@@ -266,15 +341,11 @@ export class App {
 				(component as GUISrvDef).childOfGUICaller) ?
 				caller as GUIComponent : undefined
 			);
-			const gui = await this.makeAndStartGUIComponentInstance(
+			return this.makeAndStartGUIComponentInstance(
 				entrypoint, component as GUISrvDef, undefined, parent
 			);
-			return gui.getService(service);
 		} else if (component.runtime === 'deno') {
-			const deno = await this.makeAndStartDenoComponentInstance(
-				entrypoint, service, component
-			);
-			return deno.getService(service);
+			return this.makeAndStartDenoComponentInstance(entrypoint, component);
 		} else if (component.runtime === 'wasm,mp1') {
 			// XXX
 			throw new Error(`Starting ${component.runtime} component is not implemented, yet.`);
@@ -288,10 +359,12 @@ export class App {
 	}
 
 	private async makeAndStartDenoComponentInstance(
-		entrypoint: string, service: string, component: SrvDef
+		entrypoint: string, component: SrvDef
 	): Promise<DenoComponent> {
-		const appDomain = this.manifest.appDomain;
-		let caps = this.makeAppCAPs(appDomain, entrypoint, component, undefined);
+		const { appDomain, version } = this.manifest;
+		let caps = this.makeAppCAPs(
+			appDomain, version, entrypoint, component, undefined
+		);
 		if (this.devCAPsWrapper) {
 			caps = this.devCAPsWrapper(entrypoint, caps);
 		}
@@ -299,7 +372,7 @@ export class App {
 			connectInfo, connect
 		} = await this.sockConnectors.createConnector();
 		if (this.devTools) {
-			console.log(`▶️ 🏁 ${appDomain}${entrypoint} component starts, on request to provide service ${service}
+			console.log(`▶️ ${appDomain}${entrypoint} component starts
 			`);
 		}
 		const services = servicesContainerFor(this.manifest, entrypoint);
@@ -309,8 +382,8 @@ export class App {
 		).catch((exc: FileException) => {
 			if ((exc.type === 'file') && exc.notFound) {
 				throw makeAppInitExc(appDomain, {}, {
-					entrypoint, service,
-					message: `Runtime '${component.runtime}' is unknown`
+					entrypoint,
+					message: `Entrypoint ${exc.path} not found for starting '${component.runtime}' component`
 				});
 			} else {
 				throw exc;
@@ -327,7 +400,8 @@ export class App {
 				appDomain}${entrypoint} pid ${pidStr}: ${chunk}
 			`));
 			deno.setCloseListener((code, signal) => console.log(`🚩 ${
-				appDomain}${entrypoint} pid ${pidStr} exited (code: ${code}, signal: ${signal})
+				appDomain}${entrypoint} pid ${pidStr} exited (code: ${
+				code}, signal: ${signal})
 			`));
 		}
 		this.addToInstances(entrypoint, component, deno);
@@ -363,6 +437,52 @@ export class App {
 		}		
 	}
 
+	async exposedFSResource(
+		resourceName: string, requestingApp: string, requestingComponent: string
+	): ReturnType<GetFSResource> {
+		const {
+			appStorage, itemType, path, initValueSrc
+		} = getExposedFSResource(
+			this.manifest, resourceName, requestingApp, requestingComponent
+		);
+		const fs = await this.getAppStorage(appStorage);
+		if (itemType === 'file') {
+			return await fs.readonlyFile(path)
+			.catch(async (exc: FileException) => {
+				if (!exc.notFound) {
+					throw exc;
+				} else if (!initValueSrc) {
+					throw makeAppFSResourceException(
+						this.manifest.appDomain, resourceName,
+						requestingApp, requestingComponent, {
+							resourceNotInitialized: true
+						}
+					);
+				}
+				await copyFile(this.appRoot, initValueSrc, fs, path);
+				return fs.readonlyFile(path);
+			});
+		} else if (itemType === 'folder') {
+			return await fs.readonlySubRoot(path)
+			.catch(async (exc: FileException) => {
+				if (!exc.notFound) {
+					throw exc;
+				} else if (!initValueSrc) {
+					throw makeAppFSResourceException(
+						this.manifest.appDomain, resourceName,
+						requestingApp, requestingComponent, {
+							resourceNotInitialized: true
+						}
+					);
+				}
+				await copyFolder(this.appRoot, initValueSrc, fs, path);
+				return fs.readonlySubRoot(path);
+			});
+		} else {
+			throw new Error(`Unknown fs resource type ${itemType}`);
+		}
+	}
+
 }
 Object.freeze(App.prototype);
 Object.freeze(App);
@@ -373,4 +493,27 @@ function servicesContainerFor(
 ): PostponedValuesFixedKeysMap<string, Service>|undefined {
 	const services = servicesImplementedBy(manifest, entrypoint);
 	return (services ? new PostponedValuesFixedKeysMap(services) : undefined);
+}
+
+async function copyFile(
+	src: ReadonlyFS, srcPath: string, dst: WritableFS, dstPath: string
+): Promise<void> {
+	const bytes = await src.readBytes(srcPath);
+	await dst.writeBytes(dstPath, (bytes ? bytes : new Uint8Array(0)));
+}
+
+async function copyFolder(
+	src: ReadonlyFS, srcPath: string, dst: WritableFS, dstPath: string
+): Promise<void> {
+	const lst = await src.listFolder(srcPath);
+	await dst.makeFolder(dstPath);
+	for (const { name, isFile, isFolder } of lst) {
+		if (isFile) {
+			await copyFile(src, `${srcPath}/${name}`, dst, `${dstPath}/${name}`);
+		} else if (isFolder) {
+			await copyFolder(src, `${srcPath}/${name}`, dst, `${dstPath}/${name}`);
+		} else {
+			throw new Error(`${srcPath}/${name} for initial fs resource value is neither file, nor folder`);
+		}
+	}
 }

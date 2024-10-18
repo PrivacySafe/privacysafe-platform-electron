@@ -17,7 +17,7 @@
 
 import { BrowserView, BrowserWindow } from "electron";
 import { TitleGenerator } from "../app-n-components/gui-component";
-import { CoreDriver } from "../core/core-driver";
+import { CoreDriver } from "../core";
 import { ElectronIPCConnectors } from "../core/w3n-connectors";
 import { addDevToolsShortcuts } from "../init-proc/devtools";
 import { DevSiteParamsGetter } from "../test-stand";

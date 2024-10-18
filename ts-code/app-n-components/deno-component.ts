@@ -17,9 +17,9 @@
 
 import { spawn, ChildProcess } from "child_process";
 import { createReadStream, ReadStream } from "fs";
-import { Component, Service } from ".";
+import { Component, Service } from "./index";
 import { denoBinParams, DenoParams, logError, utilDir } from "../confs";
-import { AppCAPsAndSetup } from "../core/core-driver";
+import { AppCAPsAndSetup } from "../core";
 import { SocketConnectInfo } from "../ipc-with-core/socket-ipc";
 import { assert } from "../lib-common/assert";
 import { utf8 } from "../lib-common/buffer-utils";
@@ -105,7 +105,7 @@ export class DenoComponent implements Component {
 		}
 		this.proc = spawn(
 			this.denoBin.bin,
-			[ 'run', '--unstable', ...privArgs, '--no-check', '-' ],
+			[ 'run', ...privArgs, '--no-check', '-' ],
 			{
 				cwd: utilDir,
 				shell: this.denoBin.spanWithShell

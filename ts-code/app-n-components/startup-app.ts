@@ -20,7 +20,7 @@ import { STARTUP_APP_DOMAIN } from "../bundle-confs";
 import { toCanonicalAddress } from "../lib-common/canonical-address";
 import { DevAppInstanceFromUrl, GUIComponent } from "./gui-component";
 import { appAndManifestOnDev } from "./utils";
-import { CoreDriver } from "../core/core-driver";
+import { CoreDriver } from "../core";
 import { MAIN_GUI_ENTRYPOINT, getWebGUIComponent } from "../lib-common/manifest-utils";
 import { applyingStartupWindowPlacement } from "../window-utils/screen-gui-placements";
 import { errWithCause } from "../lib-common/exceptions/error";

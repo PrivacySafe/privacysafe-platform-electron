@@ -15,10 +15,10 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Caller } from 'core-3nweb-client-lib/build/ipc';
+import { Caller, callerSideJSONWrap as jsonCall } from 'core-3nweb-client-lib/build/ipc';
 import { makeFileDialogs } from "../shell/file-dialogs/file-dialogs-cap-ipc";
 import { makeUserNotifications } from '../shell/user-notifications/user-notifications-cap-ipc';
-import { makeGetStartedCmd, makeStartAppWithParams, makeWatchStartCmds } from './cmd-invocation/cmds-caps-ipc';
+import { makeGetFSResource } from './fs-resource/fs-resource-caps-ipc';
 
 type ShellCAPs = web3n.shell.ShellCAPs;
 
@@ -55,6 +55,12 @@ export async function promiseShellCaller(
 	);
 }
 
+function shellCall<M extends keyof ShellCAPs>(
+	caller: Caller, objPath: string[], method: M
+): ShellCAPs[M] {
+	return jsonCall.makeReqRepObjCaller<ShellCAPs, M>(caller, objPath, method);
+}
+
 function makeShellFollowingListing(
 	shellCAPs: (keyof ShellCAPs)[],
 	dialogFns: (keyof NonNullable<ShellCAPs['fileDialogs']>)[] | undefined,
@@ -70,16 +76,23 @@ function makeShellFollowingListing(
 		shell.userNotifications = makeUserNotifications(caller, notifPath);
 	}
 	if (shellCAPs.includes('getStartedCmd')) {
-		const fnPath = objPath.concat('getStartedCmd');
-		shell.getStartedCmd = makeGetStartedCmd(caller, fnPath);
+		shell.getStartedCmd = shellCall(
+			caller, objPath, 'getStartedCmd'
+		);
 	}
 	if (shellCAPs.includes('watchStartCmds')) {
-		const fnPath = objPath.concat('watchStartCmds');
-		shell.watchStartCmds = makeWatchStartCmds(caller, fnPath);
+		shell.watchStartCmds = jsonCall.makeObservableFuncCaller(
+			caller, objPath.concat('watchStartCmds')
+		);
 	}
 	if (shellCAPs.includes('startAppWithParams')) {
-		const fnPath = objPath.concat('startAppWithParams');
-		shell.startAppWithParams = makeStartAppWithParams(caller, fnPath);
+		shell.startAppWithParams = shellCall(
+			caller, objPath, 'startAppWithParams'
+		);
+	}
+	if (shellCAPs.includes('getFSResource')) {
+		const fnPath = objPath.concat('getFSResource');
+		shell.getFSResource = makeGetFSResource(caller, fnPath);
 	}
 	return shell;
 

@@ -17,11 +17,11 @@
 
 import { assert } from "../lib-common/assert";
 import { checkAndTransformAddress, toCanonicalAddress, areAddressesEqual } from "../lib-common/canonical-address";
-import { APP_ROOT_FOLDER, MANIFEST_FILE, SITE_ROOT_FOLDER } from "../apps/installer/unpack-zipped-app";
+import { APP_ROOT_FOLDER, MANIFEST_FILE, SITE_ROOT_FOLDER } from "../system/apps/installer/unpack-zipped-app";
 import { dirname, isAbsolute, join, resolve } from "path";
 import { readFileSync, statSync, writeFileSync } from "fs";
 import { errWithCause } from "../lib-common/exceptions/error";
-import { AppCAPsAndSetup, AppSetter, CoreDriver, SiteCAPsAndSetup } from "../core/core-driver";
+import { AppCAPsAndSetup, AppSetter, CoreDriver, SiteCAPsAndSetup } from "../core";
 import { Code } from "../lib-common/exceptions/file";
 import { stringOfB64CharsSync, stringOfB64UrlSafeCharsSync } from "../lib-common/random-node";
 import { MAIN_GUI_ENTRYPOINT } from "../lib-common/manifest-utils";
@@ -142,11 +142,16 @@ export class TestStand {
 		makeRunner: MakeRunner, deskUI: DesktopUI,
 		startDevStartupApp: StartDevStartupApp
 	): Promise<void> {
-		const devUsers = this.devUsers.slice(1);
-		if (devUsers.length === 0) {
-			await this.startTestingStartupApp(startDevStartupApp);
-		} else {
-			await this.startForUsers(devUsers, makeRunner, deskUI);
+		try {
+			const devUsers = this.devUsers.slice(1);
+			if (devUsers.length === 0) {
+				await this.startTestingStartupApp(startDevStartupApp);
+			} else {
+				await this.startForUsers(devUsers, makeRunner, deskUI);
+			}
+		} catch (err) {
+			console.error(`❌ booting test-stand threw an error:`, '\n', err);
+			this.exitAll(5);
 		}
 	}
 
@@ -799,7 +804,7 @@ class TestMsgListeners {
 		const srcId = capIdFor(userNum, appDomain, component);
 		this.srcIdToObservers.add(srcId, obs);
 		return () => {
-			if (obs.complete)
+			obs.complete?.();
 			this.srcIdToObservers.remove(srcId, obs);
 		};
 	}

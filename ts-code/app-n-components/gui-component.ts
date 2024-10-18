@@ -21,7 +21,7 @@ import { protoSchemas } from "../electron/protocols";
 import { join } from 'path';
 import { copy as jsonCopy } from '../lib-common/json-utils';
 import { logError, logWarning } from '../confs';
-import { AppCAPsAndSetup } from '../core/core-driver';
+import { AppCAPsAndSetup } from '../core';
 import { addDevToolsShortcuts } from '../init-proc/devtools';
 import { Component, Service } from '.';
 import { toBuffer } from '../lib-common/buffer-utils';
