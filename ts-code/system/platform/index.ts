@@ -18,13 +18,15 @@
 import { doBodylessRequest } from "../../electron/request-utils";
 import { makeRuntimeException } from "../../lib-common/exceptions/runtime";
 import { assert } from "../../lib-common/assert";
-import { makeUpdater } from "./updater";
+import { Updater } from "./updater";
 import { PackInfo, findPackInfo } from "../../confs";
 import { platform } from "os";
 import { PLATFORM_BUNDLE_URL } from "../../bundle-confs";
+import { bundleVersion } from "../../bundle-version";
+import { listBundledAppPacks, listInstalledBundledApps } from "../system-places";
 
-type AppVersionPacks = web3n.system.apps.AppDistributionList;
-type PlatformDownloadProgress = web3n.system.platform.PlatformUpdateEvents;
+type PlatformUpdateEvents = web3n.system.platform.PlatformUpdateEvents;
+type BundleVersions = web3n.system.platform.BundleVersions;
 type Observer<T> = web3n.Observer<T>;
 type DistChannels = web3n.system.apps.DistChannels;
 
@@ -33,6 +35,7 @@ export class PlatformDownloader {
 
 	private readonly packInfo: PackInfo|undefined;
 	private readonly type: 'electron-builder-update' | undefined;
+	private updater: Updater|undefined = undefined;
 
 	constructor() {
 		this.packInfo = findPackInfo();
@@ -40,30 +43,63 @@ export class PlatformDownloader {
 		Object.seal(this);
 	}
 
+	async getCurrentVersion(): Promise<BundleVersions> {
+		const bundledApps: BundleVersions['apps'] = {};
+		for (const { id, current } of await listInstalledBundledApps()) {
+			bundledApps[id] = current!;
+		}
+		const bundledAppPacks: BundleVersions['app-packs'] = {};
+		for (const { id, version } of await listBundledAppPacks()) {
+			bundledAppPacks[id] = version;
+		}
+		return {
+			apps: bundledApps,
+			"app-packs": bundledAppPacks,
+			bundle: bundleVersion,
+			platform: bundleVersion.substring(0, bundleVersion.indexOf('+')),
+			runtimes: {}
+		};
+	}
+
 	getChannels(): Promise<DistChannels> {
 		return platfChannels();
 	}
 
-	getLatestVersion(channel: string): Promise<string> {
+	getLatestVersion(channel: string): Promise<BundleVersions> {
 		return channelLatestVersion(channel);
 	}
 
-	getVersionList(version: string): Promise<AppVersionPacks> {
-		return listVersionPacks(version);
-	}
-
-	async availableUpdateType(): Promise<PlatformDownloader['type']> {
-		return this.type;
-	}
-
-	downloadAndApplyUpdate(
-		channel: string, observer: Observer<PlatformDownloadProgress>
+	setupUpdater(
+		newBundleVersion: string, observer: Observer<PlatformUpdateEvents>
 	): () => void {
 		if (this.type === 'electron-builder-update') {
-			return runElectronBuilderUpdate(channel, observer);
-		} else {
-			throw makeDownloadExc({ noUpdateMechanism: true }, this.packInfo);
+			if (!this.updater
+			|| (this.updater.newBundleVersion !== newBundleVersion)) {
+				this.updater = Updater.make(newBundleVersion);
+			}
+			if (this.updater) {
+				return this.updater.watchUpdaterEvents(observer);
+			}
 		}
+		throw makeDownloadExc({ noUpdateMechanism: true }, this.packInfo);
+	}
+
+	private ensureUpdaterSet(): void {
+		if (!this.updater) {
+			throw `updater is not set, yet`;
+		}
+	}
+
+	async downloadUpdate(): Promise<string[]|undefined> {
+		this.ensureUpdaterSet();
+		if (await this.updater!.appUpdater.checkForUpdates()) {
+			return await this.updater!.appUpdater.downloadUpdate();
+		}
+	}
+
+	async quitAndInstall(): Promise<void> {
+		this.ensureUpdaterSet();
+		this.updater!.appUpdater.quitAndInstall();
 	}
 
 }
@@ -89,13 +125,6 @@ function packInfoToType(
 
 const bundleInfoFName = 'versions-in-bundle.json';
 
-interface BundleVersionsInfo {
-	bundle: string;
-	platform: string;
-	apps: { [ app: string ]: string };
-	runtimes: { [ runtime: string ]: string };
-}
-
 async function getJson<T>(url: string): Promise<T|undefined> {
 	const rep = await doBodylessRequest<T>({
 		method: 'GET', url, responseType: 'json'
@@ -104,7 +133,9 @@ async function getJson<T>(url: string): Promise<T|undefined> {
 }
 
 async function platfChannels(): Promise<DistChannels> {
-	const channels = await getJson<DistChannels>(`${PLATFORM_BUNDLE_URL}/platform/channels`);
+	const channels = await getJson<DistChannels>(
+		`${PLATFORM_BUNDLE_URL}/platform/channels`
+	);
 	if (channels && (typeof channels.channels === 'object')) {
 		return channels;
 	} else {
@@ -112,50 +143,17 @@ async function platfChannels(): Promise<DistChannels> {
 	}
 }
 
-// function isNonEmptyStringArr(arr: string[]): boolean {
-// 	return (Array.isArray(arr) && (arr.length > 0)
-// 	&& !arr.find(s => ((typeof s !== 'string') || !s)));
-// }
-
-// async function listChannelVersions(channel: string): Promise<string[]> {
-// 	assert((typeof channel === 'string') && (channel.length > 0),
-// 		`Invalid channel: ${channel}`);
-// 	const versions = await getJson<string[]>(`${PLATFORM_BUNDLE_URL}/${channel}.list`);
-// 	if (versions && isNonEmptyStringArr(versions)) {
-// 		return versions;
-// 	} else {
-// 		throw makeDownloadExc({ noVersions: true });
-// 	}
-// }
-
-async function channelLatestVersion(channel: string): Promise<string> {
+async function channelLatestVersion(channel: string): Promise<BundleVersions> {
 	assert((typeof channel === 'string') && (channel.length > 0),
 		`Invalid channel: ${channel}`);
-	const latest = await getJson<BundleVersionsInfo>(
+	const latest = await getJson<BundleVersions>(
 		`${PLATFORM_BUNDLE_URL}/${channel}/${bundleInfoFName}`
 	);
-	if (latest && (typeof latest.bundle === 'string')) {
-		return latest.bundle;
+	if (latest) {
+		return latest;
 	} else {
 		throw makeDownloadExc({ noVersions: true });
 	}
-}
-
-async function listVersionPacks(version: string): Promise<AppVersionPacks> {
-
-	// XXX do we even need this in bundle?
-
-	throw new Error(`Not implement, cause this may change`);
-
-	// assert((typeof version === 'string') && (version.length > 0),
-	// 	`Invalid version: ${version}`);
-	// const lst = await getJson<AppVersionPacks>(
-	// 	`${platformUrl()}/${version}/list`);
-	// if (lst && (typeof lst === 'object')) {
-	// 	return lst;
-	// } else {
-	// 	throw makeDownloadExc({ noVersionVariants: true });
-	// }
 }
 
 export interface PlatformDownloadException extends web3n.RuntimeException {
@@ -177,31 +175,29 @@ function makeDownloadExc(
 	);
 }
 
-function runElectronBuilderUpdate(
-	channel: string, observer: Observer<PlatformDownloadProgress>
-): () => void {
-	let unsub: (() => void)|undefined = undefined;
-	makeUpdater(channel).then(async updater => {
-		if (updater) {
-			unsub = updater.checkForUpdateAndApply(observer);
-		} else if (observer && observer.error) {
-			observer.error(new Error(
-				`Failed to create an updater. Packing info is ${
-					JSON.stringify(findPackInfo())
-				}`
-			));
-		}
-	});
-	return () => {
-		if (unsub) {
-			unsub();
-		} else {
-			observer = undefined as any;
-		}
-	}; 
-}
-
-function noop() {}
+// function runElectronBuilderUpdate(
+// 	newBundleVersion: string, observer: Observer<PlatformDownloadProgress>
+// ): () => void {
+// 	let unsub: (() => void)|undefined = undefined;
+// 	makeUpdater(newBundleVersion).then(async updater => {
+// 		if (updater) {
+// 			unsub = updater.checkForUpdateAndApply(observer);
+// 		} else if (observer && observer.error) {
+// 			observer.error(new Error(
+// 				`Failed to create an updater. Packing info is ${
+// 					JSON.stringify(findPackInfo())
+// 				}`
+// 			));
+// 		}
+// 	});
+// 	return () => {
+// 		if (unsub) {
+// 			unsub();
+// 		} else {
+// 			observer = undefined as any;
+// 		}
+// 	}; 
+// }
 
 
 Object.freeze(exports);

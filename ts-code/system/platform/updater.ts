@@ -15,9 +15,8 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { NsisUpdater, AppImageUpdater, MacUpdater, AppUpdater, ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from "electron-updater";
+import { NsisUpdater, AppImageUpdater, MacUpdater, AppUpdater } from "electron-updater";
 import { Subject } from "rxjs";
-import { makeRuntimeException } from "../../lib-common/exceptions/runtime";
 import { toRxObserver } from "../../lib-common/utils-for-observables";
 import { PLATFORM_BUNDLE_URL } from "../../bundle-confs";
 import { findPackInfo } from "../../confs";
@@ -26,94 +25,80 @@ import { platform } from "os";
 type PlatformUpdateEvents = web3n.system.platform.PlatformUpdateEvents;
 type Observer<T> = web3n.Observer<T>;
 
-export interface Updater {
-	checkForUpdateAndApply(
-		observer: Observer<PlatformUpdateEvents>
-	): () => void;
-}
 
-export async function makeUpdater(channel: string): Promise<Updater|undefined> {
-	const packInfo = findPackInfo();
-	if (!packInfo) {
-		return;
-	}
-	const { arch, variant } = packInfo;
-	if (variant === 'AppImage') {
-		return wrapElectronBuilderUpdater(new AppImageUpdater({
-			provider: 'generic',
-			url: `${PLATFORM_BUNDLE_URL}/${channel}/linux/${arch}/`
-		}));			
-	} else if (variant === 'nsis') {
-		return wrapElectronBuilderUpdater(new NsisUpdater({
-			provider: 'generic',
-			url: `${PLATFORM_BUNDLE_URL}/${channel}/windows/${arch}/`
-		}));			
-	} else if ((variant === 'dmg')
-	|| ((platform() === 'freebsd') && (variant === 'zip'))) {
-		return wrapElectronBuilderUpdater(new MacUpdater({
-			provider: 'generic',
-			url: `${PLATFORM_BUNDLE_URL}/${channel}/mac/${arch}/`
-		}));			
-	} else {
-		return;
-	}
-}
+export class Updater {
 
-function wrapElectronBuilderUpdater(updater: AppUpdater): Updater {
-	updater.on('checking-for-update', () => {
-		next({ event: 'checking-for-update' });
-	});
-	updater.on('appimage-filename-updated', path => next({
-		event: 'appimage-filename-updated', path
-	}));
-	for (const event of [
-		'update-available', 'update-not-available',
-		'update-downloaded', 'download-progress',
-		'update-cancelled'
-	]) {
-		updater.on(event as PlatformUpdateEvents['event'], info => next({
-			event: event as any, info
-		}));	
-	}
-	updater.on('error', err => signalErr(err));
+	private readonly sinks: Subject<PlatformUpdateEvents>[] = [];
 
-	let proc: Promise<any>|undefined = undefined;
-	let sinks: Subject<PlatformUpdateEvents>[] = [];
-	const next = (p: PlatformUpdateEvents) => sinks.forEach(s => s.next(p));
-	const signalErr = (err: any) => {
-		sinks.forEach(s => s.error(err));
-		sinks = [];
-		proc = undefined;
-	};
-	const signalCompletion = () => {
-		sinks.forEach(s => s.complete());
-		sinks = [];
-		proc = undefined;
-	};
-
-	return {
-		checkForUpdateAndApply: observer => {
-			const sink = new Subject<PlatformUpdateEvents>();
-			sinks.push(sink);
-			const sub = sink.asObservable()
-			.subscribe(toRxObserver(observer));
-			if (!proc) {
-				proc = updater.checkForUpdatesAndNotify({
-					title: `PrivacySafe platform updated`,
-					body: `Close and restart platform to use new version`
-				})
-				.then(
-					updateRes => {
-						console.log(`🧐 updater.checkForUpdatesAndNotify() ->`, updateRes);
-						setTimeout(() => signalCompletion(), 10*60*1000).unref();
-					},
-					signalErr
-				);
-			}
-			return () => sub.unsubscribe();
+	private constructor(
+		public readonly newBundleVersion: string,
+		public readonly appUpdater: AppUpdater
+	) {
+		this.appUpdater.autoDownload = false;
+		const next = (p: PlatformUpdateEvents) => this.sinks.forEach(s => s.next(p));
+		const signalErr = (err: any) => {
+			this.sinks.forEach(s => s.error(err));
+			this.sinks.splice(0, this.sinks.length);
+		};
+		this.appUpdater.on('checking-for-update', () => {
+			next({ event: 'checking-for-update' });
+		});
+		this.appUpdater.on('appimage-filename-updated', path => next({
+			event: 'appimage-filename-updated', path
+		}));
+		for (const event of [
+			'update-available', 'update-not-available',
+			'update-downloaded', 'download-progress',
+			'update-cancelled'
+		]) {
+			this.appUpdater.on(event as PlatformUpdateEvents['event'], info => next({
+				event: event as any, info
+			}));	
 		}
-	};
+		this.appUpdater.on('error', err => signalErr(err));
+		Object.seal(this);
+	}
+
+	static make(newBundleVersion: string): Updater|undefined {
+		const versionUrl = `${PLATFORM_BUNDLE_URL}/bundles/${newBundleVersion}`;
+		const packInfo = findPackInfo();
+		if (!packInfo) {
+			return;
+		}
+		console.log(`🧐 Updater.make, platform is ${platform()}, packInfo is`, packInfo);
+		const { arch, variant } = packInfo;
+		if (variant === 'AppImage') {
+			return new Updater(newBundleVersion, new AppImageUpdater({
+				provider: 'generic',
+				url: `${versionUrl}/linux/${arch}/`
+			}));			
+		} else if (variant === 'nsis') {
+			return new Updater(newBundleVersion, new NsisUpdater({
+				provider: 'generic',
+				url: `${versionUrl}/windows/${arch}/`
+			}));			
+		} else if ((variant === 'dmg')
+		|| ((platform() === 'darwin') && (variant === 'zip'))) {
+			return new Updater(newBundleVersion, new MacUpdater({
+				provider: 'generic',
+				url: `${versionUrl}/mac/${arch}/`
+			}));			
+		} else {
+			return;
+		}
+	}
+
+	watchUpdaterEvents(observer: Observer<PlatformUpdateEvents>): () => void {
+		const sink = new Subject<PlatformUpdateEvents>();
+		this.sinks.push(sink);
+		const sub = sink.asObservable()
+		.subscribe(toRxObserver(observer));
+		return () => sub.unsubscribe();
+	}
+
 }
+Object.freeze(Updater.prototype);
+Object.freeze(Updater);
 
 
 Object.freeze(exports);

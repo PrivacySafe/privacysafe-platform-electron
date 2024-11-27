@@ -130,14 +130,26 @@ export function datumFromSerialFormOnClientSide(
 			passedByReference: passedObjs.map(({ ref, file, fs }) => {
 				if (ref) {
 					const found = caller.findCallingObjByRef(ref);
-					if (found) { return found; }
-					switch (ref.objType as TransferableRefType) {
-						case 'FileByteSource':
-							return makeSrcCaller(caller, ref as ObjectReference<"FileByteSource">);
-						case 'FileByteSink':
-							return makeSinkCaller(caller, ref as ObjectReference<"FileByteSink">);
-						default:
-							throw Error(`Failed to create proxy for object type ${ref.objType} from a reference`);
+					if (found?.obj) { return found.obj; }
+					const reconstructData = found?.reconstructData;
+					if (reconstructData) {
+						switch (ref.objType as TransferableRefType) {
+							case 'FSImpl':
+								return makeFSCaller(caller, reconstructData as FSMsg);
+							case 'FileImpl':
+								return makeFileCaller(caller, reconstructData as FileMsg);
+							default:
+								throw Error(`Failed to recreate proxy for object type ${ref.objType} from reconstructData`);
+						}
+					} else {
+						switch (ref.objType as TransferableRefType) {
+							case 'FileByteSource':
+								return makeSrcCaller(caller, ref as ObjectReference<"FileByteSource">);
+							case 'FileByteSink':
+								return makeSinkCaller(caller, ref as ObjectReference<"FileByteSink">);
+							default:
+								throw Error(`Failed to create proxy for object type ${ref.objType} from a reference`);
+						}
 					}
 				} else if (file) {
 					return makeFileCaller(caller, file);

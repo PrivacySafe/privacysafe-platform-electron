@@ -16,7 +16,7 @@
 */
 
 import { Component, Service } from "./index";
-import { getAllGUIComponents, getComponentForCommand, getComponentForService, getDefaultLauncher, getWebGUIComponent, isCallerAllowed, isMultiInstanceComponent, makeRPCException, makeShellCmdException, servicesImplementedBy, getComponentsForSystemStartup, getExposedFSResource, makeAppFSResourceException } from "../lib-common/manifest-utils";
+import { getAllGUIComponents, getComponentForCommand, getComponentForService, getDefaultLauncher, getWebGUIComponent, isCallerAllowed, isMultiInstanceComponent, makeRPCException, makeShellCmdException, servicesImplementedBy, getComponentsForSystemStartup, getExposedFSResource, makeAppFSResourceException, getComponent } from "../lib-common/manifest-utils";
 import { NamedProcs } from "../lib-common/processes/named-procs";
 import { WrapAppCAPsAndSetup } from "../test-stand";
 import { DevAppInstanceFromUrl, GUIComponent, TitleGenerator } from "./gui-component";
@@ -24,7 +24,7 @@ import { CoreDriver } from "../core";
 import { ScreenGUIPlacements } from "../window-utils/screen-gui-placements";
 import { assert } from "../lib-common/assert";
 import { ElectronIPCConnectors, SocketIPCConnectors } from "../core/w3n-connectors";
-import { makeAppInitExc } from "../system/apps/installer/system-places";
+import { makeAppInitExc } from "../system/system-places";
 import { DenoComponent } from "./deno-component";
 import { PostponedValuesFixedKeysMap } from "../lib-common/postponed-values-map";
 import { wrapWithTimeout } from "../lib-common/processes/timeouts";
@@ -34,12 +34,14 @@ type ReadonlyFS = web3n.files.ReadonlyFS;
 type WritableFS = web3n.files.WritableFS;
 type AppManifest = web3n.caps.AppManifest;
 type AppComponent = web3n.caps.AppComponent;
+type Runtime = web3n.caps.Runtime;
 type CmdParams = web3n.shell.commands.CmdParams;
 type GUIComponentDef = web3n.caps.GUIComponent;
 type SrvDef = web3n.caps.ServiceComponent;
 type GUISrvDef = web3n.caps.GUIServiceComponent;
 type FileException = web3n.files.FileException;
 type GetFSResource = web3n.shell.GetFSResource;
+type OpenConnectionInfo = web3n.system.monitor.OpenConnectionInfo;
 
 export type GetAppStorage = (type: 'local'|'synced') => Promise<WritableFS>;
 
@@ -70,7 +72,8 @@ export class App {
 		private readonly titleMaker: TitleGenerator,
 		devTools: boolean,
 		private readonly devRootUrl: string|undefined,
-		private readonly devCAPsWrapper: WrapAppCAPsAndSetup|undefined
+		private readonly devCAPsWrapper: WrapAppCAPsAndSetup|undefined,
+		private readonly removeThisFromLiveApps: () => void
 	) {
 		this.devTools = devTools || !!this.devCAPsWrapper;
 		Object.seal(this);
@@ -189,7 +192,7 @@ export class App {
 		await this.whenNoStartProc(entrypoint);
 		const existing = this.instances.get(entrypoint);
 		if (existing && !isMultiInstanceComponent(component)) {
-			(existing as GUIComponent)?.window.focus();
+			(existing as GUIComponent)?.window?.focus();
 			return;
 		}
 		if (component.runtime === 'web-gui') {
@@ -293,6 +296,9 @@ export class App {
 			if ((slotValue as Set<Component>).size === 0) {
 				this.instances.delete(entrypoint);
 			}
+		}
+		if ((this.instances.size === 0) && !this.startProcs.hasProcs()) {
+			this.stopAndClose();
 		}
 	}
 
@@ -412,7 +418,7 @@ export class App {
 		return this.manifest.version;
 	}
 
-	get domain(): string {
+	get appId(): string {
 		return this.manifest.appDomain;
 	}
 
@@ -424,8 +430,13 @@ export class App {
 		}
 	}
 
+	get isClosed(): boolean {
+		return !this.canStartComponents;
+	}
+
 	async stopAndClose(): Promise<void> {
 		this.canStartComponents = false;
+		this.removeThisFromLiveApps();
 		for (const inst of this.instances.values()) {
 			if ((inst as Component).close) {
 				(inst as Component).close();
@@ -434,7 +445,7 @@ export class App {
 					c.close();
 				}
 			}
-		}		
+		}
 	}
 
 	async exposedFSResource(
@@ -459,7 +470,10 @@ export class App {
 						}
 					);
 				}
-				await copyFile(this.appRoot, initValueSrc, fs, path);
+				await this.syncFsInitProc(
+					resourceName,
+					() => copyFile(this.appRoot, initValueSrc, fs, path)
+				);
 				return fs.readonlyFile(path);
 			});
 		} else if (itemType === 'folder') {
@@ -475,12 +489,73 @@ export class App {
 						}
 					);
 				}
-				await copyFolder(this.appRoot, initValueSrc, fs, path);
+				await this.syncFsInitProc(
+					resourceName,
+					() => copyFolder(this.appRoot, initValueSrc, fs, path)
+				);
 				return fs.readonlySubRoot(path);
 			});
 		} else {
 			throw new Error(`Unknown fs resource type ${itemType}`);
 		}
+	}
+
+	private syncFsInitProc(
+		resourceName: string, action: () => Promise<void>
+	): Promise<void> {
+		const procId = `init-fs-resource:${resourceName}`;
+		const proc = this.startProcs.getP(procId) as Promise<void>|undefined;
+		return (proc ? proc : this.startProcs.startOrChain(procId, action));
+	}
+
+	/**
+	 * Info list of open instances of this app's components.
+	 */
+	get openInstances(): {
+		entrypoint: string; runtime: Runtime; numOfInstances: number;
+	}[] {
+		return Array.from(this.instances.entries())
+		.map(([ entrypoint, compOrSet]) => ({
+			entrypoint,
+			runtime: getComponent(this.manifest, entrypoint).runtime,
+			numOfInstances: ((compOrSet as Component).domain ?
+				1 : (compOrSet as Set<Component>).size
+			)
+		}));
+	}
+
+	/**
+	 * Info list of open connection to this app's services.
+	 * If this app has no exposed services, undefined is returned.
+	 */
+	get openSrvConnections(): OpenConnectionInfo[]|undefined {
+		let info: OpenConnectionInfo[]|undefined = undefined;
+		for (const compOrSet of this.instances.values()) {
+			if (!compOrSet) {
+				return;
+			} else if ((compOrSet as Component).domain) {
+				const conns = (compOrSet as Component).listServiceConnections();
+				if (conns) {
+					if (!info) {
+						info = conns;
+					} else if (conns.length > 0) {
+						info.push(...conns);
+					}
+				}
+			} else {
+				for (const component of (compOrSet as Set<Component>)) {
+					const conns = component.listServiceConnections();
+					if (conns) {
+						if (!info) {
+							info = conns;
+						} else if (conns.length > 0) {
+							info.push(...conns);
+						}
+					}
+				}
+			}
+		}
+		return info;
 	}
 
 }

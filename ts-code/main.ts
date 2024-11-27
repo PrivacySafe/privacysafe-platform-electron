@@ -31,92 +31,109 @@ import { clearDefaultWindowMenu } from './window-utils/window-menu';
 import { mkdirSync } from 'fs';
 import { sleep } from './lib-common/processes/sleep';
 import { EventEmitter } from 'events';
+import { processOfUtilityArgsIfGiven } from './main-for-util-invocations';
 
-EventEmitter.defaultMaxListeners = 100;
+const utilityInvocation = processOfUtilityArgsIfGiven();
+if (utilityInvocation) {
 
-// The reason for changing this process' work directory is that down the line
-// unix sockets are used, but these are limited in length for historic reasons.
-// Work around this limitation is in having all processes working directories
-// in our own data and use relative paths whenever it is necessary.
-mkdirSync(utilDir, { recursive: true });
-process.chdir(utilDir);
-
-if (SOCKS5_PROXY) {
-	app.commandLine.appendSwitch('proxy-server', `socks5://${SOCKS5_PROXY}`);
-}
-
-function setupAndStartMainInstance(): InitProc {
-
-	registerAllProtocolShemas();
-
-	const init = new InitProc(
-		makeCoreDriver,
-		{
-			signUpUrl: SIGNUP_URL,
-			dataDir: appDir
-		},
-		devToolsFromARGs(),
-		TEST_STAND_CONF
+	// Utility args like help, version, are not supposed to start main processes.
+	utilityInvocation.then(
+		() => process.exit(0),
+		err => {
+			console.error(`\n❌ Error occured:\n`, err);
+			process.exit(-1);
+		}
 	);
 
-	// Removing default menu
-	clearDefaultWindowMenu();
+} else {
 
-	// Opening process
-	lastValueFrom(fromEvent(app, 'ready').pipe(take(1)))
-	.then(async () => {
+	EventEmitter.defaultMaxListeners = 100;
 
-		recordUnhandledRejectionsInProcess();
+	// The reason for changing this process' work directory is that down the line
+	// unix sockets are used, but these are limited in length for historic reasons.
+	// Work around this limitation is in having all processes working directories
+	// in our own data and use relative paths whenever it is necessary.
+	mkdirSync(utilDir, { recursive: true });
+	process.chdir(utilDir);
 
-		// Prevent closing when all windows are closed by setting listener
-		app.on('window-all-closed', () => {});
-
-		try {
-			await init.boot();
-		} catch (err) {
-			await logError(err);
-			if (!SKIP_APP_ERR_DIALOG_FLAG) {
-				dialog.showErrorBox(
-					`Restart 3NWeb application`,
-					`Error occured on 3NWeb core's initialization. Please restart application.`);
-			}
-			await init.exit(1);
-			return;
-		}
-
-		process.on('SIGINT', () => init.exit(0));
-		process.on('SIGTERM', () => init.exit(0));
-
-	});
-
-	return init;
-}
-
-try {
-
-	// XXX
-	// Use if OPEN_APP_CMD to open only single app, talking via socket.
-	// Note that caller should give --data-dir (always?).
-
-	if (MULTI_INSTANCE_FLAG) {
-		setupAndStartMainInstance();
-	} else {
-		const isFstInstance = app.requestSingleInstanceLock();
-		if (isFstInstance) {
-			app.on('second-instance', async (event, argv, workDir) => {
-				const cmdToken = cmdTokenFromCli(argv);
-				if (cmdToken && !init.runCmd(cmdToken)) {
-					await init.openAllLaunchers();
-				}
-			});
-			const init = setupAndStartMainInstance();
-		} else {
-			sleep(300).then(() => app.quit());
-		}
+	if (SOCKS5_PROXY) {
+		app.commandLine.appendSwitch('proxy-server', `socks5://${SOCKS5_PROXY}`);
 	}
 
-} catch (err) {
-	console.error(`\n❌ Error occured during loading`);
-	console.error(err);
-	process.exit(-1);
+	function setupAndStartMainInstance(): InitProc {
+
+		registerAllProtocolShemas();
+
+		const init = new InitProc(
+			makeCoreDriver,
+			{
+				signUpUrl: SIGNUP_URL,
+				dataDir: appDir
+			},
+			devToolsFromARGs(),
+			TEST_STAND_CONF
+		);
+
+		// Removing default menu
+		clearDefaultWindowMenu();
+
+		// Opening process
+		lastValueFrom(fromEvent(app, 'ready').pipe(take(1)))
+		.then(async () => {
+
+			recordUnhandledRejectionsInProcess();
+
+			// Prevent closing when all windows are closed by setting listener
+			app.on('window-all-closed', () => {});
+
+			try {
+				await init.boot();
+			} catch (err) {
+				await logError(err);
+				if (!SKIP_APP_ERR_DIALOG_FLAG) {
+					dialog.showErrorBox(
+						`Restart 3NWeb application`,
+						`Error occured on 3NWeb core's initialization. Please restart application.`);
+				}
+				await init.exit(1);
+				return;
+			}
+
+			process.on('SIGINT', () => init.exit(0));
+			process.on('SIGTERM', () => init.exit(0));
+
+		});
+
+		return init;
+	}
+
+	try {
+
+		// XXX
+		// Use if OPEN_APP_CMD to open only single app, talking via socket.
+		// Note that caller should give --data-dir (always?).
+
+		if (MULTI_INSTANCE_FLAG) {
+			setupAndStartMainInstance();
+		} else {
+			const isFstInstance = app.requestSingleInstanceLock();
+			if (isFstInstance) {
+				app.on('second-instance', async (event, argv, workDir) => {
+					const cmdToken = cmdTokenFromCli(argv);
+					if (cmdToken && !init.runCmd(cmdToken)) {
+						await init.openAllLaunchers();
+					}
+				});
+				const init = setupAndStartMainInstance();
+			} else {
+				sleep(300).then(() => app.quit());
+			}
+		}
+
+	} catch (err) {
+		console.error(`\n❌ Error occured during loading`);
+		console.error(err);
+		process.exit(-1);
+	}
+
 }

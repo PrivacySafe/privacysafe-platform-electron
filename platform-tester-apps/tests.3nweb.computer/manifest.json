@@ -40,7 +40,7 @@
 				},
 				"mailerid": true,
 				"logout": "all",
-				"log": "all",
+				"logToPlatform": true,
 				"shell": {
 					"userNotifications": true,
 					"startAppCmds": {
@@ -59,7 +59,8 @@
 				"connectivity": "check",
 				"system": {
 					"apps": "all",
-					"platform": "all"
+					"platform": "all",
+					"monitor": "all"
 				}
 			},
 			"windowOpts": {

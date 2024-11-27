@@ -19,6 +19,7 @@ type W3N = web3n.system.W3N;
 type SysUtils = web3n.system.SysUtils;
 type Apps = web3n.system.apps.Apps;
 type Platform = web3n.system.platform.Platform;
+type SystemMonitor = web3n.system.monitor.SystemMonitor;
 type RequestedCAPs = web3n.system.RequestedCAPs;
 
 export function makeSystemCAP(
@@ -26,10 +27,12 @@ export function makeSystemCAP(
 ): W3N['system'] {
 	const apps = makeAppsCAP(systemCapFns.apps!, capsReq);
 	const platform = makePlatformCAP(systemCapFns.platform!, capsReq);
-	if (apps || platform) {
+	const monitor = makeSystemMonitorCAP(systemCapFns.monitor!, capsReq);
+	if (apps || platform || monitor) {
 		return {
 			apps,
-			platform
+			platform,
+			monitor
 		};
 	}
 }
@@ -59,6 +62,14 @@ function makePlatformCAP(
 ): SysUtils['platform'] {
 	if (capsReq.system?.platform === 'all') {
 		return platCapFns;
+	}
+}
+
+function makeSystemMonitorCAP(
+	sysMonCapFns: SystemMonitor, capsReq: RequestedCAPs
+): SysUtils['monitor'] {
+	if (capsReq.system?.monitor === 'all') {
+		return sysMonCapFns;
 	}
 }
 

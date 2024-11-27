@@ -16,7 +16,7 @@
 */
 
 import { ClientSideConnector, ServiceConnector } from "../../rpc";
-import { makeAppInitExc } from "../../system/apps/installer/system-places";
+import { makeAppInitExc } from "../../system/system-places";
 import { Component } from "../../app-n-components";
 import { makeRPCException } from "../../lib-common/manifest-utils";
 

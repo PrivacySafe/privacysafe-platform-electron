@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2015, 3NSoft Inc.
+ Copyright (C) 2015, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -42,12 +42,12 @@ export class NamedProcs {
 	}
 	
 	private insertPromise<T>(id: string, promise: Promise<T>): Promise<T> {
-		promise = promise.finally(() => {
-			if (this.promises.get(id) === promise) {
+		const promiseToRegister = promise.catch(noop).then(() => {
+			if (this.promises.get(id) === promiseToRegister) {
 				this.promises.delete(id);
 			}
 		});
-		this.promises.set(id, promise);
+		this.promises.set(id, promiseToRegister);
 		return promise;
 	}
 	
@@ -89,13 +89,24 @@ export class NamedProcs {
 	startOrChain<T>(id: string, action: Action<T>): Promise<T> {
 		const promise = this.promises.get(id);
 		if (promise) {
-			const next = promise.then(() => { return action(); });
+			const next = promise.then(() => action());
 			return this.insertPromise(id, next);
 		} else {
 			return this.insertPromise(id, action());
 		}
 	}
+
+	/**
+	 * This method tells if there are any procs in this container.
+	 * @returns true is there is at least on process, and false otherwise.
+	 */
+	hasProcs(): boolean {
+		return (this.promises.size > 0);
+	}
 	
 }
 Object.freeze(NamedProcs.prototype);
 Object.freeze(NamedProcs);
+
+
+function noop() {}

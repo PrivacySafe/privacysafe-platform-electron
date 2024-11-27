@@ -56,6 +56,12 @@ export class PostponedValuesFixedKeysMap<K, T> {
 		}
 	}
 
+	values(): T[] {
+		return Array.from(this.slots.values())
+		.map(({ value }) => value)
+		.filter(value => !!value) as T[];
+	}
+
 }
 Object.freeze(PostponedValuesFixedKeysMap.prototype);
 Object.freeze(PostponedValuesFixedKeysMap);

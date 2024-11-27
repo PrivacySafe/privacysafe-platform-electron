@@ -36,7 +36,7 @@ declare const w3n: web3n.testing.CommonW3N;
 		await import('./tests/rpc/transferable-objects.js');
 		await import('./tests/shell.js');
 		await import('./tests/fs-resource.js');
-		await import('./tests/system/apps.js');
+		await import('./tests/system.js');
 	} else {
 		(window as any).skipW3NTests = true;
 		addMsgToPage(`Secondary test user '${userId}'`);

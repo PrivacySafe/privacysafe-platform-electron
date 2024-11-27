@@ -20,12 +20,12 @@ import { CoreDriver, makeCoreDriver } from '../core';
 import { ElectronIPCConnectors, SocketIPCConnectors } from '../core/w3n-connectors';
 import { logError } from '../confs';
 import { DevToolsAppAllowance } from '../process-args';
-import { SystemPlaces } from '../system/apps/installer/system-places';
-import { AppDownloader } from '../system/apps/downloader';
+import { SystemPlaces } from '../system/system-places';
+import { AppDownloader } from '../system/apps-downloader';
 import { UserAppInfo } from '../desktop-integration';
 import { Subject } from 'rxjs';
 import { WrapStartupCAPs, DevAppParams, DevAppParamsGetter, DevSiteParamsGetter } from '../test-stand';
-import { Component, Service, AppsByDomain } from '../app-n-components';
+import { Component, Service, LiveApps } from '../app-n-components';
 import { sleep } from '../lib-common/processes/sleep';
 import { NamedProcs } from '../lib-common/processes/named-procs';
 import { MAIN_GUI_ENTRYPOINT } from '../lib-common/manifest-utils';
@@ -65,7 +65,7 @@ export class UserApps {
 	private readonly sysPlaces: SystemPlaces;
 
 	private startupApp: StartupApp|undefined = undefined;
-	private readonly apps: AppsByDomain;
+	private readonly apps: LiveApps;
 
 	// XXX sites should get similar treatment to app
 	private readonly siteStartingProcs = new NamedProcs();
@@ -90,9 +90,11 @@ export class UserApps {
 		const makeSystemCapFns = () => systemCAPsFrom(
 			this.sysPlaces,
 			appDownloader,
+			this.apps,
 			this.openApp.bind(this),
 			this.executeCommand.bind(this),
-			this.apps.closeAppToUninstall.bind(this.apps),
+			this.triggerAllStartupLaunchers.bind(this),
+			this.apps.closeAppsAfterUpdate.bind(this.apps),
 			getPlatform()
 		);
 		this.core = makeDriver(
@@ -106,7 +108,7 @@ export class UserApps {
 		.then(() => this.sysPlaces.getPlatformComponentFS(
 			'local', platformComponentName.guiPlacement
 		));
-		this.apps = new AppsByDomain(
+		this.apps = new LiveApps(
 			this.sysPlaces.findInstalledApp.bind(this.sysPlaces),
 			this.core.makeCAPsForAppComponent.bind(this.core),
 			this.getAppStorage.bind(this),
@@ -229,17 +231,17 @@ export class UserApps {
 	}
 
 	async doUserSystemStartup(): Promise<void> {
+		this.triggerAllStartupLaunchers();
 		await this.openApp(LAUNCHER_APP_DOMAIN);
-		// XXX need a more dynamic choice of what should be loaded on startup 
-		const chatAppDomain = 'chat.app.privacysafe.io';
-		const contactsAppDomain = 'contacts.app.privacysafe.io';
-		[ chatAppDomain, contactsAppDomain ]
-		.map(domain =>
-			this.apps.get(domain, this.devToolsAllowance(domain))
-			.then(chat => chat.loadOnStartup())
-			.catch(err => console.error(err))
-		);
+	}
 
+	private async triggerAllStartupLaunchers(): Promise<void> {
+		const lst = await this.sysPlaces.appsToLaunchOnSystemStartup();
+		const startupProcs = lst.map(domain =>
+			this.apps.get(domain, this.devToolsAllowance(domain))
+			.then(app => app.loadOnStartup())
+		);
+		await Promise.all(startupProcs);
 	}
 
 	private async startAppWithCmd(
@@ -343,9 +345,11 @@ function reverseDomain(domain: string): string {
 
 function systemCAPsFrom(
 	sysPlaces: SystemPlaces, appDownloader: AppDownloader,
+	liveApps: LiveApps,
 	openApp: UserApps['openApp'],
 	executeCommand: UserApps['executeCommand'],
-	closeAppToUninstall: AppsByDomain['closeAppToUninstall'],
+	triggerAllStartupLaunchers: () => Promise<void>,
+	closeAppsAfterUpdate: LiveApps['closeAppsAfterUpdate'],
 	platform: Platform
 ): SysUtils {
 	const apps: Apps = {
@@ -353,11 +357,11 @@ function systemCAPsFrom(
 			listApps: sysPlaces.listApps.bind(sysPlaces),
 			openApp,
 			executeCommand,
+			triggerAllStartupLaunchers,
+			closeAppsAfterUpdate,
 			getAppVersions: sysPlaces.getAppVersions.bind(sysPlaces),
 			getAppManifest: sysPlaces.getAppManifest.bind(sysPlaces),
-			getAppFileBytes: sysPlaces.getAppFileBytes.bind(
-				sysPlaces
-			),
+			getAppFileBytes: sysPlaces.getAppFileBytes.bind(sysPlaces),
 			watchApps: sysPlaces.watchApps.bind(sysPlaces)
 		},
 		downloader: {
@@ -375,18 +379,20 @@ function systemCAPsFrom(
 			)
 		},
 		installer: {
-			unpackBundledApp: sysPlaces.unpackBundledApp.bind(
-				sysPlaces
-			),
-			installApp: sysPlaces.installApp.bind(sysPlaces),
+			unpackBundledApp: sysPlaces.unpackBundledApp.bind(sysPlaces),
+			installApp: async (id, version) => {
+				await sysPlaces.installApp(id, version);
+				return liveApps.followupAppInstall(id, version);
+			},
 			uninstallApp: async id => {
-				await closeAppToUninstall(id);
+				await liveApps.closeAppToUninstall(id);
 				await sysPlaces.uninstallApp(id);
 			},
 			removeAppPack: sysPlaces.removeAppPack.bind(sysPlaces)
 		}
 	};
-	return { apps, platform };
+	const monitor = liveApps.makeMonitor();
+	return { apps, platform, monitor };
 }
 
 

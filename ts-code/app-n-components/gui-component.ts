@@ -32,6 +32,7 @@ type WindowOptions = web3n.ui.WindowOptions;
 type Session = Electron.Session;
 type W3N = web3n.caps.W3N;
 type ReadonlyFS = web3n.files.ReadonlyFS;
+type OpenConnectionInfo = web3n.system.monitor.OpenConnectionInfo;
 
 export type TitleGenerator = (contentTitle: string) => string;
 
@@ -196,6 +197,12 @@ export class GUIComponent implements Component {
 		);
 		const url = `${protoSchemas.W3N_APP.scheme}://${this.domain}${path}`;
 		await this.window.loadURL(url);
+	}
+
+	listServiceConnections(): OpenConnectionInfo[]|undefined {
+		return this.services?.values().flatMap(
+			srv => srv.listOpenConnections(this.entrypoint)
+		);
 	}
 
 }

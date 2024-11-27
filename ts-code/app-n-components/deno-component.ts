@@ -29,6 +29,7 @@ import { PostponedValuesFixedKeysMap } from "../lib-common/postponed-values-map"
 type ReadonlyFS = web3n.files.ReadonlyFS;
 type FileByteSource = web3n.files.FileByteSource;
 type W3N = web3n.caps.W3N;
+type OpenConnectionInfo = web3n.system.monitor.OpenConnectionInfo;
 
 
 export class DenoComponent implements Component {
@@ -223,6 +224,12 @@ export class DenoComponent implements Component {
 
 	get pid(): number|undefined {
 		return this.proc?.pid;
+	}
+
+	listServiceConnections(): OpenConnectionInfo[]|undefined {
+		return this.services?.values().flatMap(
+			srv => srv.listOpenConnections(this.entrypoint)
+		);
 	}
 
 }

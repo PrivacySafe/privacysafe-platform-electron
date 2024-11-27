@@ -20,7 +20,7 @@ import { CoreConf } from 'core-3nweb-client-lib';
 import { makeCoreDriver } from '../core';
 import { ElectronIPCConnectors, SocketIPCConnectors } from '../core/w3n-connectors';
 import { app } from 'electron';
-import { logError, platformVersion } from '../confs';
+import { logError } from '../confs';
 import { setTimeout } from 'timers';
 import { DevToolsAppAllowance } from '../process-args';
 import { PlatformDownloader } from '../system/platform';
@@ -94,20 +94,27 @@ export class InitProc {
 			const excIds = this.openedUsers(true);
 			const proc = apps.openStartupApp(excIds)
 			.then(async ({ init }) => {
-				if (!(await init) && (this.userApps.size === 0)) {
-					this.exit(0);
-					return;
+				const newCoreInitialized = await init;
+				if (newCoreInitialized) {
+					this.userApps.set(toCanonicalAddress(apps.userId), apps);
+					this.watchUserAppsEvents(apps);
+					apps.closeStartupApp();
+					return true;
+				} else {
+					if (this.userApps.size === 0) {
+						this.exit(0);
+					}
+					return false;
 				}
-				this.userApps.set(toCanonicalAddress(apps.userId), apps);
-				this.watchUserAppsEvents(apps);
-				apps.closeStartupApp();
 			})
 			.finally(() => {
 				this.startingUser = undefined;
 			})
-			.then(() => (
-				(this.userApps.size > 0) ? this.loadUserSystem(apps) : undefined)
-			);
+			.then(canContinueLoadingApps => {
+				if (canContinueLoadingApps) {
+					this.loadUserSystem(apps);
+				}
+			});
 			this.startingUser = {
 				proc, focusWindow: () => apps.focusStartupWindow()
 			};
@@ -133,7 +140,7 @@ export class InitProc {
 	private async loadUserSystem(apps: UserApps): Promise<void> {
 		this.updateOpenWindows();
 		await Promise.all([
-			// open app menu as main ui and close startup window
+			// trigger user system startup
 			apps.doUserSystemStartup(),
 			// update desktop elements on addition of another user
 			apps.listInstalled()
@@ -280,15 +287,12 @@ export class InitProc {
 	}
 
 	private readonly platformCAP: web3n.system.platform.Platform = {
-		getCurrentVersion: async () => platformVersion,
+		getCurrentVersion: this.platform.getCurrentVersion.bind(this.platform),
 		getChannels: this.platform.getChannels.bind(this.platform),
-		getLatestVersion: this.platform.getLatestVersion.bind(
-			this.platform),
-		getVersionList: this.platform.getVersionList.bind(this.platform),
-		availableUpdateType: this.platform.availableUpdateType.bind(
-			this.platform),
-		downloadAndApplyUpdate: this.platform.downloadAndApplyUpdate.bind(
-			this.platform)
+		getLatestVersion: this.platform.getLatestVersion.bind(this.platform),
+		setupUpdater: this.platform.setupUpdater.bind(this.platform),
+		downloadUpdate: this.platform.downloadUpdate.bind(this.platform),
+		quitAndInstall: this.platform.quitAndInstall.bind(this.platform)
 	};
 
 	async exit(exitCode = 0): Promise<void> {

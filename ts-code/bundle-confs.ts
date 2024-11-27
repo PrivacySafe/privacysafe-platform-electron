@@ -98,9 +98,10 @@ export const DATA_DIR_NAME = (() => {
 export const PLATFORM_BUNDLE_URL = getConfStringConst('bundle-base-url');
 
 export function isBundledApp(appDomain: string): boolean {
+	// XXX debug comment of bundled here
 	return (
-		(appDomain === LAUNCHER_APP_DOMAIN) ||
-		confConstants['bundled-apps'].includes(appDomain)
+		(appDomain === LAUNCHER_APP_DOMAIN) //||
+		//confConstants['bundled-apps'].includes(appDomain)
 	);
 }
 

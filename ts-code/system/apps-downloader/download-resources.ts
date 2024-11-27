@@ -15,9 +15,9 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { doBodylessRequest } from "../../../electron/request-utils";
-import { makeRuntimeException } from "../../../lib-common/exceptions/runtime";
-import { assert } from "../../../lib-common/assert";
+import { doBodylessRequest } from "../../electron/request-utils";
+import { makeRuntimeException } from "../../lib-common/exceptions/runtime";
+import { assert } from "../../lib-common/assert";
 
 type AppDistributionList = web3n.system.apps.AppDistributionList;
 type DistChannels = web3n.system.apps.DistChannels;

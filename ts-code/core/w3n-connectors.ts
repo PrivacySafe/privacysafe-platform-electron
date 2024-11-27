@@ -32,7 +32,7 @@ import { SingleProc } from "../lib-common/processes/single";
 import { DenoLikeSocket } from "../lib-common/deno-like-socket";
 import { getPortPromise } from "portfinder";
 import { exposeConnectivityCAP } from "../connectivity/connectivity-cap-ipc";
-import { exposeSystemCAP } from "../system/apps/ipc-core-side";
+import { exposeSystemCAP } from "../system/ipc-core-side";
 import { exposeShellCAPs } from "../shell/ipc-core-side";
 import { exposeRpcCAP } from "../rpc/ipc-core-side";
 

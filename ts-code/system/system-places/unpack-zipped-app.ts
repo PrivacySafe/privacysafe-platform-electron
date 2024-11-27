@@ -15,15 +15,15 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { utf8 } from '../../../lib-common/buffer-utils';
-import { makeRuntimeException } from '../../../lib-common/exceptions/runtime';
+import { utf8 } from '../../lib-common/buffer-utils';
+import { makeRuntimeException } from '../../lib-common/exceptions/runtime';
 import { Worker } from 'worker_threads';
-import { assert } from '../../../lib-common/assert';
-import { defer, Deferred } from '../../../lib-common/processes/deferred';
-import { errWithCause } from '../../../lib-common/exceptions/error';
+import { assert } from '../../lib-common/assert';
+import { defer, Deferred } from '../../lib-common/processes/deferred';
+import { errWithCause } from '../../lib-common/exceptions/error';
 import { ListRequest, ReadRequest, ReplyMsg, ZipEntryInfo } from './unzip-worker';
 import { join } from 'path';
-import { toAsarUnpacked } from '../../../bundle-confs';
+import { toAsarUnpacked } from '../../bundle-confs';
 
 type WritableFS = web3n.files.WritableFS;
 type BundleUnpackProgress = web3n.system.apps.BundleUnpackProgress;

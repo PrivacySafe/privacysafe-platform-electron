@@ -29,6 +29,7 @@ type OutgoingMsg = web3n.rpc.service.OutgoingMsg;
 type Observer<T> = web3n.Observer<T>;
 type AllowedCallers = web3n.caps.AllowedCallers;
 type RPCException = web3n.rpc.RPCException;
+type OpenConnectionInfo = web3n.system.monitor.OpenConnectionInfo;
 
 export type GetServiceToHandleNewCall = (
 	caller: Component, appDomain: string, service: string
@@ -46,9 +47,8 @@ export function makeClientSideConnector(
 ): ClientSideConnector {
 	return async (caller, appDomain, service) => {
 		const instance = await srvToHandleCall(caller, appDomain, service);
-		instance.ensureCallerAllowed(caller.domain, caller.entrypoint);
 		return await callWithTimeout(
-			() => instance.connect(),
+			() => instance.connect(caller.domain, caller.entrypoint),
 			10000,
 			() => `Timeout in connecting to service ${service} from app ${appDomain}`
 		);
@@ -63,34 +63,38 @@ class Connection {
 	private initBuffer: IncomingMsg[]|undefined = [];
 	private srvSink: Observer<IncomingMsg>|undefined = undefined;
 	private readonly onCloseFns = new Set<()=>void>();
-	private constructor(
-		public readonly appDomain: string,
-		public readonly srvName: string
+
+	constructor(
+		public readonly appId: string,
+		public readonly srvName: string,
+		public readonly callerApp: string,
+		public readonly callerComponent: string
 	) {
 		Object.seal(this);
 	}
 
-	static makePair(appDomain: string, srvName: string): {
+	makePair(): {
 		clientSide: RPCConnection; srvSide: IncomingConnection;
-		doOnClose: (cleanup: ()=>void) => void;
 	} {
-		const connection = new Connection(appDomain, srvName);
-		const close = connection.close.bind(connection);
+		const close = this.close.bind(this);
 		const srvSide: IncomingConnection = {
 			close,
-			send: connection.send.bind(connection),
-			watch: connection.watch.bind(connection),
+			send: this.send.bind(this),
+			watch: this.watch.bind(this),
 		};
 		const clientSide: RPCConnection = {
 			close,
-			makeRequestReplyCall: connection.makeRequestReplyCall.bind(connection),
-			startObservableCall: connection.startObservableCall.bind(connection),
+			makeRequestReplyCall: this.makeRequestReplyCall.bind(this),
+			startObservableCall: this.startObservableCall.bind(this),
 		};
 		return {
-			clientSide, srvSide,
-			doOnClose: cleanup => connection.onCloseFns.add(cleanup)
+			clientSide, srvSide
 		};
 	}
+
+	readonly doOnClose = (cleanup: ()=>void): void => {
+		this.onCloseFns.add(cleanup);
+	};
 
 	async close(): Promise<void> {
 		if (!this.acceptsMsgs()) { return; }
@@ -135,7 +139,7 @@ class Connection {
 		}
 	}
 
-	private acceptsMsgs(): boolean {
+	acceptsMsgs(): boolean {
 		return !!(this.srvSink || this.initBuffer);
 	}
 
@@ -169,7 +173,7 @@ class Connection {
 	private makeExc(
 		flags: Partial<RPCException>, params?: Partial<RPCException>
 	): RPCException {
-		return makeRPCException(this.appDomain, this.srvName, flags, params);
+		return makeRPCException(this.appId, this.srvName, flags, params);
 	}
 
 	async send({ callNum, callStatus, data, err }: OutgoingMsg): Promise<void> {
@@ -250,6 +254,7 @@ export class ServiceConnector implements Service {
 	private  deferredSink: Deferred<Observer<IncomingConnection>>|undefined =
 		defer();
 	private acceptingCalls = true;
+	private readonly connections = new Set<Connection>();
 
 	constructor(
 		public readonly appDomain: string,
@@ -265,6 +270,7 @@ export class ServiceConnector implements Service {
 			canHandleCall: this.canHandleCall.bind(this),
 			ensureCallerAllowed: this.ensureCallerAllowed.bind(this),
 			connect: this.connect.bind(this),
+			listOpenConnections: this.listOpenConnections.bind(this)
 		};
 	}
 
@@ -306,10 +312,11 @@ export class ServiceConnector implements Service {
 		return makeRPCException(this.appDomain, this.srvName, flags);
 	}
 
-	async connect(): Promise<{
+	async connect(callerApp: string, callerComponent: string): Promise<{
 		connection: RPCConnection;
 		doOnClose: (cleanup: ()=>void) => void;
 	}> {
+		this.ensureCallerAllowed(callerApp, callerComponent);
 		if (this.acceptingCalls) {
 			if (this.forOneConnectionOnly) {
 				this.acceptingCalls = false;
@@ -318,11 +325,39 @@ export class ServiceConnector implements Service {
 			throw this.makeExc({ connectionNotAccepted: true });
 		}
 		const srvSideSink = await this.getConnectionSink();
-		const {
-			clientSide: connection, srvSide, doOnClose
-		} = Connection.makePair(this.appDomain, this.srvName);
+		const connection = new Connection(
+			this.appDomain, this.srvName, callerApp, callerComponent
+		);
+		this.connections.add(connection);
+		connection.doOnClose(() => this.connections.delete(connection));
+		const { srvSide, clientSide } = connection.makePair();
 		srvSideSink.next!(srvSide);
-		return { connection, doOnClose };
+		return { connection: clientSide, doOnClose: connection.doOnClose };
+	}
+
+	listOpenConnections(entrypoint: string): OpenConnectionInfo[] {
+		const lst: OpenConnectionInfo[] = [];
+		for (const c of this.connections) {
+			if (!c.acceptsMsgs()) {
+				continue;
+			}
+			lst.push({
+				service: this.srvName,
+				entrypoint,
+				caller: ((c.callerApp === c.appId) ?
+					{
+						thisAppComponent: c.callerComponent
+					} :
+					{
+						otherApp: {
+							appId: c.callerApp,
+							component: c.callerComponent
+						}
+					}
+				)
+			});
+		}
+		return lst;
 	}
 
 	close(): void {

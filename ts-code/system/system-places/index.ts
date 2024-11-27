@@ -19,16 +19,16 @@ import { FactoryOfFSs, reverseDomain, sysFolders } from 'core-3nweb-client-lib';
 import { join } from 'path';
 import { from, Observable, Subject } from 'rxjs';
 import { mergeMap, share } from 'rxjs/operators';
-import { BUNDLED_APPS_FOLDER, BUNDLED_APP_PACKS_FOLDER, LAUNCHER_APP_DOMAIN, STARTUP_APP_DOMAIN, isBundledApp } from '../../../bundle-confs';
-import { logError } from '../../../confs';
-import { assert } from '../../../lib-common/assert';
-import { FileException, readdir, stat, readFile } from '../../../lib-common/async-fs-node';
-import { makeRuntimeException } from '../../../lib-common/exceptions/runtime';
-import { checkAppManifest } from '../../../lib-common/manifest-utils';
-import { toRxObserver } from '../../../lib-common/utils-for-observables';
+import { BUNDLED_APPS_FOLDER, BUNDLED_APP_PACKS_FOLDER, LAUNCHER_APP_DOMAIN, STARTUP_APP_DOMAIN, isBundledApp } from '../../bundle-confs';
+import { logError } from '../../confs';
+import { assert } from '../../lib-common/assert';
+import { FileException, readdir, stat, readFile } from '../../lib-common/async-fs-node';
+import { makeRuntimeException } from '../../lib-common/exceptions/runtime';
+import { checkAppManifest, hasStartupLaunchersDefined } from '../../lib-common/manifest-utils';
+import { toRxObserver } from '../../lib-common/utils-for-observables';
 import { readManifestFromZip, unzipAppVersion, APP_ROOT_FOLDER, MANIFEST_FILE, readFileBytesFromZip } from './unpack-zipped-app';
-import { SingleProc } from '../../../lib-common/processes/single';
-import { appAndManifestOnDev, appManifestOnDev } from '../../../app-n-components/utils';
+import { SingleProc } from '../../lib-common/processes/single';
+import { appAndManifestOnDev, appManifestOnDev } from '../../app-n-components/utils';
 
 type Observer<T> = web3n.Observer<T>;
 type ReadonlyFS = web3n.files.ReadonlyFS;
@@ -39,6 +39,7 @@ type BundleUnpackProgress = web3n.system.apps.BundleUnpackProgress;
 type AppVersions = web3n.system.apps.AppVersions;
 type AppState = web3n.system.apps.AppState;
 type AppEvent = web3n.system.apps.AppEvent;
+type SystemParamsForInstalledApp = web3n.system.apps.SystemParamsForInstalledApp;
 type AppManifest = web3n.caps.AppManifest;
 
 const CURRENT_FNAME = 'current';
@@ -46,6 +47,14 @@ const COMPLETE_PACKS_DIR = 'complete';
 const PARTIAL_PACKS_DIR = 'partial';
 
 const PLATFORM_PREFIX = 'computer.3nweb.platform';
+
+const INSTALLED_APP_SYSTEM_PARAMS_ATTR = 'installed_app_system_params';
+
+const sysApps = [
+	STARTUP_APP_DOMAIN, LAUNCHER_APP_DOMAIN
+	,'chat.app.privacysafe.io'
+	,'contacts.app.privacysafe.io'
+];
 
 
 export class SystemPlaces {
@@ -95,18 +104,8 @@ export class SystemPlaces {
 			)) {
 				infos.set(info.id, info);
 			}
-			for (const info of await listInstalledBundledApps()) {
+			for (const info of await listInstalledBundledApps(sysApps)) {
 				infos.set(info.id, info);
-			}
-		}
-		if (!filter || filter.includes('bundled')) {
-			for (const info of await listBundledApps()) {
-				const existing = infos.get(info.id);
-				if (!existing) {
-					infos.set(info.id, info);
-				} else if (!existing.bundled) {
-					existing.bundled = info.bundled;
-				}
 			}
 		}
 		if (!filter || filter.includes('packs')) {
@@ -120,6 +119,16 @@ export class SystemPlaces {
 					infos.set(info.id, info);
 				}
 			}
+			for (const { id, version } of await listBundledAppPacks()) {
+				const existing = infos.get(id);
+				if (!existing) {
+					infos.set(id, { id, packs: [ version ] });
+				} else if (!existing.packs) {
+					existing.packs = [ version ];
+				} else if (!existing.packs.includes(version)) {
+					existing.packs.push(version);
+				}
+			}
 		}
 		return Array.from(infos.values());
 	}
@@ -130,18 +139,21 @@ export class SystemPlaces {
 		const appFolder = reverseDomain(id);
 		const info: AppVersions = { id };
 		if (!filter || filter.includes('current')) {
-			const appFS = await getInstalledAppDir(
-				await this.getAppsCodeFS(), appFolder
-			);
-			if (appFS) {
-				const m = await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
-				info.current = m.version;
-			}
-		}
-		if (!filter || filter.includes('bundled')) {
-			const m = await getBundledPackManifest(id);
-			if (m) {
-				info.bundled = m.version;
+			const bundledAppManifest = await appManifestOnDev(id)
+			.catch((exc: FileException) => {
+				if (exc.notFound) { return; }
+				else { throw exc; }
+			});
+			if (bundledAppManifest) {
+				info.current = bundledAppManifest.version;
+			} else {
+				const appFS = await getInstalledAppDir(
+					await this.getAppsCodeFS(), appFolder
+				);
+				if (appFS) {
+					const m = await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
+					info.current = m.version;
+				}
 			}
 		}
 		if (!filter || filter.includes('packs')) {
@@ -151,8 +163,16 @@ export class SystemPlaces {
 			if (completePacks) {
 				info.packs = completePacks.packs;
 			}
+			const m = await getBundledPackManifest(id);
+			if (m) {
+				if (!info.packs) {
+					info.packs = [ m.version ];
+				} else if (!info.packs.includes(m.version)) {
+					info.packs.push(m.version);
+				}
+			}
 		}
-		return ((!info.current && !info.bundled && !info.packs) ?
+		return ((!info.current && !info.packs) ?
 			undefined : info
 		);
 	}
@@ -247,13 +267,28 @@ export class SystemPlaces {
 			const pack = await (await this.getPackagesFS()).readonlySubRoot(
 				completePackAppVersionFolder(id, version)
 			);
-			await checkPackBeforeInstall(pack, id, version);
+			const hasStartupLaunchers = await checkAppPack(pack, id, version);
 			const appsCode = await this.getAppsCodeFS();
 			const current =`${reverseDomain(id)}/${CURRENT_FNAME}`;
+			let sysParamsForApp: SystemParamsForInstalledApp|undefined = undefined;
 			if (await appsCode.checkLinkPresence(current)) {
+				sysParamsForApp = await appsCode.getXAttr(
+					current, INSTALLED_APP_SYSTEM_PARAMS_ATTR
+				);
 				await appsCode.deleteLink(current);
 			}
+			if (!sysParamsForApp) {
+				sysParamsForApp = {
+					hasStartupLaunchers
+				};
+			}
 			await appsCode.link(current, pack);
+			await appsCode.updateXAttrs(current, { set: {
+				[INSTALLED_APP_SYSTEM_PARAMS_ATTR]: sysParamsForApp
+			} });
+			// 
+			// XXX need to sync, from link and up to appsCode, as needed
+			// 
 			this.appEventSink.next({ type: 'installed', id, version });
 		} catch (err) {
 			throw makeAppInitExc(id, { errAtInstall: true }, { cause: err });
@@ -280,10 +315,27 @@ export class SystemPlaces {
 
 	async findInstalledApp(
 		appDomain: string
-	): ReturnType<typeof appAndManifestFrom> {
+	): Promise<InstalledAppParams> {
 		const appsCode = await this.getAppsCodeFS();
-		const appAndManifest = await findInstalledApp(appDomain, appsCode);
-		return appAndManifest;
+		const appParams = await findInstalledApp(appDomain, appsCode);
+		return appParams;
+	}
+
+	async appsToLaunchOnSystemStartup(): Promise<string[]> {
+		const appsCode = await this.getAppsCodeFS();
+		const appsWithStartupLaunchers: string[] = [];
+		const lst = await appsCode.listFolder('.');
+		for (const { name, isFolder } of lst) {
+			if (isFolder) {
+				const sysParamsForApp = await appsCode.getXAttr(
+					`${name}/${CURRENT_FNAME}`, INSTALLED_APP_SYSTEM_PARAMS_ATTR
+				) as SystemParamsForInstalledApp;
+				if (sysParamsForApp && sysParamsForApp.hasStartupLaunchers) {
+					appsWithStartupLaunchers.push(reverseDomain(name));
+				}
+			}
+		}
+		return appsWithStartupLaunchers;
 	}
 
 	async makeDownloadFolder(
@@ -361,9 +413,9 @@ export function makeAppInitExc(
 	return makeRuntimeException<AppInitException>('app-init', params, flags);
 }
 
-async function checkPackBeforeInstall(
+async function checkAppPack(
 	pack: ReadonlyFS, id: string, version: string
-): Promise<void> {
+): Promise<boolean> {
 	const { manifest, appRoot } = await appAndManifestFrom(pack)
 	.catch(exc => {
 		throw makeRuntimeException<AppInitException>('app-init',
@@ -371,6 +423,7 @@ async function checkPackBeforeInstall(
 	});
 	try {
 		checkAppManifest(manifest, id, version);
+		return hasStartupLaunchersDefined(manifest);
 	} catch (exc) {
 		throw makeRuntimeException<AppInitException>('app-init', {
 			appDomain: id, version,
@@ -382,12 +435,18 @@ async function checkPackBeforeInstall(
 	}
 }
 
+export interface InstalledAppParams {
+	appRoot: ReadonlyFS;
+	manifest: AppManifest;
+	sysParamsForApp: SystemParamsForInstalledApp;
+}
+
 async function findInstalledApp(
 	appDomain: string, appsCode: ReadonlyFS
-): ReturnType<typeof appAndManifestFrom> {
-	const current = await appsCode.readLink(
-		`${reverseDomain(appDomain)}/${CURRENT_FNAME}`
-	).catch((exc: FileException) => {
+): Promise<InstalledAppParams> {
+	const pathToLink = `${reverseDomain(appDomain)}/${CURRENT_FNAME}`;
+	const current = await appsCode.readLink(pathToLink)
+	.catch((exc: FileException) => {
 		throw (exc.notFound ?
 			makeAppInitExc(appDomain, { notInstalled: true }) :
 			exc
@@ -400,7 +459,16 @@ async function findInstalledApp(
 		);
 	}
 	const appFS = await current.target() as WritableFS;
-	return appAndManifestFrom(appFS);
+	const { appRoot, manifest } = await appAndManifestFrom(appFS);
+	let sysParamsForApp: SystemParamsForInstalledApp = await appsCode.getXAttr(
+		pathToLink, INSTALLED_APP_SYSTEM_PARAMS_ATTR
+	);
+	if (!sysParamsForApp) {
+		sysParamsForApp = {
+			hasStartupLaunchers: hasStartupLaunchersDefined(manifest)
+		};
+	}
+	return { appRoot, manifest, sysParamsForApp };
 }
 
 export async function appAndManifestFrom(
@@ -505,7 +573,9 @@ async function getInstalledAppDir(
 	return await current.target() as ReadonlyFS;
 }
 
-async function listBundledApps(): Promise<AppVersions[]> {
+export async function listBundledAppPacks(): Promise<{
+	id: string; version: string;
+}[]> {
 	const appManifestsPromises = (await readdir(BUNDLED_APP_PACKS_FOLDER)
 	.catch((exc: FileException) => {
 		if (exc.notFound) { return [] as string[]; }
@@ -517,31 +587,32 @@ async function listBundledApps(): Promise<AppVersions[]> {
 	.filter(info => !!info)
 	.map(m => ({
 		id: m!.appDomain,
-		bundled: m!.version
-	} as AppVersions));
+		version: m!.version
+	}));
 	return infos;
 }
 
-async function listInstalledBundledApps(): Promise<AppVersions[]> {
-	const appManifestsPromises = (await readdir(BUNDLED_APPS_FOLDER)
+export async function listInstalledBundledApps(
+	skipApps?: string[]
+): Promise<AppVersions[]> {
+	let lst = (await readdir(BUNDLED_APPS_FOLDER)
 	.catch((exc: FileException) => {
 		if (exc.notFound) { return [] as string[]; }
 		else { throw exc; }
-	}))
+	}));
+	if (skipApps) {
+		lst = lst.filter(fName => !skipApps.includes(reverseDomain(fName)));
+	}
+	const appManifestsPromises = lst
 	.map(fName => readFile(
 		join(BUNDLED_APPS_FOLDER, fName, MANIFEST_FILE),
 		{ encoding: 'utf8' }
 	));
 	const infos = (await Promise.all(appManifestsPromises))
 	.map(mFile => JSON.parse(mFile) as AppManifest)
-	.filter(({ appDomain }) => (
-		(appDomain !== STARTUP_APP_DOMAIN) &&
-		(appDomain !== LAUNCHER_APP_DOMAIN)
-	))
 	.map(m => ({
 		id: m.appDomain,
-		current: m.version,
-		bundled: m.version
+		current: m.version
 	} as AppVersions));
 	return infos;	
 }

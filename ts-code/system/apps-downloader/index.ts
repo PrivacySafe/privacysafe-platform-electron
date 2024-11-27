@@ -15,15 +15,15 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { SystemPlaces } from "../installer/system-places";
-import { doBodylessRequest } from "../../../electron/request-utils";
+import { SystemPlaces } from "../system-places";
+import { doBodylessRequest } from "../../electron/request-utils";
 import { getAppLocation } from "./app-package-locator";
 import { createHash } from "crypto";
 import { from, Observable, Subject } from "rxjs";
 import { mergeMap } from "rxjs/operators";
-import { MANIFEST_FILE } from "../installer/unpack-zipped-app";
+import { MANIFEST_FILE } from "../system-places/unpack-zipped-app";
 import { appChannels, channelLatestVersion, listAppVersionPacks, getJson, makeAppDownloadExc } from "./download-resources";
-import { toRxObserver } from "../../../lib-common/utils-for-observables";
+import { toRxObserver } from "../../lib-common/utils-for-observables";
 
 type DownloadProgress = web3n.system.apps.DownloadProgress;
 type Observer<T> = web3n.Observer<T>;
@@ -101,6 +101,11 @@ export class AppDownloader {
 			const {
 				dir, mvDirOnCompletion, rmDirOnErr
 			} = await this.sysPlaces.makeDownloadFolder(id, version);
+			// 
+			// XXX add to dir xattr pack_source with some json data in it with
+			//     timestamp, url, note if download is complete, or uses prev
+			//     version(s).
+			// 
 			let filesLeft = 0;
 			let bytesLeft = 0;
 			for (const file of content.content) {

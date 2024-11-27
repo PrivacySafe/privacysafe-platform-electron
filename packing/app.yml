@@ -50,8 +50,8 @@ asarUnpack:
   - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\cryptor.wasm
 
   # system/app unzipper worker files
-  - system/apps/installer/unzip-worker.js
-  - system\apps\installer\unzip-worker.js
+  - system/system-places/unzip-worker.js
+  - system\system-places\unzip-worker.js
   - node_modules/adm-zip/**/*
   - node_modules\adm-zip\**\*
 

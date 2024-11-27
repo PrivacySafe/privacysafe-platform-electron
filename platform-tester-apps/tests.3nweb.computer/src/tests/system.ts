@@ -20,17 +20,18 @@ describe(`system.platform`, () => {
 	it(`has all methods`, () => {
 		const platform = w3n.system!.platform!;
 		expect(platform).toBeDefined();
-		expect(typeof platform.availableUpdateType).toBe('function');
-		expect(typeof platform.downloadAndApplyUpdate).toBe('function');
 		expect(typeof platform.getChannels).toBe('function');
 		expect(typeof platform.getCurrentVersion).toBe('function');
 		expect(typeof platform.getLatestVersion).toBe('function');
-		expect(typeof platform.getVersionList).toBe('function');
+		expect(typeof platform.setupUpdater).toBe('function');
+		expect(typeof platform.downloadUpdate).toBe('function');
+		expect(typeof platform.quitAndInstall).toBe('function');
 	});
 
 	it('can get platform version', async () => {
-		const platformVersion = await w3n.system!.platform!.getCurrentVersion();
-		expect(typeof platformVersion).toBe('string');
+		const bundledVersions = await w3n.system!.platform!.getCurrentVersion();
+		expect(typeof bundledVersions.bundle).toBe('string');
+		expect(typeof bundledVersions.platform).toBe('string');
 	});
 
 });
@@ -45,6 +46,7 @@ describe(`system.apps`, () => {
 		expect(typeof apps.opener!.getAppFileBytes).toBe('function');
 		expect(typeof apps.opener!.listApps).toBe('function');
 		expect(typeof apps.opener!.openApp).toBe('function');
+		expect(typeof apps.opener!.triggerAllStartupLaunchers).toBe('function');
 		expect(apps.downloader).toBeDefined();
 		expect(typeof apps.downloader!.downloadWebApp).toBe('function');
 		expect(typeof apps.downloader!.getAppChannels).toBe('function');
@@ -64,6 +66,17 @@ describe(`system.apps.opener`, () => {
 	it(`.listApps lists installed apps`, async () => {
 		const lst = await w3n.system!.apps!.opener!.listApps();
 		expect(Array.isArray(lst)).toBeTrue();
+	});
+
+});
+
+describe(`system.monitor`, () => {
+
+	it(`has all methods`, () => {
+		const monitor = w3n.system!.monitor!;
+		expect(monitor).toBeDefined();
+		expect(typeof monitor.listProcs).toBe('function');
+		expect(typeof monitor.listConnectionsToAppServices).toBe('function');
 	});
 
 });

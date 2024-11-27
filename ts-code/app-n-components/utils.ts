@@ -16,21 +16,26 @@
 */
 
 import { join } from "path";
-import { appAndManifestFrom } from "../system/apps/installer/system-places";
+import { InstalledAppParams, appAndManifestFrom } from "../system/system-places";
 import { BUNDLED_APPS_FOLDER } from "../bundle-confs";
 import { DeviceFS, reverseDomain } from "core-3nweb-client-lib";
-import { MANIFEST_FILE } from "../system/apps/installer/unpack-zipped-app";
+import { MANIFEST_FILE } from "../system/system-places/unpack-zipped-app";
+import { hasStartupLaunchersDefined } from "../lib-common/manifest-utils";
 
 type AppManifest = web3n.caps.AppManifest;
 
 export async function appAndManifestOnDev(
 	appDomain: string
-): ReturnType<typeof appAndManifestFrom> {
+): Promise<InstalledAppParams> {
 	const path = join(
 		BUNDLED_APPS_FOLDER, reverseDomain(appDomain)
 	);
 	const appFS = await DeviceFS.makeReadonly(path);
-	return appAndManifestFrom(appFS);
+	const { appRoot, manifest } = await appAndManifestFrom(appFS);
+	const hasStartupLaunchers = hasStartupLaunchersDefined(manifest);
+	return {
+		appRoot, manifest, sysParamsForApp: { hasStartupLaunchers }
+	};
 }
 
 export async function appManifestOnDev(

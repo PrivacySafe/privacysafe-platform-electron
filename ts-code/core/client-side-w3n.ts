@@ -18,7 +18,7 @@
 import { ObjectsConnector, makeW3Nclient, promiseW3Nclient, callerSideJSONWrap as jsonCall } from 'core-3nweb-client-lib/build/ipc';
 import { makeTestStandCaller } from "../test-stand/test-stand-cap-ipc";
 import { makeConnectivity } from '../connectivity/connectivity-cap-ipc';
-import { makeSystemCaller, promiseSystemCaller } from '../system/apps/ipc-client-side';
+import { makeSystemCaller, promiseSystemCaller } from '../system/ipc-client-side';
 import { makeShellCaller, promiseShellCaller } from '../shell/ipc-client-side';
 import { makeRpcCaller, promiseRpcCaller } from '../rpc/ipc-client-side';
 
@@ -70,7 +70,7 @@ export async function promiseClientSideW3N(
 	return clientW3N;
 }
 
-function addDeprecatedItems(clientW3N: web3n.testing.CommonW3N): void {
+function addDeprecatedItems(clientW3N: W3N): void {
 	try {
 		if (clientW3N.rpc?.thisApp) {
 			(clientW3N as any).appRPC = wrapExistingFn(

@@ -17,7 +17,7 @@
 
 import { assert } from "../lib-common/assert";
 import { checkAndTransformAddress, toCanonicalAddress, areAddressesEqual } from "../lib-common/canonical-address";
-import { APP_ROOT_FOLDER, MANIFEST_FILE, SITE_ROOT_FOLDER } from "../system/apps/installer/unpack-zipped-app";
+import { APP_ROOT_FOLDER, MANIFEST_FILE, SITE_ROOT_FOLDER } from "../system/system-places/unpack-zipped-app";
 import { dirname, isAbsolute, join, resolve } from "path";
 import { readFileSync, statSync, writeFileSync } from "fs";
 import { errWithCause } from "../lib-common/exceptions/error";

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2015, 2017, 2019 3NSoft Inc.
+ Copyright (C) 2015, 2017, 2019, 2024 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -40,12 +40,12 @@ export class SingleProc {
 	}
 	
 	private insertPromise<T>(promise: Promise<T>): Promise<T> {
-		promise = promise.finally(() => {
-			if (this.promise === promise) {
+		const promiseToRegister = promise.catch(noop).then(() => {
+			if (this.promise === promiseToRegister) {
 				this.promise = undefined;
 			}
 		});
-		this.promise = promise;
+		this.promise = promiseToRegister;
 		return promise;
 	}
 	
@@ -75,6 +75,8 @@ export class SingleProc {
 }
 Object.freeze(SingleProc.prototype);
 Object.freeze(SingleProc);
+
+function noop() {}
 
 /**
  * This wraps given function/method into syncing wrap.

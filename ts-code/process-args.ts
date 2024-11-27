@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2018, 2020 - 2023 3NSoft Inc.
+ Copyright (C) 2018, 2020 - 2024 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -132,6 +132,12 @@ const platformArgDefs: ArgDef[] = [
 		typeLabel: '{underline <address:port>}',
 		description: `SOCKS5 proxy to use for connectivity.`
 	},
+	{
+		name: 'version',
+		alias: 'v',
+		type: Boolean,
+		description: `Displays platform and bundle versions information`
+	},
 	// {
 	// 	name: 'single-user',
 	// 	alias: 's',
@@ -151,14 +157,18 @@ const usage: CliUsageSection[] = [
 	}
 ];
 
+export function cliUsageTxt(): string {
+	return cliUsageToString(usage);
+}
+
 const parsedCliArgs = parseArgv<any>(
 	process.argv, platformArgDefs, { partial: true }
 );
 
-if (parsedCliArgs['help']) {
-	console.log(cliUsageToString(usage));
-	process.exit(0);
-}
+export const UTIL_INVOCATION_ARGS = {
+	help: parsedCliArgs['help'],
+	version: parsedCliArgs['version']
+};
 
 export const HTTP_LOG_TO_CONSOLE_FLAG = !!parsedCliArgs['console-log-http'];
 

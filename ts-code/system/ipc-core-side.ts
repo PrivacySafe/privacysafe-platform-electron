@@ -23,6 +23,7 @@ type AppsDownloader = web3n.system.apps.AppsDownloader;
 type AppsInstaller = web3n.system.apps.AppsInstaller;
 type Platform = web3n.system.platform.Platform;
 type AppsOpener = web3n.system.apps.AppsOpener;
+type SystemMonitor = web3n.system.monitor.SystemMonitor;
 
 export function exposeSystemCAP(
 	cap: SysUtils, expServices: ExposedServices
@@ -33,6 +34,9 @@ export function exposeSystemCAP(
 	}
 	if (cap.platform) {
 		wrap.platform = exposePlatformDownloaderCAP(cap.platform);
+	}
+	if (cap.monitor) {
+		wrap.monitor = exposeSystemMonitorCAP(cap.monitor);
 	}
 	return wrap;
 }
@@ -94,15 +98,11 @@ function exposePlatformDownloaderCAP(
 		getLatestVersion: jsonSrv.wrapReqReplySrvMethod(
 			cap, 'getLatestVersion'
 		),
-		getVersionList: jsonSrv.wrapReqReplySrvMethod(
-			cap, 'getVersionList'
+		setupUpdater: jsonSrv.wrapObservingFunc(
+			(obs, newBundleVersion) => cap.setupUpdater(newBundleVersion, obs)
 		),
-		availableUpdateType: jsonSrv.wrapReqReplySrvMethod(
-			cap, 'availableUpdateType'
-		),
-		downloadAndApplyUpdate: jsonSrv.wrapObservingFunc(
-			(obs, channel) => cap.downloadAndApplyUpdate(channel, obs)
-		)
+		downloadUpdate: jsonSrv.wrapReqReplySrvMethod(cap, 'downloadUpdate'),
+		quitAndInstall: jsonSrv.wrapReqReplySrvMethod(cap, 'quitAndInstall')
 	};
 }
 
@@ -113,10 +113,27 @@ function exposeAppsOpenerCAP(
 		listApps: jsonSrv.wrapReqReplySrvMethod(cap, 'listApps'),
 		openApp: jsonSrv.wrapReqReplySrvMethod(cap, 'openApp'),
 		executeCommand: jsonSrv.wrapReqReplySrvMethod(cap, 'executeCommand'),
+		triggerAllStartupLaunchers: jsonSrv.wrapReqReplySrvMethod(
+			cap, 'triggerAllStartupLaunchers'
+		),
+		closeAppsAfterUpdate: jsonSrv.wrapReqReplySrvMethod(
+			cap, 'closeAppsAfterUpdate'
+		),
 		getAppFileBytes: jsonSrv.wrapReqReplySrvMethod(cap, 'getAppFileBytes'),
 		getAppManifest: jsonSrv.wrapReqReplySrvMethod(cap, 'getAppManifest'),
 		getAppVersions: jsonSrv.wrapReqReplySrvMethod(cap, 'getAppVersions'),
 		watchApps: jsonSrv.wrapObservingFunc(cap.watchApps)
+	};
+}
+
+function exposeSystemMonitorCAP(
+	cap: SystemMonitor
+): ExposedObj<SystemMonitor> {
+	return {
+		listProcs: jsonSrv.wrapReqReplySrvMethod(cap, 'listProcs'),
+		listConnectionsToAppServices: jsonSrv.wrapReqReplySrvMethod(
+			cap, 'listConnectionsToAppServices'
+		)
 	};
 }
 

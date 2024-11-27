@@ -200,7 +200,7 @@ declare namespace web3n.caps {
 	}
 
 	interface CommonComponentSetting {
-		runtime: NonGUIRuntime | GUIRuntime;
+		runtime: Runtime;
 		capsRequested?: RequestedCAPs;
 		sharedLibs?: SharedLibInfo[];
 	}
@@ -221,6 +221,8 @@ declare namespace web3n.caps {
 	type GUIRuntime = 'web-gui';
 
 	type NonGUIRuntime = 'wasm,mp1' | 'deno';
+
+	type Runtime = NonGUIRuntime | GUIRuntime;
 
 	interface AllowedCallers {
 		thisAppComponents?: '*' | string[];

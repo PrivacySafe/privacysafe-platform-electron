@@ -83,7 +83,22 @@ export const MAIN_GUI_ENTRYPOINT = '/index.html';
 export function getWebGUIComponent(
 	m: AppManifest, entrypoint: string
 ): GUIComponentDef {
-	if (!(m as GeneralAppManifest).components) {
+	const component = getComponent(m, entrypoint) as GUIComponentDef;
+	if (component.runtime !== 'web-gui') {
+		throw makeAppManifestException(
+			m.appDomain, { wrongComponentType: true }, {
+				entrypoint,
+				message: `Runtime is ${component.runtime} instead of expected 'web-gui'`
+			}
+		);
+	}
+	return component;
+}
+
+export function getComponent(
+	m: AppManifest, entrypoint: string
+): AppComponent {
+	if (isSimpleGUIAppManifest(m)) {
 		if (entrypoint !== MAIN_GUI_ENTRYPOINT) {
 			throw makeAppManifestException(
 				m.appDomain, { componentNotFound: true }, { entrypoint }
@@ -96,15 +111,6 @@ export function getWebGUIComponent(
 	if (!component) {
 		throw makeAppManifestException(
 			m.appDomain, { componentNotFound: true }, { entrypoint }
-		);
-	}
-
-	if (component.runtime !== 'web-gui') {
-		throw makeAppManifestException(
-			m.appDomain, { wrongComponentType: true }, {
-				entrypoint,
-				message: `Runtime is ${component.runtime} instead of expected 'web-gui'`
-			}
 		);
 	}
 
@@ -367,6 +373,14 @@ function makeAppManifestException(
 	}
 	return makeRuntimeException('app-manifest', params, flags);
 
+}
+
+export function hasStartupLaunchersDefined(m: AppManifest): boolean {
+	const { launchOnSystemStartup } = (m as GeneralAppManifest);
+	return (
+		Array.isArray(launchOnSystemStartup) &&
+		(launchOnSystemStartup.length > 0)
+	);
 }
 
 export function getComponentsForSystemStartup(

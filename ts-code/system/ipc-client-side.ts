@@ -26,6 +26,7 @@ type BundleUnpackProgress = web3n.system.apps.BundleUnpackProgress;
 type Platform = web3n.system.platform.Platform;
 type PlatformUpdateEvents = web3n.system.platform.PlatformUpdateEvents;
 type AppsOpener = web3n.system.apps.AppsOpener;
+type SystemMonitor = web3n.system.monitor.SystemMonitor;
 
 export function makeSystemCaller(caller: Caller, sysPath: string[]): SysUtils {
 	if (!caller.listObj) {
@@ -43,6 +44,12 @@ export function makeSystemCaller(caller: Caller, sysPath: string[]): SysUtils {
 	if (lstSystemCAP.includes('platform')) {
 		const platformPath = sysPath.concat('platform');
 		system.platform = makePlatformDownloaderCaller(
+			caller, platformPath
+		);
+	}
+	if (lstSystemCAP.includes('monitor')) {
+		const platformPath = sysPath.concat('monitor');
+		system.monitor = makeSystemMonitorCaller(
 			caller, platformPath
 		);
 	}
@@ -69,6 +76,12 @@ export async function promiseSystemCaller(
 	if (lstSystemCAP.includes('platform')) {
 		const platformPath = sysPath.concat('platform');
 		system.platform = makePlatformDownloaderCaller(
+			caller, platformPath
+		);
+	}
+	if (lstSystemCAP.includes('monitor')) {
+		const platformPath = sysPath.concat('monitor');
+		system.monitor = makeSystemMonitorCaller(
 			caller, platformPath
 		);
 	}
@@ -148,14 +161,14 @@ function makePlatformDownloaderCaller(
 		getCurrentVersion: callPlatform(caller, objPath, 'getCurrentVersion'),
 		getChannels: callPlatform(caller, objPath, 'getChannels'),
 		getLatestVersion: callPlatform(caller, objPath, 'getLatestVersion'),
-		getVersionList: callPlatform(caller, objPath, 'getVersionList'),
-		availableUpdateType: callPlatform(caller, objPath, 'availableUpdateType'),
-		downloadAndApplyUpdate: (() => {
+		setupUpdater: (() => {
 			const fn = jsonCall.makeObservableFuncCaller<PlatformUpdateEvents>(
-				caller, objPath.concat('downloadAndApplyUpdate')
+				caller, objPath.concat('setupUpdater')
 			);
-			return (channel, obs) => fn(obs, channel);
+			return (newBundleVersion, obs) => fn(obs, newBundleVersion);
 		})(),
+		downloadUpdate: callPlatform(caller, objPath, 'downloadUpdate'),
+		quitAndInstall: callPlatform(caller, objPath, 'quitAndInstall')
 	};
 }
 
@@ -172,6 +185,12 @@ function makeAppsOpenerCaller(
 		listApps: callAppsOpener(caller, objPath, 'listApps'),
 		openApp: callAppsOpener(caller, objPath, 'openApp'),
 		executeCommand: callAppsOpener(caller, objPath, 'executeCommand'),
+		triggerAllStartupLaunchers: callAppsOpener(
+			caller, objPath, 'triggerAllStartupLaunchers'
+		),
+		closeAppsAfterUpdate: callAppsOpener(
+			caller, objPath, 'closeAppsAfterUpdate'
+		),
 		getAppFileBytes: callAppsOpener(caller, objPath, 'getAppFileBytes'),
 		getAppManifest: callAppsOpener(caller, objPath, 'getAppManifest'),
 		getAppVersions: callAppsOpener(caller, objPath, 'getAppVersions'),
@@ -183,6 +202,23 @@ function callAppsOpener<M extends keyof AppsOpener>(
 	caller: Caller, objPath: string[], method: M
 ): AppsOpener[M] {
 	return jsonCall.makeReqRepObjCaller<AppsOpener, M>(caller, objPath, method);
+}
+
+function makeSystemMonitorCaller(
+	caller: Caller, objPath: string[]
+): SystemMonitor {
+	return {
+		listProcs: callSystemMonitor(caller, objPath, 'listProcs'),
+		listConnectionsToAppServices: callSystemMonitor(
+			caller, objPath, 'listConnectionsToAppServices'
+		)
+	};
+}
+
+function callSystemMonitor<M extends keyof SystemMonitor>(
+	caller: Caller, objPath: string[], method: M
+): SystemMonitor[M] {
+	return jsonCall.makeReqRepObjCaller<SystemMonitor, M>(caller, objPath, method);
 }
 
 
