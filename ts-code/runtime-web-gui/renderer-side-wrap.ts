@@ -17,42 +17,39 @@
 
 import { Subject } from "rxjs";
 import { Envelope, ObjectsConnector, makeStartupW3Nclient } from 'core-3nweb-client-lib/build/ipc';
-import { ipcRenderer, IpcRendererEvent } from 'electron';
-import { IPC_CORE_SIDE, IPC_CLIENT_SIDE, IPC_SYNCED_W3N_LIST } from "../ipc-with-core/electron-ipc";
 import { toBuffer } from "../lib-common/buffer-utils";
 import { makeStartupTestStandCaller } from "../test-stand/test-stand-cap-ipc";
 import { makeClientSideW3N } from "../core/client-side-w3n";
+import { InitIPC } from "./ipc-type";
 
 type StartupW3N = web3n.startup.W3N;
 type W3N = web3n.caps.W3N;
 
-function makeClientSideConnector(): ObjectsConnector {
+function makeClientSideConnector({
+	listObjOnServiceSide, sendMsgToCore, setHandlerOfMsgsFromCore
+}: InitIPC): ObjectsConnector {
 	const fromCore = new Subject<Envelope>();
-	const coreListener = (event: IpcRendererEvent, msg: Envelope) => {
+	const coreListener = (msg: Envelope) => {
 		if (msg.body) {
 			msg.body.value = toBuffer(msg.body.value);
 		}
 		fromCore.next(msg);
 	};
-	const listObjOnServiceSide = (
-		path: string[]
-	) => ipcRenderer.sendSync(IPC_SYNCED_W3N_LIST, path);
-	ipcRenderer.on(IPC_CLIENT_SIDE, coreListener);
-	const detachListener = () => ipcRenderer.removeListener(
-		IPC_CLIENT_SIDE, coreListener);
+	const detachListener = setHandlerOfMsgsFromCore(coreListener);
 	const toClient = fromCore.asObservable();
 	const fromClient = new Subject<Envelope>();
 	fromClient.asObservable().subscribe({
-		next: msg => ipcRenderer.send(IPC_CORE_SIDE, msg),
+		next: msg => sendMsgToCore(msg),
 		error: detachListener,
 		complete: detachListener
 	});
 	return new ObjectsConnector(
-		fromClient, toClient, 'clients', listObjOnServiceSide);
+		fromClient, toClient, 'clients', listObjOnServiceSide
+	);
 }
 
-export function makeStartupW3N(): StartupW3N {
-	const clientSide = makeClientSideConnector();
+export function makeStartupW3N(ipc: InitIPC): StartupW3N {
+	const clientSide = makeClientSideConnector(ipc);
 	const clientW3N = makeStartupW3Nclient<web3n.testing.StartupW3N>(
 		clientSide.caller, {
 			testStand: makeStartupTestStandCaller
@@ -60,8 +57,8 @@ export function makeStartupW3N(): StartupW3N {
 	return clientW3N;
 }
 
-export function makeW3N(): W3N {
-	const clientSide = makeClientSideConnector();
+export function makeW3N(ipc: InitIPC): W3N {
+	const clientSide = makeClientSideConnector(ipc);
 	return makeClientSideW3N(clientSide);
 }
 

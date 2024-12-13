@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 3NSoft Inc.
+ Copyright (C) 2024 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,9 +15,13 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { makeStartupW3N } from './renderer-side-wrap';
-// import { contextBridge } from 'electron';
 
-// contextBridge.exposeInMainWorld('w3n', makeStartupW3N());
+declare namespace web3n.media {
 
-(window as any).w3n = makeStartupW3N();
+	interface MediaDevices {
+		provideAppOwnDisplayMediaSelectionHandler?: (
+			handler: () => void
+		) => void;
+	}
+
+}

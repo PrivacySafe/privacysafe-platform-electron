@@ -15,20 +15,22 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { session, Session } from 'electron';
-import { setAppProtocolIn, protoSchemas, setFsProtocolIn } from "./protocols";
+import { desktopCapturer, session, Session, MediaAccessPermissionRequest } from 'electron';
+import { setAppProtocolIn, protoSchemas, W3NSetupType } from "./protocols";
 import { logWarning } from '../confs';
 import { devToolsExtFilter } from '../init-proc/devtools';
 
 type ReadonlyFS = web3n.files.ReadonlyFS;
+type RequestedCAPs = web3n.caps.RequestedCAPs;
 
 export function makeSessionForApp(
-	appDomain: string, appFilesRoot: ReadonlyFS, devTools: boolean
+	appDomain: string, appFilesRoot: ReadonlyFS, w3nSetup: W3NSetupType,
+	capsReq: RequestedCAPs|undefined, devTools: boolean
 ): Session {
 	if (!appDomain) { throw new Error(`Bad app domain given: ${appDomain}`); }
 	const appSes = generateSession(devTools);
 
-	setAppProtocolIn(appSes, appFilesRoot, appDomain);
+	setAppProtocolIn(appSes, appFilesRoot, appDomain, w3nSetup);
 
 	const allowUrl = makeUrlChecker(
 		`${protoSchemas.W3N_APP.scheme}://${appDomain}`,
@@ -43,8 +45,101 @@ export function makeSessionForApp(
 			cb({ cancel: true });
 		}
 	});
-	
+
+	setPermissionsInSession(appSes, capsReq);
+
 	return appSes;
+}
+
+function setPermissionsInSession(
+	session: Session, capsReq: RequestedCAPs|undefined
+): void {
+
+	session.setPermissionCheckHandler((_wContent, permission) => {
+		switch (permission) {
+			case 'background-sync' as any:
+				return true;
+			case 'fullscreen':
+				return true;
+			case 'media':
+				return mediaPermission(capsReq);
+			case 'speaker-selection' as any:
+				return speakerSelectionPermission(capsReq);
+			default:
+				return false;
+		}
+	});
+	session.setPermissionRequestHandler((_wContent, permission, cb, details) => {
+		switch (permission) {
+			case 'fullscreen':
+				return cb(true);
+			case 'media':
+				return cb(mediaPermissionRequest(capsReq, details));
+			case 'speaker-selection':
+				return cb(speakerSelectionPermission(capsReq));
+			default:
+				return cb(false);
+		}
+	});
+
+	session.setDisplayMediaRequestHandler(async (
+		{ audioRequested, videoRequested }, cb
+	) => {
+
+		console.log(` 🛠️ (need implementation) -> displayMediaRequestHandler, audioRequested is ${audioRequested}, videoRequested is ${videoRequested}`);
+
+		const deskSrcs = await desktopCapturer.getSources({
+			types: [ 'screen', 'window' ]
+		});
+		cb({ video: deskSrcs[0] });
+
+	});
+
+}
+
+function mediaPermission(capsReq: RequestedCAPs|undefined): boolean {
+	if (capsReq?.mediaDevices) {
+		const { cameras, microphones, speakers } = capsReq.mediaDevices;
+		return !!(cameras && microphones && speakers);
+	} else {
+		return false;
+	}
+}
+
+function mediaPermissionRequest(
+	capsReq: RequestedCAPs|undefined, req: MediaAccessPermissionRequest
+): boolean {
+	if (capsReq?.mediaDevices && req.mediaTypes) {
+		if (req.mediaTypes.length === 0) {
+			const { windows, screens } = capsReq.mediaDevices;
+			return (
+				(windows === 'all') || (windows === 'use') ||
+				(screens === 'all') || (screens === 'use')
+			);	
+		} else {
+			const { cameras, microphones } = capsReq.mediaDevices;
+			let cumulative = false;
+			if (req.mediaTypes.includes('audio')) {
+				if ((microphones !== 'all') && (microphones !== 'use')) {
+					return false;
+				}
+				cumulative = true;
+			}
+			if (req.mediaTypes.includes('video')) {
+				if ((cameras !== 'all') && (cameras !== 'use')) {
+					return false;
+				}
+				cumulative = true;
+			}
+			return cumulative;
+		}
+	} else {
+		return false;
+	}
+}
+
+function speakerSelectionPermission(capsReq: RequestedCAPs|undefined): boolean {
+	return !!capsReq?.mediaDevices?.speakers;
 }
 
 let partitionCounter = Date.now();
@@ -62,33 +157,10 @@ function generateSession(devTools: boolean): Session {
 
 export function makeSessionFor3NComms(): Session {
 	const commSes = generateSession(false);
-	
+
 	// XXX should we added anything else here?
 
 	return commSes;
-}
-
-export function makeSessionForViewer(
-	fs: ReadonlyFS, path: string, itemType: 'file'|'folder', devTools: boolean
-): Session {
-	const viewSes = generateSession(devTools);
-
-	setFsProtocolIn(viewSes, fs, path, itemType);
-
-	const allowUrl = makeUrlChecker(
-		`${protoSchemas.W3N_FS.scheme}://${itemType}`,
-		devTools);
-
-	viewSes.webRequest.onBeforeRequest((details, cb) => {
-		if (allowUrl(details.url)) {
-			cb({ cancel: false });
-		} else {
-			logWarning(`Canceled unexpected ${details.method} request for ${details.url}`);
-			cb({ cancel: true });
-		}
-	});
-	
-	return viewSes;
 }
 
 function makeUrlChecker(
@@ -101,12 +173,16 @@ function makeUrlChecker(
 	}
 }
 
-export function makeSessionForDevAppFromUrl(url: string): Electron.Session {
+export function makeSessionForDevAppFromUrl(
+	url: string, capsReq: RequestedCAPs|undefined
+): Electron.Session {
 	const appSes = generateSession(true);
 
 	// XXX there are absolutely no restrictions here.
 	// Should we tighten this? Or should devs do further testing with folder
 	// based load to feed out requests that won't run in production?
+
+	setPermissionsInSession(appSes, capsReq);
 
 	return appSes;
 }

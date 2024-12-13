@@ -245,11 +245,12 @@ export class App {
 		if (this.devRootUrl) {
 			gui = await DevAppInstanceFromUrl.makeForUrl(
 				appDomain, this.devRootUrl, entrypoint, caps,
+				component.capsRequested,
 				windowOpts, component.icon, guiParent, this.titleMaker, services
 			);
 		} else {
 			gui = await GUIComponent.make(
-				appDomain, this.appRoot, entrypoint, caps,
+				appDomain, this.appRoot, entrypoint, caps, component.capsRequested,
 				windowOpts, component.icon, guiParent,
 				devTools || this.devTools, this.titleMaker, services
 			);

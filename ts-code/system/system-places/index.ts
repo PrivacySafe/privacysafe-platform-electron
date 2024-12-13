@@ -52,8 +52,6 @@ const INSTALLED_APP_SYSTEM_PARAMS_ATTR = 'installed_app_system_params';
 
 const sysApps = [
 	STARTUP_APP_DOMAIN, LAUNCHER_APP_DOMAIN
-	,'chat.app.privacysafe.io'
-	,'contacts.app.privacysafe.io'
 ];
 
 

@@ -33,12 +33,12 @@ type Session = Electron.Session;
 type W3N = web3n.caps.W3N;
 type ReadonlyFS = web3n.files.ReadonlyFS;
 type OpenConnectionInfo = web3n.system.monitor.OpenConnectionInfo;
+type RequestedCAPs = web3n.caps.RequestedCAPs;
 
 export type TitleGenerator = (contentTitle: string) => string;
 
 const dirWithPreloads = join(__dirname, '..', 'runtime-web-gui');
-const APP_PRELOAD = join(dirWithPreloads, 'preload.bundle.js');
-const STARTUP_APP_PRELOAD = join(dirWithPreloads, 'preload-for-startup.bundle.js');
+const IPC_PRELOAD = join(dirWithPreloads, 'preload-ipc.bundle.js');
 
 export class GUIComponent implements Component {
 
@@ -141,15 +141,17 @@ export class GUIComponent implements Component {
 
 	static async make(
 		domain: string, appRoot: ReadonlyFS, entrypoint: string,
-		caps: AppCAPsAndSetup,
+		caps: AppCAPsAndSetup, capsReq: RequestedCAPs|undefined,
 		winOpts: WindowOptions|undefined, icon: string|undefined,
 		parent: GUIComponent|undefined,
 		devTools: boolean, generateTitle: TitleGenerator,
 		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<GUIComponent> {
-		const session = makeSessionForApp(domain, appRoot, devTools);
+		const session = makeSessionForApp(
+			domain, appRoot, 'regular', capsReq, devTools
+		);
 		const preload = ((Object.keys(caps.w3n).length > 0) ?
-			APP_PRELOAD : undefined
+			IPC_PRELOAD : undefined
 		);
 		const opts = prepareWindowOpts(
 			session, preload, winOpts, parent?.window, devTools
@@ -170,9 +172,11 @@ export class GUIComponent implements Component {
 		winOpts: WindowOptions|undefined, icon: string|undefined,
 		devTools: boolean
 	): Promise<GUIComponent> {
-		const session = makeSessionForApp(domain, appRoot, devTools);
+		const session = makeSessionForApp(
+			domain, appRoot, 'startup', undefined, devTools
+		);
 		const opts = prepareWindowOpts(
-			session, STARTUP_APP_PRELOAD, winOpts, undefined, devTools
+			session, IPC_PRELOAD, winOpts, undefined, devTools
 		);
 		if (icon) {
 			opts.icon = await nativeImageFromFile(appRoot, icon, domain);
@@ -228,7 +232,7 @@ function prepareWindowOpts(
 
 	opts.webPreferences = {
 		sandbox: true,
-		contextIsolation: false,
+		contextIsolation: true,
 		nodeIntegration: false,
 		devTools,
 		session,
@@ -296,15 +300,16 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 
 	static async makeForUrl(
 		domain: string, appUrl: string, entrypoint: string,
-		caps: AppCAPsAndSetup,
+		caps: AppCAPsAndSetup, capsReq: RequestedCAPs|undefined,
 		winOpts: WindowOptions|undefined, icon: string|undefined,
 		parent: GUIComponent|undefined,
 		generateTitle: TitleGenerator,
 		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<GUIComponent> {
-		const session = makeSessionForDevAppFromUrl(appUrl);
+		const session = makeSessionForDevAppFromUrl(appUrl, capsReq);
 		const preload = ((Object.keys(caps.w3n).length > 0) ?
-			APP_PRELOAD : undefined);
+			IPC_PRELOAD : undefined
+		);
 		const opts = prepareWindowOpts(
 			session, preload, winOpts, parent?.window, true
 		);
@@ -324,9 +329,9 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 		domain: string, appUrl: string, entrypoint: string,
 		winOpts: WindowOptions|undefined, icon: string|undefined
 	): Promise<GUIComponent> {
-		const session = makeSessionForDevAppFromUrl(appUrl);
+		const session = makeSessionForDevAppFromUrl(appUrl, undefined);
 		const opts = prepareWindowOpts(
-			session, STARTUP_APP_PRELOAD, winOpts, undefined, true
+			session, IPC_PRELOAD, winOpts, undefined, true
 		);
 		const app = new DevAppInstanceFromUrl(
 			domain, undefined, appUrl, entrypoint, undefined, opts, t => t,

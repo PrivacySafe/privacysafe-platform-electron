@@ -35,6 +35,8 @@ import { exposeConnectivityCAP } from "../connectivity/connectivity-cap-ipc";
 import { exposeSystemCAP } from "../system/ipc-core-side";
 import { exposeShellCAPs } from "../shell/ipc-core-side";
 import { exposeRpcCAP } from "../rpc/ipc-core-side";
+import { exposeMediaDevicesCAP } from "../media-devices/expose-service-cap-ipc";
+import { unlink } from "../lib-common/async-fs-node";
 
 type StartupW3N = web3n.startup.W3N;
 type W3N = web3n.caps.W3N;
@@ -129,6 +131,7 @@ const extraCAPs = Object.freeze({
 	shell: exposeShellCAPs,
 	rpc: exposeRpcCAP,
 	connectivity: exposeConnectivityCAP,
+	mediaDevices: exposeMediaDevicesCAP
 });
 
 const IPC_TOKEN_LEN = 30;
@@ -228,7 +231,9 @@ export class SocketIPCConnectors {
 			starting?.reject(err);
 		})
 		.on('close', () => {
-			// XXX what should be here?
+			if (typeof this.addr === 'string') {
+				unlink(this.addr).catch(exc => console.error(exc));
+			}
 		})
 		.unref();
 		if (typeof this.addr === 'string') {

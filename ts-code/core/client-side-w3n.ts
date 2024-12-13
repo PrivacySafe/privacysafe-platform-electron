@@ -21,6 +21,7 @@ import { makeConnectivity } from '../connectivity/connectivity-cap-ipc';
 import { makeSystemCaller, promiseSystemCaller } from '../system/ipc-client-side';
 import { makeShellCaller, promiseShellCaller } from '../shell/ipc-client-side';
 import { makeRpcCaller, promiseRpcCaller } from '../rpc/ipc-client-side';
+import { makeMediaDevices, promiseMediaDevices } from '../media-devices/client-caps-ipc';
 
 type W3N = web3n.system.W3N;
 
@@ -44,6 +45,7 @@ export function makeClientSideW3N(clientSide: ObjectsConnector): W3N {
 			shell: makeShellCaller,
 			rpc: makeRpcCaller,
 			connectivity: makeConnectivity,
+			mediaDevices: makeMediaDevices
 		}
 	);
 	addDeprecatedItems(clientW3N);
@@ -64,6 +66,7 @@ export async function promiseClientSideW3N(
 			shell: promiseShellCaller,
 			rpc: promiseRpcCaller,
 			connectivity: makeConnectivity,
+			mediaDevices: promiseMediaDevices
 		}
 	);
 	addDeprecatedItems(clientW3N);
