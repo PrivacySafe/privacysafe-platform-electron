@@ -19,7 +19,7 @@ import { spawn, ChildProcess } from "child_process";
 import { createReadStream, ReadStream } from "fs";
 import { Component, Service } from "./index";
 import { denoBinParams, DenoParams, logError, utilDir } from "../confs";
-import { AppCAPsAndSetup } from "../core";
+import { AppCAPsAndSetup } from "../core/caps";
 import { SocketConnectInfo } from "../ipc-with-core/socket-ipc";
 import { assert } from "../lib-common/assert";
 import { utf8 } from "../lib-common/buffer-utils";

@@ -16,10 +16,10 @@
 */
 
 import { makeAllFileDialogOpeners } from "../../shell/file-dialogs";
-import { makeAppCmdsCaller, makeCmdsHandler, StartAppWithCmd } from "../../shell/cmd-invocation";
+import { makeAppCmdsCaller, makeCmdsHandler } from "../../shell/cmd-invocation";
 import { GUIComponent } from "../../app-n-components/gui-component";
 import { GetAppFSResourceFor, getFSResourceCAP } from "../../shell/fs-resource";
-import { AppSetter } from "../index";
+import { AppSetter, CAPsSetupFns, makeCAPsSetAppAndCloseFns } from "./index";
 import { Driver } from "../core-driver";
 
 type W3N = web3n.caps.W3N;
@@ -40,14 +40,12 @@ export function makeShellCAPs(
 }|undefined {
 	if (!capsReq.shell && !cmdHandlerDef) { return; }
 	const cap: NonNullable<W3N['shell']> = {};
-	const closeFns: (() => void)[] = [];
-	const setAppFns: AppSetter[] = [];
+	const capsSetupFns: CAPsSetupFns[] = [];
 	if (capsReq.shell) {
 		const fileDialogs = fileDialogShellCAP(capsReq.shell.fileDialog);
 		if (fileDialogs) {
 			cap.fileDialogs = fileDialogs.cap;
-			closeFns.push(fileDialogs.close);
-			setAppFns.push(fileDialogs.setApp);
+			capsSetupFns.push(fileDialogs);
 		}
 		const userNotifications = makeUserNotificationsShellCAP(
 			appDomain, component, capsReq.shell.userNotifications,
@@ -55,8 +53,7 @@ export function makeShellCAPs(
 		);
 		if (userNotifications) {
 			cap.userNotifications = userNotifications.cap;
-			closeFns.push(userNotifications.close);
-			setAppFns.push(userNotifications.setApp);
+			capsSetupFns.push(userNotifications);
 		}
 		const startAppWithParamsShell = startAppWithParamsShellCAP(
 			appDomain, component, capsReq.shell.startAppCmds,
@@ -74,18 +71,15 @@ export function makeShellCAPs(
 		}
 	}
 	if (cmdHandlerDef) {
-		const {
-			getStartedCmd, watchStartCmds, setApp
-		} = makeCmdHandlerCAP(appDomain, cmdHandlerDef, startCmd);
-		cap.getStartedCmd = getStartedCmd;
-		cap.watchStartCmds = watchStartCmds;
-		setAppFns.push(setApp);
+		const capFns = makeCmdHandlerCAP(appDomain, cmdHandlerDef, startCmd);
+		cap.getStartedCmd = capFns.getStartedCmd;
+		cap.watchStartCmds = capFns.watchStartCmds;
+		capsSetupFns.push(capFns);
 	}
-	return {
-		cap,
-		setApp: app => setAppFns.forEach(setApp => setApp(app)),
-		close: () => closeFns.forEach(close => close()),
-	};
+	if (Object.keys(cap).length > 0) {
+		const { close, setApp } = makeCAPsSetAppAndCloseFns(...capsSetupFns);
+		return { cap, close, setApp };
+	}
 }
 
 function makeUserNotificationsShellCAP(

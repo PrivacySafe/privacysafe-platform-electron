@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedFn, Caller, ExposedObj, checkRefObjTypeIs, ExposedServices } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedFn, Caller, ExposedObj, checkRefObjTypeIs, CoreSideServices } from 'core-3nweb-client-lib/build/ipc';
 import { Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ObjectReference, objRefType, ProtoType } from '../ipc-with-core/protobuf-msg';
@@ -32,7 +32,9 @@ export namespace thisAppRPC {
 
 	const reqType = ProtoType.for<{ service: string; }>(pb.AppRPCRequestBody);
 
-	export function expose(fn: AppRPC, expServices: ExposedServices): ExposedFn {
+	export function expose(
+		fn: AppRPC, expServices: CoreSideServices
+	): ExposedFn {
 		return buf => {
 			const { service } = reqType.unpack(buf);
 			const promise = fn(service)
@@ -62,7 +64,7 @@ export namespace otherAppsRPC {
 	}>(pb.OtherAppsRPCRequestBody);
 
 	export function expose(
-		fn: OtherAppsRPC, expServices: ExposedServices
+		fn: OtherAppsRPC, expServices: CoreSideServices
 	): ExposedFn {
 		return buf => {
 			const { appDomain, service } = reqType.unpack(buf);
@@ -90,7 +92,7 @@ export namespace otherAppsRPC {
 namespace rpcConnection {
 
 	export function expose(
-		c: RPCConnection, expServices: ExposedServices
+		c: RPCConnection, expServices: CoreSideServices
 	): ObjectReference<'RPCConnection'> {
 		const exp: ExposedObj<RPCConnection> = {
 			close: close.wrapService(c.close),
@@ -143,7 +145,8 @@ namespace rpcConnection {
 	namespace makeRequestReplyCall {
 
 		export function wrapService(
-			fn: RPCConnection['makeRequestReplyCall'], expServices: ExposedServices
+			fn: RPCConnection['makeRequestReplyCall'],
+			expServices: CoreSideServices
 		): ExposedFn {
 			return buf => {
 				const { method, req } = callStartType.unpack(buf);
@@ -175,7 +178,7 @@ namespace rpcConnection {
 	namespace startObservableCall {
 
 		export function wrapService(
-			fn: RPCConnection['startObservableCall'], expServices: ExposedServices
+			fn: RPCConnection['startObservableCall'], expServices: CoreSideServices
 		): ExposedFn {
 			return buf => {
 				const { method, req } = callStartType.unpack(buf);

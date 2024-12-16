@@ -15,14 +15,14 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedFn, Caller, ExposedObj, FileMsg, exposeFileService, ExposedServices, makeFileCaller, FSMsg, exposeFSService, makeFSCaller } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedFn, Caller, ExposedObj, FileMsg, exposeFileService, CoreSideServices, makeFileCaller, FSMsg, exposeFSService, makeFSCaller } from 'core-3nweb-client-lib/build/ipc';
 import { ProtoType } from '../../ipc-with-core/protobuf-msg';
 import { file_dialogs as pb } from '../../protos/file_dialogs.proto';
 
 type FileDialogs = web3n.shell.files.Dialogs;
 
 export function exposeFileDialogsCAP(
-	cap: FileDialogs, expServices: ExposedServices
+	cap: FileDialogs, expServices: CoreSideServices
 ): ExposedObj<FileDialogs> {
 	const exposed: ExposedObj<FileDialogs> = {};
 	if (cap.openFileDialog) {
@@ -83,7 +83,7 @@ namespace saveFileDialog {
 
 	export function wrapService(
 		fn: NonNullable<FileDialogs['saveFileDialog']>,
-		expServices: ExposedServices
+		expServices: CoreSideServices
 	): ExposedFn {
 		return bytes => {
 			const { btnLabel, defaultPath, title, filters } =
@@ -91,7 +91,8 @@ namespace saveFileDialog {
 			const promise = fn(title, btnLabel, defaultPath, filters)
 			.then(fileObj => {
 				const file = (fileObj ?
-					exposeFileService(fileObj, expServices) : undefined);
+					exposeFileService(fileObj, expServices) : undefined
+				);
 				return replyType.pack({ file });
 			});
 			return { promise };
@@ -126,7 +127,7 @@ namespace saveFolderDialog {
 
 	export function wrapService(
 		fn: NonNullable<FileDialogs['saveFolderDialog']>,
-		expServices: ExposedServices
+		expServices: CoreSideServices
 	): ExposedFn {
 		return bytes => {
 			const { btnLabel, defaultPath, title, filters } =
@@ -178,7 +179,7 @@ namespace openFileDialog {
 
 	export function wrapService(
 		fn: NonNullable<FileDialogs['openFileDialog']>,
-		expServices: ExposedServices
+		expServices: CoreSideServices
 	): ExposedFn {
 		return bytes => {
 			const { btnLabel, multiSelections, title, filters } =
@@ -224,7 +225,7 @@ namespace openFolderDialog {
 
 	export function wrapService(
 		fn: NonNullable<FileDialogs['openFolderDialog']>,
-		expServices: ExposedServices
+		expServices: CoreSideServices
 	): ExposedFn {
 		return bytes => {
 			const { btnLabel, multiSelections, title, filters } =

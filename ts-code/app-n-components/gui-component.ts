@@ -16,12 +16,12 @@
 */
 
 import { BrowserWindow, NativeImage, nativeImage } from 'electron';
-import { makeSessionForApp, makeSessionForDevAppFromUrl } from '../electron/session';
+import { SessionHandlers, makeSessionForApp, makeSessionForDevAppFromUrl } from '../electron/session';
 import { protoSchemas } from "../electron/protocols";
 import { join } from 'path';
 import { copy as jsonCopy } from '../lib-common/json-utils';
 import { logError, logWarning } from '../confs';
-import { AppCAPsAndSetup } from '../core';
+import { AppCAPsAndSetup } from '../core/caps';
 import { addDevToolsShortcuts } from '../init-proc/devtools';
 import { Component, Service } from '.';
 import { toBuffer } from '../lib-common/buffer-utils';
@@ -49,6 +49,7 @@ export class GUIComponent implements Component {
 	public readonly devToolsEnabled: boolean;
 	private contentTitle = '';
 	private cmdHandlerImpl: CmdsHandler|undefined = undefined;
+	private readonly sessionHandlers: Partial<SessionHandlers> = {};
 
 	protected constructor(
 		public readonly domain: string,
@@ -148,7 +149,8 @@ export class GUIComponent implements Component {
 		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<GUIComponent> {
 		const session = makeSessionForApp(
-			domain, appRoot, 'regular', capsReq, devTools
+			domain, appRoot, 'regular', capsReq, devTools,
+			handlerType => app.getHandlerInSession(handlerType)
 		);
 		const preload = ((Object.keys(caps.w3n).length > 0) ?
 			IPC_PRELOAD : undefined
@@ -173,7 +175,7 @@ export class GUIComponent implements Component {
 		devTools: boolean
 	): Promise<GUIComponent> {
 		const session = makeSessionForApp(
-			domain, appRoot, 'startup', undefined, devTools
+			domain, appRoot, 'startup', undefined, devTools, undefined
 		);
 		const opts = prepareWindowOpts(
 			session, IPC_PRELOAD, winOpts, undefined, devTools
@@ -207,6 +209,18 @@ export class GUIComponent implements Component {
 		return this.services?.values().flatMap(
 			srv => srv.listOpenConnections(this.entrypoint)
 		);
+	}
+
+	protected getHandlerInSession<T extends keyof SessionHandlers>(
+		type: T
+	): SessionHandlers[T]|undefined {
+		return this.sessionHandlers[type];
+	}
+
+	setHandlerInSession<T extends keyof SessionHandlers>(
+		type: T, handler: SessionHandlers[T]
+	): void {
+		this.sessionHandlers[type] = handler;
 	}
 
 }
@@ -306,7 +320,9 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 		generateTitle: TitleGenerator,
 		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<GUIComponent> {
-		const session = makeSessionForDevAppFromUrl(appUrl, capsReq);
+		const session = makeSessionForDevAppFromUrl(
+			appUrl, capsReq, handlerType => app.getHandlerInSession(handlerType)
+		);
 		const preload = ((Object.keys(caps.w3n).length > 0) ?
 			IPC_PRELOAD : undefined
 		);
@@ -329,7 +345,7 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 		domain: string, appUrl: string, entrypoint: string,
 		winOpts: WindowOptions|undefined, icon: string|undefined
 	): Promise<GUIComponent> {
-		const session = makeSessionForDevAppFromUrl(appUrl, undefined);
+		const session = makeSessionForDevAppFromUrl(appUrl, undefined, undefined);
 		const opts = prepareWindowOpts(
 			session, IPC_PRELOAD, winOpts, undefined, true
 		);

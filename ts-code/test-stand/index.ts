@@ -21,7 +21,8 @@ import { APP_ROOT_FOLDER, MANIFEST_FILE, SITE_ROOT_FOLDER } from "../system/syst
 import { dirname, isAbsolute, join, resolve } from "path";
 import { readFileSync, statSync, writeFileSync } from "fs";
 import { errWithCause } from "../lib-common/exceptions/error";
-import { AppCAPsAndSetup, AppSetter, CoreDriver, SiteCAPsAndSetup } from "../core";
+import { CoreDriver } from "../core";
+import { AppCAPsAndSetup, AppSetter, SiteCAPsAndSetup } from "../core/caps";
 import { Code } from "../lib-common/exceptions/file";
 import { stringOfB64CharsSync, stringOfB64UrlSafeCharsSync } from "../lib-common/random-node";
 import { MAIN_GUI_ENTRYPOINT } from "../lib-common/manifest-utils";

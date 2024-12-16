@@ -28,12 +28,14 @@ import { Notifications } from "../shell/user-notifications";
 import { Deferred, defer } from "../lib-common/processes/deferred";
 import { StartAppWithCmd } from "../shell/cmd-invocation";
 import { GetAppFSResourceFor } from "../shell/fs-resource";
-import { AppSetter, CoreDriver, SiteCAPsAndSetup } from "./index";
+import { CoreDriver } from "./index";
+import { AppSetter, SiteCAPsAndSetup, makeCAPsSetAppAndCloseFns } from "./caps";
 import { makeRpcCAP } from "./caps/rpc";
 import { connectivityCAP } from "./caps/connectivity";
 import { makeLogoutCAP } from "./caps/logout";
 import { makeSystemCAP } from "./caps/system";
 import { makeShellCAPs } from "./caps/shell";
+import { makeMediaDevicesCAP } from "./caps/mediaDevices";
 
 type W3N = web3n.system.W3N;
 type SitesW3N = web3n.caps.sites.W3N;
@@ -175,16 +177,10 @@ export class Driver implements CoreDriver {
 		const rpc = makeRpcCAP(
 			this.rpcClientSide, appDomain, componentDef, capsReq
 		);
-		const close = () => {
-			shell?.close();
-			rpc?.close();
-			baseW3N.close();
-		};
-		const setApp: AppSetter = app => {
-			closeSelf.setApp(app);
-			shell?.setApp(app);
-			rpc?.setApp(app);
-		};
+		const mediaDevices = makeMediaDevicesCAP(capsReq.mediaDevices);
+		const { close, setApp } = makeCAPsSetAppAndCloseFns(
+			shell, rpc, mediaDevices, baseW3N, closeSelf
+		);
 		const w3n: W3N = {
 			log: baseW3N.caps.log,
 			myVersion: async () => appVersion,
@@ -192,11 +188,15 @@ export class Driver implements CoreDriver {
 			mail: baseW3N.caps.mail,
 			mailerid: baseW3N.caps.mailerid,
 			closeSelf: closeSelf.cap,
-			system: makeSystemCAP(this.makeSystemCapFns(), capsReq),
+			system: makeSystemCAP(
+				this.makeSystemCapFns,
+				(capsReq as web3n.system.RequestedCAPs).system
+			),
 			logout: makeLogoutCAP(this.logout, capsReq),
 			shell: shell?.cap,
 			rpc: rpc?.cap,
 			connectivity: connectivityCAP(capsReq.connectivity),
+			mediaDevices: mediaDevices?.cap,
 		};
 		return { w3n, close, setApp };
 	}

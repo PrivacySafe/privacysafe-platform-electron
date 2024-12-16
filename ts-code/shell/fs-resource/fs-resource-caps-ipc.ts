@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Caller, ExposedFn, ExposedServices, FSMsg, FileMsg, exposeFSService, exposeFileService, makeFSCaller, makeFileCaller, makeIPCException } from "core-3nweb-client-lib/build/ipc";
+import { Caller, ExposedFn, CoreSideServices, FSMsg, FileMsg, exposeFSService, exposeFileService, makeFSCaller, makeFileCaller, makeIPCException } from "core-3nweb-client-lib/build/ipc";
 import { shell_fs_resource as pb } from '../../protos/shell_fs_resource.proto';
 import { ProtoType, Value, toOptVal, valOfOpt } from '../../ipc-with-core/protobuf-msg';
 
@@ -36,7 +36,7 @@ namespace getFSResource {
 	}>(pb.GetFSResourceReplyBody);
 
 	export function wrapService(
-		fn: GetFSResource, expServices: ExposedServices
+		fn: GetFSResource, expServices: CoreSideServices
 	): ExposedFn {
 		return bytes => {
 			const { resourceName, appDomain } = requestType.unpack(bytes);

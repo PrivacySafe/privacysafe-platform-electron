@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedFn, Caller, ExposedServices, ExposedObj, checkRefObjTypeIs, EnvelopeBody } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedFn, Caller, CoreSideServices, ExposedObj, checkRefObjTypeIs, EnvelopeBody } from 'core-3nweb-client-lib/build/ipc';
 import { Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { errFromMsg, errToMsg, ObjectReference, objRefType } from '../ipc-with-core/protobuf-msg';
@@ -34,7 +34,7 @@ export namespace exposeService {
 	const reqType = ProtoType.for<{ service: string; }>(pb.ExposeSrvRequestBody);
 
 	export function expose(
-		fn: ExposeService, expServices: ExposedServices
+		fn: ExposeService, expServices: CoreSideServices
 	): ExposedFn {
 		return buf => {
 			const { service } = reqType.unpack(buf);
@@ -78,7 +78,7 @@ Object.freeze(exposeService);
 namespace connection {
 
 	export function expose(
-		c: IncomingConnection, expServices: ExposedServices
+		c: IncomingConnection, expServices: CoreSideServices
 	): ObjectReference<'IncomingConnection'> {
 		const exp = makeExposedObjForIncomingConnection(c, expServices);
 		return expServices.exposeDroppableService('IncomingConnection', exp, c);
@@ -96,7 +96,7 @@ namespace connection {
 	}
 
 	function makeExposedObjForIncomingConnection(
-		c: IncomingConnection, expServices: ExposedServices
+		c: IncomingConnection, expServices: CoreSideServices
 	): ExposedObj<IncomingConnection> {
 		return {
 			close: close.wrapService(c.close),
@@ -132,7 +132,7 @@ namespace connection {
 		const msgType = ProtoType.for<OutgoingMsg>(pb.OutgoingMsg);
 
 		export function wrapService(
-			fn: IncomingConnection['send'], expServices: ExposedServices
+			fn: IncomingConnection['send'], expServices: CoreSideServices
 		): ExposedFn {
 			return buf => {
 				const msg = unpackMsg(buf, expServices);
@@ -159,7 +159,7 @@ namespace connection {
 		}
 
 		function unpackMsg(
-			buf: EnvelopeBody, expServices: ExposedServices
+			buf: EnvelopeBody, expServices: CoreSideServices
 		): OutgoingMsg {
 			const msg = msgType.unpack(buf);
 			if (msg.err) {
@@ -179,7 +179,7 @@ namespace connection {
 		const msgType = ProtoType.for<IncomingMsg>(pb.IncomingMsg);
 
 		export function wrapService(
-			fn: IncomingConnection['watch'], expServices: ExposedServices
+			fn: IncomingConnection['watch'], expServices: CoreSideServices
 		): ExposedFn {
 			return () => {
 				const s = new Subject<IncomingMsg>();

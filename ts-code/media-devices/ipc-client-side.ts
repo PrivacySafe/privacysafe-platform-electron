@@ -15,12 +15,13 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Caller } from 'core-3nweb-client-lib/build/ipc';
+import { Caller, ClientSideServices } from 'core-3nweb-client-lib/build/ipc';
+import { setSelectDisplayMediaForCaptureHandler } from './handler-caps-ipc';
 
 type MediaDevices = web3n.media.MediaDevices;
 
 export function makeMediaDevices(
-	caller: Caller, mediaDevPath: string[]
+	caller: Caller, mediaDevPath: string[], expServices: ClientSideServices
 ): MediaDevices {
 	if (!caller.listObj) {
 		throw new Error(`Caller here expects to have method 'listObj'`);
@@ -29,18 +30,37 @@ export function makeMediaDevices(
 	const lstMediaDeviceCAP = caller.listObj(
 		mediaDevPath
 	) as (keyof MediaDevices)[];
+	addHandlerSetters(
+		caller, expServices, media, mediaDevPath, lstMediaDeviceCAP
+	);
 	return media;
 }
 
 export async function promiseMediaDevices(
-	caller: Caller, mediaDevPath: string[]
+	caller: Caller, mediaDevPath: string[], expServices: ClientSideServices
 ): Promise<MediaDevices> {
 	if (!caller.listObjAsync) {
 		throw new Error(`Caller here expects to have method 'listObjAsync'`);
 	}
 	const media: MediaDevices = {};
-	const lstSystemCAP = (
+	const lstMediaDeviceCAP = (
 		await caller.listObjAsync(mediaDevPath)
 	) as (keyof MediaDevices)[];
+	addHandlerSetters(
+		caller, expServices, media, mediaDevPath, lstMediaDeviceCAP
+	);
 	return media;
+}
+
+function addHandlerSetters(
+	caller: Caller, expServices: ClientSideServices, media: MediaDevices,
+	mediaDevPath: string[], lst: (keyof MediaDevices)[]
+): void {
+	if (lst.includes('setSelectDisplayMediaForCaptureHandler')) {
+		media.setSelectDisplayMediaForCaptureHandler = setSelectDisplayMediaForCaptureHandler.makeClient(
+			caller,
+			mediaDevPath.concat('setSelectDisplayMediaForCaptureHandler'),
+			expServices
+		);
+	}
 }

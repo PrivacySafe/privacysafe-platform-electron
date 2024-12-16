@@ -17,7 +17,7 @@
 
 /// <reference path="../api-defs/w3n.d.ts" />
 
-import { Envelope, makeIPCException, ObjectsConnector } from "core-3nweb-client-lib/build/ipc";
+import { Envelope, makeIPCException, ObjectsConnector, ClientSide } from "core-3nweb-client-lib/build/ipc";
 import { SocketConnectInfo, makeSocketIPCException, toAuthRequestChunk, readMsgOnClientSide, toListObjRequestChunk, EnvelopesBuffer, SocketIPCException, MsgOnClientSide, toChunksForSending, MAX_MSG_SIZE, MAX_NONACK_WRITES, MAX_NONACK_READS, ACK_CHUNK } from "../ipc-with-core/socket-ipc";
 import { Subject, Unsubscribable } from "rxjs";
 import { DenoLikeSocket } from "../lib-common/deno-like-socket";
@@ -40,7 +40,7 @@ export class ClientSocketIPC {
 	private readonly toCore = new Subject<Envelope>();
 	private readonly sendingProc = new SingleProc();
 	private sendingToCoreProc: Unsubscribable|undefined;
-	private readonly clientSide: ObjectsConnector;
+	private readonly clientSide: ClientSide;
 
 	private listRequests = new Map<string, Deferred<string[]>>();
 	private readonly envelopeParts = new EnvelopesBuffer();
@@ -67,16 +67,17 @@ export class ClientSocketIPC {
 				this.fromCore.error(err);
 			},
 		});
-		this.clientSide = new ObjectsConnector(
-			this.toCore, this.fromCore.asObservable(), 'clients',
-			undefined, this.listObjAsync.bind(this));
+		this.clientSide = ObjectsConnector.makeClientSide(
+			this.toCore, this.fromCore.asObservable(),
+			undefined, this.listObjAsync.bind(this)
+		);
 		this.startContinuousReading();
 		Object.seal(this);
 	}
 
 	static denoConnect: typeof Deno.connect = undefined as any;
 
-	static makeConnector(sockParam: SocketConnectInfo): ObjectsConnector {
+	static makeConnector(sockParam: SocketConnectInfo): ClientSide {
 		const ipc = new ClientSocketIPC(sockParam);
 		return ipc.clientSide;
 	}

@@ -15,14 +15,14 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedObj, ExposedServices } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedObj, CoreSideServices } from 'core-3nweb-client-lib/build/ipc';
 import { exposeService } from './expose-service-cap-ipc';
 import { thisAppRPC, otherAppsRPC } from './client-caps-ipc';
 
 type RPC = web3n.rpc.RPC;
 
 export function exposeRpcCAP(
-	cap: RPC, expServices: ExposedServices
+	cap: RPC, expServices: CoreSideServices
 ): ExposedObj<RPC> {
 	const wrap: ExposedObj<RPC> = {};
 	if (cap.thisApp) {

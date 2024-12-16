@@ -21,7 +21,7 @@ import { stat as fsStat } from '../../lib-common/async-fs-node';
 import { DeviceFS } from 'core-3nweb-client-lib';
 import { FileException } from '../../lib-common/exceptions/file';
 import { GUIComponent } from '../../app-n-components/gui-component';
-import { AppSetter } from '../../core';
+import { AppSetter } from '../../core/caps';
 
 export interface DialogOpeners {
 	openFileDialog: web3n.shell.files.OpenFileDialog;

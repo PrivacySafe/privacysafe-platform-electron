@@ -16,7 +16,7 @@
 */
 
 import { Subject, Unsubscribable } from "rxjs";
-import { Envelope, ExposedFn, ObjectsConnector, exposeStartupW3N, exposeW3N, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
+import { Envelope, ExposedFn, ObjectsConnector, CoreSide, exposeStartupW3N, exposeW3N, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
 import { ipcMain, WebContents } from 'electron';
 import { IPC_CORE_SIDE, IPC_CLIENT_SIDE, IPC_SYNCED_W3N_LIST } from "../ipc-with-core/electron-ipc";
 import { base64, toBuffer } from "../lib-common/buffer-utils";
@@ -35,7 +35,7 @@ import { exposeConnectivityCAP } from "../connectivity/connectivity-cap-ipc";
 import { exposeSystemCAP } from "../system/ipc-core-side";
 import { exposeShellCAPs } from "../shell/ipc-core-side";
 import { exposeRpcCAP } from "../rpc/ipc-core-side";
-import { exposeMediaDevicesCAP } from "../media-devices/expose-service-cap-ipc";
+import { exposeMediaDevicesCAP } from "../media-devices/ipc-core-side";
 import { unlink } from "../lib-common/async-fs-node";
 
 type StartupW3N = web3n.startup.W3N;
@@ -70,7 +70,7 @@ export class ElectronIPCConnectors {
 	connectStartupW3N(coreW3N: StartupW3N, client: WebContents): void {
 		const coreSide = this.makeCoreSideConnector(client);
 		exposeStartupW3N(
-			coreSide.exposedServices,
+			coreSide,
 			coreW3N as web3n.testing.StartupW3N,
 			extraStartupCAPs
 		);
@@ -82,13 +82,13 @@ export class ElectronIPCConnectors {
 			event.returnValue = coreSide.exposedServices.listObj(path);
 		});
 		exposeW3N(
-			coreSide.exposedServices,
+			coreSide,
 			coreW3N as web3n.testing.CommonW3N,
 			extraCAPs
 		);
 	}
 
-	private makeCoreSideConnector(client: WebContents): ObjectsConnector {
+	private makeCoreSideConnector(client: WebContents): CoreSide {
 		const fromCore = new Subject<Envelope>();
 		const fromClient = new Subject<Envelope>();
 		const toCore = fromClient.asObservable();
@@ -98,7 +98,7 @@ export class ElectronIPCConnectors {
 			error: removeConnector,
 			complete: removeConnector
 		});
-		const coreSide = new ObjectsConnector(fromCore, toCore, 'services');
+		const coreSide = ObjectsConnector.makeCoreSide(fromCore, toCore);
 		this.connectors.set(client, { coreSide, fromClient });
 		client.on('destroyed', () => coreSide.close());
 		return coreSide;
@@ -110,7 +110,7 @@ Object.freeze(ElectronIPCConnectors);
 
 
 interface Connector {
-	coreSide: ObjectsConnector;
+	coreSide: CoreSide;
 	fromClient: Subject<Envelope>;
 }
 
@@ -297,7 +297,7 @@ Object.freeze(SocketIPCConnectors);
 class CAPsSocket {
 
 	private niceSock: DenoLikeSocket|undefined = undefined;
-	private readonly coreSide: ObjectsConnector;
+	private readonly coreSide: CoreSide;
 	private readonly fromClient = new Subject<Envelope>();
 	private sendingProc: Unsubscribable|undefined = undefined;
 	private readonly envelopeParts = new EnvelopesBuffer();
@@ -319,9 +319,9 @@ class CAPsSocket {
 			error: disconnect,
 			complete: disconnect
 		});
-		this.coreSide = new ObjectsConnector(fromCore, toCore, 'services');
+		this.coreSide = ObjectsConnector.makeCoreSide(fromCore, toCore);
 		exposeW3N(
-			this.coreSide.exposedServices,
+			this.coreSide,
 			this.caps as web3n.testing.CommonW3N,
 			extraCAPs
 		);

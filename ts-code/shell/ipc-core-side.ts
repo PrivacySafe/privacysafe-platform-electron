@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedObj, ExposedServices, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedObj, CoreSideServices, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
 import { exposeFileDialogsCAP } from "../shell/file-dialogs/file-dialogs-cap-ipc";
 import { exposeUserNotificationsCAP } from "../shell/user-notifications/user-notifications-cap-ipc";
 import { exposeGetFSResourceCAP } from './fs-resource/fs-resource-caps-ipc';
@@ -23,7 +23,7 @@ import { exposeGetFSResourceCAP } from './fs-resource/fs-resource-caps-ipc';
 type ShellCAPs = web3n.shell.ShellCAPs;
 
 export function exposeShellCAPs(
-	cap: ShellCAPs, expServices: ExposedServices
+	cap: ShellCAPs, expServices: CoreSideServices
 ): ExposedObj<ShellCAPs> {
 	const wrap: ExposedObj<ShellCAPs> = {};
 	if (cap.fileDialogs) {

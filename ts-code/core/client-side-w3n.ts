@@ -15,29 +15,33 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ObjectsConnector, makeW3Nclient, promiseW3Nclient, callerSideJSONWrap as jsonCall } from 'core-3nweb-client-lib/build/ipc';
+import { ClientSide, makeW3Nclient, promiseW3Nclient, callerSideJSONWrap as jsonCall, Caller } from 'core-3nweb-client-lib/build/ipc';
 import { makeTestStandCaller } from "../test-stand/test-stand-cap-ipc";
 import { makeConnectivity } from '../connectivity/connectivity-cap-ipc';
 import { makeSystemCaller, promiseSystemCaller } from '../system/ipc-client-side';
 import { makeShellCaller, promiseShellCaller } from '../shell/ipc-client-side';
 import { makeRpcCaller, promiseRpcCaller } from '../rpc/ipc-client-side';
-import { makeMediaDevices, promiseMediaDevices } from '../media-devices/client-caps-ipc';
+import { makeMediaDevices, promiseMediaDevices } from '../media-devices/ipc-client-side';
 
 type W3N = web3n.system.W3N;
 
-const jsonFuncCall = jsonCall.makeReqRepFuncCaller;
-const jsonFuncCallSwallowingErrs: typeof jsonFuncCall<any> = (a, b, c) => {
-	const fn = jsonFuncCall(a,b,c);
+function jsonFuncCall<F extends Function>(
+	clientSide: Caller, path: string[]
+): F {
+	return jsonCall.makeReqRepFuncCaller(clientSide, path);
+}
+const jsonFuncCallSwallowingErrs: typeof jsonFuncCall<any> = (a, b) => {
+	const fn = jsonFuncCall(a,b);
 	return function() {
 		return fn.call(undefined, ...arguments).catch(noop);
 	}
 };
 
-export function makeClientSideW3N(clientSide: ObjectsConnector): W3N {
+export function makeClientSideW3N(clientSide: ClientSide): W3N {
 	const clientW3N = makeW3Nclient<W3N & web3n.testing.CommonW3N>(
-		clientSide.caller,
+		clientSide,
 		{
-			closeSelf: jsonFuncCall,
+			closeSelf: jsonFuncCallSwallowingErrs,
 			myVersion: jsonFuncCall,
 			system: makeSystemCaller,
 			logout: jsonFuncCall,
@@ -53,10 +57,10 @@ export function makeClientSideW3N(clientSide: ObjectsConnector): W3N {
 }
 
 export async function promiseClientSideW3N(
-	clientSide: ObjectsConnector
+	clientSide: ClientSide
 ): Promise<W3N> {
 	const clientW3N = await promiseW3Nclient<W3N & web3n.testing.CommonW3N>(
-		clientSide.caller,
+		clientSide,
 		{
 			closeSelf: jsonFuncCallSwallowingErrs,
 			myVersion: jsonFuncCall,

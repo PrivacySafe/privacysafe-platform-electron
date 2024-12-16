@@ -17,13 +17,11 @@
 
 import { CoreConf, FactoryOfFSs } from "core-3nweb-client-lib";
 import { GetServiceToHandleNewCall } from "../rpc";
-import { Component } from "../app-n-components";
 import { StartAppWithCmd } from "../shell/cmd-invocation";
 import { GetAppFSResourceFor } from "../shell/fs-resource";
 import { Driver } from "./core-driver";
+import { AppCAPsAndSetup, SiteCAPsAndSetup } from "./caps";
 
-type W3N = web3n.caps.W3N;
-type SitesW3N = web3n.caps.sites.W3N;
 type SysUtils = web3n.system.SysUtils;
 type Logout = web3n.caps.Logout;
 type AppComponent = web3n.caps.AppComponent;
@@ -45,18 +43,6 @@ export interface CoreDriver {
 	getUserId(): string;
 	whenReady(): Promise<void>;
 }
-
-export interface AppCAPsAndSetup {
-	w3n: W3N;
-	close: () => void;
-	setApp: AppSetter;
-}
-
-export interface SiteCAPsAndSetup {
-	w3n: SitesW3N;
-}
-
-export type AppSetter = (app: Component) => void;
 
 export function makeCoreDriver(
 	conf: CoreConf, makeSystemCapFns: () => SysUtils,

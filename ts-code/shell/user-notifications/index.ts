@@ -18,7 +18,7 @@
 import { Notification, NotificationConstructorOptions } from 'electron';
 import { Subject } from 'rxjs';
 import { share } from 'rxjs/operators';
-import { AppSetter } from '../../core';
+import { AppSetter } from '../../core/caps';
 import { Component } from '../../app-n-components';
 import { GUIComponent } from '../../app-n-components/gui-component';
 import { toRxObserver } from '../../lib-common/utils-for-observables';

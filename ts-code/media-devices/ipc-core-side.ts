@@ -15,13 +15,21 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedObj, ExposedServices, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedObj, CoreSideServices, CallerToClient } from 'core-3nweb-client-lib/build/ipc';
+import { setSelectDisplayMediaForCaptureHandler } from './handler-caps-ipc';
 
 type MediaDevices = web3n.media.MediaDevices;
 
 export function exposeMediaDevicesCAP(
-	cap: MediaDevices, expServices: ExposedServices
+	cap: MediaDevices, _expServices: CoreSideServices,
+	callerToClient: CallerToClient
 ): ExposedObj<MediaDevices> {
 	const wrap: ExposedObj<MediaDevices> = {};
+	if (cap.setSelectDisplayMediaForCaptureHandler) {
+		wrap.setSelectDisplayMediaForCaptureHandler = setSelectDisplayMediaForCaptureHandler.expose(
+			cap.setSelectDisplayMediaForCaptureHandler,
+			callerToClient
+		)
+	}
 	return wrap;
 }

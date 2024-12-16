@@ -19,26 +19,14 @@ import { ClientSideConnector, ServiceConnector } from "../../rpc";
 import { makeAppInitExc } from "../../system/system-places";
 import { Component } from "../../app-n-components";
 import { makeRPCException } from "../../lib-common/manifest-utils";
+import { AppSetter, makeCAPsSetAppAndCloseFns } from "./index";
 
 type W3N = web3n.caps.W3N;
-type SitesW3N = web3n.caps.sites.W3N;
 type AppComponent = web3n.caps.AppComponent;
 type GUIServiceComponent = web3n.caps.GUIServiceComponent;
 type ServiceComponent = web3n.caps.ServiceComponent;
 type RequestedCAPs = web3n.caps.RequestedCAPs;
 type ExposeService = web3n.rpc.service.ExposeService;
-
-export interface AppCAPsAndSetup {
-	w3n: W3N;
-	close: () => void;
-	setApp: AppSetter;
-}
-
-export interface SiteCAPsAndSetup {
-	w3n: SitesW3N;
-}
-
-export type AppSetter = (app: Component) => void;
 
 
 class ClientSideRPCConnections {
@@ -155,19 +143,10 @@ export function makeRpcCAP(
 		otherAppsRPC: otherAppsRPC?.cap,
 		exposeService: exposeService?.cap,
 	};
-	return {
-		cap,
-		setApp: app => {
-			exposeService?.setApp(app);
-			appRPC?.setApp(app);
-			otherAppsRPC?.setApp(app);
-		},
-		close: () => {
-			exposeService?.close();
-			appRPC?.close();
-			otherAppsRPC?.close();
-		}
-	};
+	const { close, setApp } = makeCAPsSetAppAndCloseFns(
+		exposeService, appRPC, otherAppsRPC
+	);
+	return { cap, close, setApp };
 }
 
 function exposeServiceCAP(

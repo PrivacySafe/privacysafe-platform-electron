@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedObj, ExposedServices, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedObj, CoreSideServices, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
 
 type SysUtils = web3n.system.SysUtils;
 type Apps = web3n.system.apps.Apps;
@@ -26,7 +26,7 @@ type AppsOpener = web3n.system.apps.AppsOpener;
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
 
 export function exposeSystemCAP(
-	cap: SysUtils, expServices: ExposedServices
+	cap: SysUtils, expServices: CoreSideServices
 ): ExposedObj<SysUtils> {
 	const wrap: ExposedObj<SysUtils> = {};
 	if (cap.apps) {
@@ -42,7 +42,7 @@ export function exposeSystemCAP(
 }
 
 export function exposeAppsCAP(
-	cap: Apps, expServices: ExposedServices
+	cap: Apps, expServices: CoreSideServices
 ): ExposedObj<Apps> {
 	const wrap: ExposedObj<Apps> = {};
 	if (cap.opener) {

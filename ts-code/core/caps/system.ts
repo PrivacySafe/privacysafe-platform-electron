@@ -23,11 +23,15 @@ type SystemMonitor = web3n.system.monitor.SystemMonitor;
 type RequestedCAPs = web3n.system.RequestedCAPs;
 
 export function makeSystemCAP(
-	systemCapFns: SysUtils, capsReq: RequestedCAPs
+	makeSystemCapFns: () => SysUtils, sysReq: RequestedCAPs['system']
 ): W3N['system'] {
-	const apps = makeAppsCAP(systemCapFns.apps!, capsReq);
-	const platform = makePlatformCAP(systemCapFns.platform!, capsReq);
-	const monitor = makeSystemMonitorCAP(systemCapFns.monitor!, capsReq);
+	if (!sysReq) {
+		return;
+	}
+	const systemCapFns = makeSystemCapFns();
+	const apps = makeAppsCAP(systemCapFns.apps!, sysReq);
+	const platform = makePlatformCAP(systemCapFns.platform!, sysReq);
+	const monitor = makeSystemMonitorCAP(systemCapFns.monitor!, sysReq);
 	if (apps || platform || monitor) {
 		return {
 			apps,
@@ -38,13 +42,13 @@ export function makeSystemCAP(
 }
 
 function makeAppsCAP(
-	appsCapFns: Apps, capsReq: RequestedCAPs
+	appsCapFns: Apps, sysReq: NonNullable<RequestedCAPs['system']>
 ): SysUtils['apps'] {
-	if (capsReq.system?.apps === 'all') {
+	if (sysReq.apps === 'all') {
 		return appsCapFns;
-	} else if (capsReq.system?.apps) {
+	} else if (sysReq.apps) {
 		const apps: SysUtils['apps'] = {};
-		const appsReq = capsReq.system.apps;
+		const appsReq = sysReq.apps;
 		if (Array.isArray(appsReq)) {
 			for (const key of appsReq) {
 				apps[key] = appsCapFns[key] as any;
@@ -58,17 +62,17 @@ function makeAppsCAP(
 }
 
 function makePlatformCAP(
-	platCapFns: Platform, capsReq: RequestedCAPs
+	platCapFns: Platform, sysReq: NonNullable<RequestedCAPs['system']>
 ): SysUtils['platform'] {
-	if (capsReq.system?.platform === 'all') {
+	if (sysReq.platform === 'all') {
 		return platCapFns;
 	}
 }
 
 function makeSystemMonitorCAP(
-	sysMonCapFns: SystemMonitor, capsReq: RequestedCAPs
+	sysMonCapFns: SystemMonitor, sysReq: NonNullable<RequestedCAPs['system']>
 ): SysUtils['monitor'] {
-	if (capsReq.system?.monitor === 'all') {
+	if (sysReq.monitor === 'all') {
 		return sysMonCapFns;
 	}
 }

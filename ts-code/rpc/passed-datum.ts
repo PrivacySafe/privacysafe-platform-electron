@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedServices, EnvelopeBody, TransferableObj, exposeFSService, exposeFileService, Caller, makeFSCaller, FSMsg, FileMsg, exposeSrcService, exposeSinkService, makeSrcCaller, makeSinkCaller, makeFileCaller } from 'core-3nweb-client-lib/build/ipc';
+import { CoreSideServices, EnvelopeBody, TransferableObj, exposeFSService, exposeFileService, Caller, makeFSCaller, FSMsg, FileMsg, exposeSrcService, exposeSinkService, makeSrcCaller, makeSinkCaller, makeFileCaller } from 'core-3nweb-client-lib/build/ipc';
 import { ObjectReference, ProtoType } from '../ipc-with-core/protobuf-msg';
 import { rpc as pb } from '../protos/rpc.proto';
 
@@ -39,7 +39,7 @@ export interface PassedObj {
 export const datumType = ProtoType.for<SerialFormOfPassedData>(pb.PassedDatum);
 
 export function datumFromSerialFormOnCoreSide(
-	datum: SerialFormOfPassedData|undefined, expServices: ExposedServices
+	datum: SerialFormOfPassedData|undefined, expServices: CoreSideServices
 ): PassedDatum|undefined {
 	if (!datum) { return; }
 	const { bytes, passedObjs } = datum;
@@ -56,7 +56,7 @@ export function datumFromSerialFormOnCoreSide(
 }
 
 export function datumToSerialFormOnCoreSide(
-	datum: PassedDatum|undefined, expServices: ExposedServices
+	datum: PassedDatum|undefined, expServices: CoreSideServices
 ): SerialFormOfPassedData|undefined {
 	if (!datum?.passedByReference) { return datum; }
 	const { bytes, passedByReference } = datum;
@@ -74,7 +74,7 @@ export function datumToSerialFormOnCoreSide(
 }
 
 export function packDatumOnCoreSide(
-	datum: PassedDatum|undefined, expServices: ExposedServices
+	datum: PassedDatum|undefined, expServices: CoreSideServices
 ): EnvelopeBody {
 	return (datum ?
 		datumType.pack(datumToSerialFormOnCoreSide(datum, expServices)!) :
@@ -86,7 +86,7 @@ type TransferableType = File | FS | FileByteSink | FileByteSource;
 type TransferableRefType = 'FileImpl' | 'FSImpl' | 'FileByteSource' | 'FileByteSink';
 
 function exposeTransferable(
-	type: TransferableRefType, o: TransferableType, expServices: ExposedServices
+	type: TransferableRefType, o: TransferableType, expServices: CoreSideServices
 ): PassedObj {
 	switch (type) {
 		case 'FSImpl':
