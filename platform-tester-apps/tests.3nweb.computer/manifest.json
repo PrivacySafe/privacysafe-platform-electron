@@ -18,9 +18,11 @@
 					"OneShotDialog", "LongDialog",
 					"ServiceInDeno", "LongServiceInDeno"
 				],
+				"keyrings": "all",
 				"mail": {
 					"receivingFrom": "all",
-					"sendingTo": "all"
+					"sendingTo": "all",
+					"config": "all"
 				},
 				"storage": {
 					"appFS": [

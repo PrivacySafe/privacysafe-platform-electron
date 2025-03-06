@@ -137,8 +137,9 @@ export class UserApps {
 		const infos: UserAppInfo[] = [];
 		const allApps = await this.sysPlaces.listApps();
 		for (const { id, current } of allApps) {
+			const m = await this.sysPlaces.getAppManifest(id);
 			infos.push({
-				id, name: id, isInstalled: !!current
+				id, name: (m ? m.name : id), isInstalled: !!current
 			});
 		}
 		return infos;

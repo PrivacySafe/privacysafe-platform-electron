@@ -166,6 +166,7 @@ export class Driver implements CoreDriver {
 			componentDef.capsRequested : {}
 		);
 		const baseW3N = this.core.makeCAPsForApp(appDomain, capsReq);
+		const { log, keyrings, mail, mailerid, storage } = baseW3N.caps;
 		const closeSelf = this.closeSelfCAP();
 		const shell = makeShellCAPs(
 			appDomain, component, capsReq,
@@ -182,11 +183,8 @@ export class Driver implements CoreDriver {
 			shell, rpc, mediaDevices, baseW3N, closeSelf
 		);
 		const w3n: W3N = {
-			log: baseW3N.caps.log,
+			log, keyrings, mail, mailerid, storage,
 			myVersion: async () => appVersion,
-			storage: baseW3N.caps.storage,
-			mail: baseW3N.caps.mail,
-			mailerid: baseW3N.caps.mailerid,
 			closeSelf: closeSelf.cap,
 			system: makeSystemCAP(
 				this.makeSystemCapFns,

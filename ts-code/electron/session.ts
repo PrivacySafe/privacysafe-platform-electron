@@ -97,12 +97,12 @@ function setPermissionsInSession(
 	session.setDisplayMediaRequestHandler(async (req, cb) => {
 		const types = allowedDisplayMediaTypes(req, capsReq);
 		if (!types) {
-			cb({});
+			cb(null as any);
 			return;
 		}
 		const selectMediaToCapture = getHandler?.('selectMediaForCapture');
 		if (!selectMediaToCapture) {
-			cb({});
+			cb(null as any);
 			return;
 		}
 		const deskSrcs = await desktopCapturer.getSources({
@@ -113,10 +113,14 @@ function setPermissionsInSession(
 		const choices = toDisplaySourceInfo(deskSrcs);
 		const selectedId = await selectMediaToCapture(choices);
 		const selected = deskSrcs.find(src => (src.id === selectedId))!;
-		cb({
-			video: (req.videoRequested ? selected : undefined),
-			audio: (req.audioRequested ? 'loopbackWithMute' : undefined)
-		});
+		if (selected) {
+			cb({
+				video: (req.videoRequested ? selected : undefined),
+				audio: (req.audioRequested ? 'loopbackWithMute' : undefined)
+			});
+		} else {
+			cb(null as any);
+		}
 	});
 
 	session.setDevicePermissionHandler(details => {
@@ -212,14 +216,14 @@ function toDisplaySourceInfo(srcs: DesktopCapturerSource[]): DisplaySourceInfo {
 	.filter(({ id }) => id.startsWith('screen:'))
 	.map(({ id, name, display_id, thumbnail }) => ({
 		id, name, display_id,
-		thumbnail: optImageToBitmap(thumbnail)!,
+		thumbnail: optImageToPNG(thumbnail)!,
 	}));
 	const windows: NonNullable<DisplaySourceInfo['windows']> = srcs
 	.filter(({ id }) => id.startsWith('window:'))
 	.map(({ id, name, thumbnail, appIcon }) => ({
 		id, name,
-		thumbnail: optImageToBitmap(thumbnail)!,
-		appIcon: optImageToBitmap(appIcon)
+		thumbnail: optImageToPNG(thumbnail)!,
+		appIcon: optImageToPNG(appIcon)
 	}));
 	return {
 		screens: ((screens.length > 0) ? screens : undefined),
@@ -227,8 +231,8 @@ function toDisplaySourceInfo(srcs: DesktopCapturerSource[]): DisplaySourceInfo {
 	};
 }
 
-function optImageToBitmap(img: NativeImage|undefined): Uint8Array|undefined {
-	const bytes = img?.toBitmap();
+function optImageToPNG(img: NativeImage|undefined): Uint8Array|undefined {
+	const bytes = img?.toPNG();
 	return ((bytes && (bytes.length > 0)) ? bytes : undefined);
 }
 

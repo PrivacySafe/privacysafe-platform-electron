@@ -41,6 +41,7 @@ type AppState = web3n.system.apps.AppState;
 type AppEvent = web3n.system.apps.AppEvent;
 type SystemParamsForInstalledApp = web3n.system.apps.SystemParamsForInstalledApp;
 type AppManifest = web3n.caps.AppManifest;
+type GeneralAppManifest = web3n.caps.GeneralAppManifest;
 
 const CURRENT_FNAME = 'current';
 const COMPLETE_PACKS_DIR = 'complete';
@@ -321,19 +322,20 @@ export class SystemPlaces {
 
 	async appsToLaunchOnSystemStartup(): Promise<string[]> {
 		const appsCode = await this.getAppsCodeFS();
-		const appsWithStartupLaunchers: string[] = [];
+		const userApps: string[] = [];
 		const lst = await appsCode.listFolder('.');
 		for (const { name, isFolder } of lst) {
 			if (isFolder) {
 				const sysParamsForApp = await appsCode.getXAttr(
 					`${name}/${CURRENT_FNAME}`, INSTALLED_APP_SYSTEM_PARAMS_ATTR
-				) as SystemParamsForInstalledApp;
+				).catch(noop) as SystemParamsForInstalledApp|undefined;
 				if (sysParamsForApp && sysParamsForApp.hasStartupLaunchers) {
-					appsWithStartupLaunchers.push(reverseDomain(name));
+					userApps.push(reverseDomain(name));
 				}
 			}
 		}
-		return appsWithStartupLaunchers;
+		const bundledApps = await listInstalledBundledAppsWithStartup();
+		return userApps.concat(bundledApps);
 	}
 
 	async makeDownloadFolder(
@@ -590,9 +592,9 @@ export async function listBundledAppPacks(): Promise<{
 	return infos;
 }
 
-export async function listInstalledBundledApps(
+async function manifestsOfInstalledBundledApps(
 	skipApps?: string[]
-): Promise<AppVersions[]> {
+): Promise<AppManifest[]> {
 	let lst = (await readdir(BUNDLED_APPS_FOLDER)
 	.catch((exc: FileException) => {
 		if (exc.notFound) { return [] as string[]; }
@@ -606,13 +608,30 @@ export async function listInstalledBundledApps(
 		join(BUNDLED_APPS_FOLDER, fName, MANIFEST_FILE),
 		{ encoding: 'utf8' }
 	));
-	const infos = (await Promise.all(appManifestsPromises))
-	.map(mFile => JSON.parse(mFile) as AppManifest)
+	const manifests = (await Promise.all(appManifestsPromises))
+	.map(mFile => JSON.parse(mFile) as AppManifest);
+	return manifests;
+}
+
+export async function listInstalledBundledApps(
+	skipApps?: string[]
+): Promise<AppVersions[]> {
+	return (await manifestsOfInstalledBundledApps(skipApps))
 	.map(m => ({
 		id: m.appDomain,
 		current: m.version
-	} as AppVersions));
-	return infos;	
+	}));
+}
+
+async function listInstalledBundledAppsWithStartup(
+	skipApps?: string[]
+): Promise<string[]> {
+	return (await manifestsOfInstalledBundledApps(skipApps))
+	.filter(m => {
+		const launchers = (m as GeneralAppManifest).launchOnSystemStartup;
+		return (launchers && (launchers.length > 0));
+	})
+	.map(({ appDomain }) => appDomain);
 }
 
 function getBundledPackManifest(id: string): Promise<AppManifest|undefined> {
@@ -705,6 +724,8 @@ async function getAppDirInPacks(
 		if (!(exc as FileException).notFound) { throw exc; }
 	}
 }
+
+function noop() {}
 
 
 Object.freeze(exports);

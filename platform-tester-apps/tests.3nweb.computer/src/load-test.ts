@@ -30,6 +30,7 @@ declare const w3n: web3n.testing.CommonW3N;
 		await import('./tests/common-caps.js');
 		await import('./tests/mailerid.js');
 		await import('./tests/storage.js');
+		await import('./tests/keyrings.js');
 		await import('./tests/asmail.js');
 		await import('./tests/rpc/thisApp.js');
 		await import('./tests/services/fs-usage.js');

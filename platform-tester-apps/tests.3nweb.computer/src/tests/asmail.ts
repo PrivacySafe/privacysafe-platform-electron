@@ -18,7 +18,7 @@
 import { itCond } from './libs-for-tests/jasmine-utils.js';
 import { loadSpecs } from './libs-for-tests/spec-module.js';
 import { SetupForASMail } from './asmail/test-utils.js';
-import { areAddressesEqual } from '../lib-common/canonical-address.js';
+import { areAddressesEqual } from '../lib-common/address-utils.js';
 import { specs } from './asmail/specs/index.js';
 
 type WritableFS = web3n.files.WritableFS;
@@ -52,6 +52,7 @@ describe('ASMail', () => {
 		expect(typeof w3n.mail).toBe('object');
 		expect(typeof w3n.mail!.delivery).toBe('object');
 		expect(typeof w3n.mail!.inbox).toBe('object');
+		expect(typeof w3n.mail!.config).toBe('object');
 		expect(typeof w3n.mail!.getUserId).toBe('function');
 	}, undefined, s);
 
@@ -59,6 +60,42 @@ describe('ASMail', () => {
 		const userId = await w3n.mail!.getUserId();
 		expect(areAddressesEqual(userId, s.thisUser)).toBeTrue();
 	}, undefined, s);
+
+	describe(`config`, () => {
+
+		const config = w3n.mail!.config;
+
+		itCond(`shows parameter' values on the server`, async () => {
+			const initPubKey = await config.getOnServer('init-pub-key');
+			expect(typeof initPubKey).toBe('object');
+
+			const anonSenderPolicy = await config.getOnServer('anon-sender/policy');
+			expect(anonSenderPolicy).toBeTruthy();
+			expect(typeof anonSenderPolicy!.accept).toBe('boolean');
+			expect(typeof anonSenderPolicy!.defaultMsgSize).toBe('number');
+
+			const anonSenderInvites = await config.getOnServer('anon-sender/invites');
+			expect(anonSenderInvites).toBeTruthy();
+			expect(typeof anonSenderInvites).toBe('object');
+		}, undefined, s);
+
+		itCond(`sets parameter' values on the server`, async () => {
+			// some paramaters can be set directly
+			let anonSenderPolicy = await config.getOnServer('anon-sender/policy');
+			const newDefaultMsgSize = anonSenderPolicy!.defaultMsgSize + 42;
+			anonSenderPolicy!.defaultMsgSize = newDefaultMsgSize;
+			await config.setOnServer('anon-sender/policy', anonSenderPolicy!);
+			anonSenderPolicy = await config.getOnServer('anon-sender/policy');
+			expect(anonSenderPolicy!.defaultMsgSize).toBe(newDefaultMsgSize);
+
+			// but public key should be set via keyring cap, and not here
+			await config.setOnServer('init-pub-key', null).then(
+				() => fail(`public key shouldn't be set directly`),
+				err => expect(err).toBeTruthy()
+			);
+		}, undefined, s);
+
+	});
 
 	itCond('lists incoming messages in the inbox', async () => {
 		const msgs = await w3n.mail!.inbox.listMsgs();
