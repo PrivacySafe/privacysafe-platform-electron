@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2022 3NSoft Inc.
+ Copyright (C) 2021 - 2022, 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,10 +15,10 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedFn, Caller, ExposedObj, exposeLogger, makeLogCaller, EnvelopeBody } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedFn, Caller, ExposedObj, EnvelopeBody, serviceSideJSONWrap as jsonSrv, callerSideJSONWrap as jsonCall } from 'core-3nweb-client-lib/build/ipc';
 import { Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { ProtoType, strValType, toVal, unpackInt, packInt, Value, toOptVal, valOfOpt } from '../ipc-with-core/protobuf-msg';
+import { ProtoType, strValType, toVal, Value, toOptVal, valOfOpt } from '../ipc-with-core/protobuf-msg';
 import { test_stand as pb } from '../protos/test_stand.proto';
 
 type StartupTestStand = web3n.testing.StartupTestStand;
@@ -28,161 +28,125 @@ export function exposeStartupTestStandCAP(
 	cap: StartupTestStand
 ): ExposedObj<StartupTestStand> {
 	return {
-		log: exposeLogger(cap.log),
-		record: record.wrapService(cap.record),
-		exitAll: exitAll.wrapService(cap.exitAll),
-		staticTestInfo: staticTestInfo.wrapService(cap.staticTestInfo),
+		log: exposeJSONFunc(cap.log),
+		record: exposeJSONFunc(cap.record),
+		exitAll: exposeJSONFunc(cap.exitAll),
+		staticTestInfo: exposeJSONFunc(cap.staticTestInfo),
 	};
 }
 
 export function exposeTestStandCAP(cap: TestStand): ExposedObj<TestStand> {
-	return {
-		log: exposeLogger(cap.log),
-		record: record.wrapService(cap.record),
-		exitAll: exitAll.wrapService(cap.exitAll),
-		staticTestInfo: staticTestInfo.wrapService(cap.staticTestInfo),
-		idOfTestUser: idOfTestUser.wrapService(cap.idOfTestUser),
+	const exp: ExposedObj<TestStand> = {
+		log: exposeJSONFunc(cap.log),
+		record: exposeJSONFunc(cap.record),
+		exitAll: exposeJSONFunc(cap.exitAll),
+		staticTestInfo: exposeJSONFunc(cap.staticTestInfo),
+		idOfTestUser: exposeJSONFunc(cap.idOfTestUser),
 		sendMsgToOtherLocalTestProcess:
 			sendMsgToOtherLocalTestProcess.wrapService(
 				cap.sendMsgToOtherLocalTestProcess
 			),
+		// sendMsgToOtherLocalTestProcess: exposeJSONFunc(
+		// 	cap.sendMsgToOtherLocalTestProcess
+		// ),
 		observeMsgsFromOtherLocalTestProcess:
 			observeMsgsFromOtherLocalTestProcess.wrapService(
 				cap.observeMsgsFromOtherLocalTestProcess
 			),
+		// observeMsgsFromOtherLocalTestProcess: jsonSrv.wrapObservingFunc(
+		// 	cap.observeMsgsFromOtherLocalTestProcess
+		// )
 	};
+	if (cap.focusThisWindow) {
+		exp.focusThisWindow = exposeJSONFunc(cap.focusThisWindow);
+	}
+	return exp;
+}
+
+function exposeJSONFunc<F extends Function>(fn: F): ExposedFn {
+	return jsonSrv.wrapReqReplyFunc(fn as any);
 }
 
 export function makeStartupTestStandCaller(
 	caller: Caller, objPath: string[]
 ): StartupTestStand {
 	return {
-		log: makeLogCaller(caller, objPath.concat('log')),
-		record: record.makeCaller(caller, objPath),
-		exitAll: exitAll.makeCaller(caller, objPath),
-		staticTestInfo: staticTestInfo.makeCaller(
-			caller, objPath) as StartupTestStand['staticTestInfo'],
+		log: testStartupStandCall(caller, objPath, 'log'),
+		record: testStartupStandCall(caller, objPath, 'record'),
+		exitAll: testStartupStandCall(caller, objPath, 'exitAll'),
+		staticTestInfo: testStartupStandCall(
+			caller, objPath, 'staticTestInfo'
+		) as StartupTestStand['staticTestInfo'],
 	};
+}
+
+function testStartupStandCall<M extends keyof StartupTestStand>(
+	caller: Caller, objPath: string[], method: M
+): StartupTestStand[M] {
+	return jsonCall.makeReqRepObjCaller<StartupTestStand, M>(
+		caller, objPath, method
+	);
 }
 
 export function makeTestStandCaller(
 	caller: Caller, objPath: string[]
 ): TestStand {
-	return {
-		log: makeLogCaller(caller, objPath.concat('log')),
-		record: record.makeCaller(caller, objPath),
-		exitAll: exitAll.makeCaller(caller, objPath),
-		staticTestInfo: staticTestInfo.makeCaller(caller, objPath),
-		idOfTestUser: idOfTestUser.makeCaller(caller, objPath),
+	if (!caller.listObj) {
+		throw new Error(`Caller here expects to have method 'listObj'`);
+	}
+	const methods = caller.listObj(objPath) as (keyof TestStand)[];
+	return setupTestStandCaller(caller, objPath, methods);
+}
+
+export async function promiseTestStandCaller(
+	caller: Caller, objPath: string[]
+): Promise<TestStand> {
+	if (!caller.listObjAsync) {
+		throw new Error(`Caller here expects to have method 'listObjAsync'`);
+	}
+	const methods = (await caller.listObjAsync(objPath)) as (keyof TestStand)[];
+	return setupTestStandCaller(caller, objPath, methods);
+}
+
+function setupTestStandCaller(
+	caller: Caller, objPath: string[], methods: (keyof TestStand)[]
+): TestStand {
+	const cap: TestStand = 
+	{
+		log: testStandCall(caller, objPath, 'log'),
+		record: testStandCall(caller, objPath, 'record'),
+		exitAll: testStandCall(caller, objPath, 'exitAll'),
+		staticTestInfo: testStandCall(
+			caller, objPath, 'staticTestInfo'
+		) as StartupTestStand['staticTestInfo'],
+		idOfTestUser: testStandCall(caller, objPath, 'idOfTestUser'),
 		sendMsgToOtherLocalTestProcess: sendMsgToOtherLocalTestProcess.makeCaller(
 			caller, objPath
 		),
+		// sendMsgToOtherLocalTestProcess: testStandCall(
+		// 	caller, objPath, 'sendMsgToOtherLocalTestProcess'
+		// ),
 		observeMsgsFromOtherLocalTestProcess:
 			observeMsgsFromOtherLocalTestProcess.makeCaller(caller, objPath),
+		// observeMsgsFromOtherLocalTestProcess: jsonCall.makeObservableFuncCaller(
+		// 	caller, objPath.concat('observeMsgsFromOtherLocalTestProcess')
+		// )
 	};
+	if (methods.includes('focusThisWindow')) {
+		cap.focusThisWindow = testStandCall(caller, objPath, 'focusThisWindow');
+	}
+	return cap;
 }
 
 
-namespace exitAll {
-
-	export function wrapService(fn: StartupTestStand['exitAll']): ExposedFn {
-		return () => {
-			const promise = fn();
-			return { promise };
-		}
-	}
-
-	export function makeCaller(
-		caller: Caller, objPath: string[]
-	): StartupTestStand['exitAll'] {
-		const path = objPath.concat('exitAll');
-		return () => caller.startPromiseCall(path, undefined)
-		.then(noop);
-	}
-
+function testStandCall<M extends keyof TestStand>(
+	caller: Caller, objPath: string[], method: M
+): TestStand[M] {
+	return jsonCall.makeReqRepObjCaller<TestStand, M>(caller, objPath, method);
 }
-Object.freeze(exitAll);
 
 
 function noop() {}
-
-
-namespace record {
-
-	interface Request {
-		type: web3n.testing.TestRecordType,
-		msg?: string;
-	}
-
-	const requestType = ProtoType.for<Request>(pb.RecordRequestBody);
-
-	export function wrapService(fn: StartupTestStand['record']): ExposedFn {
-		return (reqBody: Buffer) => {
-			const { type, msg } = requestType.unpack(reqBody);
-			const promise = fn(type, msg);
-			return { promise };
-		};
-	}
-
-	export function makeCaller(
-		caller: Caller, objPath: string[]
-	): StartupTestStand['record'] {
-		const path = objPath.concat('record');
-		return (type, msg) => {
-			const req: Request = { type, msg };
-			return caller.startPromiseCall(path, requestType.pack(req))
-			.then(noop);
-		};
-	}
-
-}
-Object.freeze(record);
-
-
-namespace staticTestInfo {
-
-	export function wrapService(
-		fn: StartupTestStand['staticTestInfo'] | TestStand['staticTestInfo']
-	): ExposedFn {
-		return () => {
-			const promise = fn()
-			.then(info => strValType.pack(toVal(JSON.stringify(info))));
-			return { promise };
-		}
-	}
-
-	export function makeCaller(
-		caller: Caller, objPath: string[]
-	): TestStand['staticTestInfo'] {
-		const path = objPath.concat('staticTestInfo');
-		return () => caller.startPromiseCall(path, undefined)
-		.then(buf => JSON.parse(strValType.unpack(buf).value));
-	}
-
-}
-Object.freeze(staticTestInfo);
-
-
-namespace idOfTestUser {
-
-	export function wrapService(fn: TestStand['idOfTestUser']): ExposedFn {
-		return buf => {
-			const promise = fn(unpackInt(buf))
-			.then(userId => strValType.pack(toVal(userId)));
-			return { promise };
-		}
-	}
-
-	export function makeCaller(
-		caller: Caller, objPath: string[]
-	): TestStand['idOfTestUser'] {
-		const path = objPath.concat('idOfTestUser');
-		return userNum => caller.startPromiseCall(path, packInt(userNum))
-		.then(buf => strValType.unpack(buf).value);
-	}
-
-}
-Object.freeze(idOfTestUser);
 
 
 namespace sendMsgToOtherLocalTestProcess {
@@ -246,7 +210,7 @@ namespace observeMsgsFromOtherLocalTestProcess {
 				map(msg => strValType.pack(toVal(JSON.stringify(msg))))
 			);
 			const onCancel = fn(
-				valOfOpt(userNum), valOfOpt(appDomain), valOfOpt(appComponent), s
+				s, valOfOpt(userNum), valOfOpt(appDomain), valOfOpt(appComponent)
 			);
 			return { obs, onCancel };
 		}
@@ -256,7 +220,7 @@ namespace observeMsgsFromOtherLocalTestProcess {
 		caller: Caller, objPath: string[]
 	): TestStand['observeMsgsFromOtherLocalTestProcess'] {
 		const path = objPath.concat('observeMsgsFromOtherLocalTestProcess');
-		return (userNum, appDomain, appComponent, obs) => {
+		return (obs, userNum, appDomain, appComponent) => {
 			const s = new Subject<EnvelopeBody>();
 			const unsub = caller.startObservableCall(
 				path, requestType.pack({

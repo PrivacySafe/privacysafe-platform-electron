@@ -16,7 +16,7 @@
 */
 
 import { ClientSide, makeW3Nclient, promiseW3Nclient, callerSideJSONWrap as jsonCall, Caller } from 'core-3nweb-client-lib/build/ipc';
-import { makeTestStandCaller } from "../test-stand/test-stand-cap-ipc";
+import { makeTestStandCaller, promiseTestStandCaller } from "../test-stand/test-stand-cap-ipc";
 import { makeConnectivity } from '../connectivity/connectivity-cap-ipc';
 import { makeSystemCaller, promiseSystemCaller } from '../system/ipc-client-side';
 import { makeShellCaller, promiseShellCaller } from '../shell/ipc-client-side';
@@ -66,7 +66,7 @@ export async function promiseClientSideW3N(
 			myVersion: jsonFuncCall,
 			system: promiseSystemCaller,
 			logout: jsonFuncCall,
-			testStand: makeTestStandCaller,
+			testStand: promiseTestStandCaller,
 			shell: promiseShellCaller,
 			rpc: promiseRpcCaller,
 			connectivity: makeConnectivity,

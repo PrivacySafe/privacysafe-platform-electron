@@ -47,8 +47,9 @@ export async function promiseShellCaller(
 	let dialogFns: (keyof NonNullable<ShellCAPs['fileDialogs']>)[] | undefined = undefined;
 	if (shellCAPs.includes('fileDialogs')) {
 		const dialogsPath = objPath.concat('fileDialogs');
-		dialogFns = (await caller.listObjAsync(dialogsPath)
-			) as (keyof NonNullable<ShellCAPs['fileDialogs']>)[];
+		dialogFns = (
+			await caller.listObjAsync(dialogsPath)
+		) as (keyof NonNullable<ShellCAPs['fileDialogs']>)[];
 	}
 	return makeShellFollowingListing(
 		shellCAPs, dialogFns, caller, objPath

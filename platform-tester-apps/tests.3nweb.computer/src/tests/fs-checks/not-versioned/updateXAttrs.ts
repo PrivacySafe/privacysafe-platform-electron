@@ -100,4 +100,37 @@ it.func = async function(s) {
 };
 specs.its.push(it);
 
+it = {
+	expectation: 'empty binary and string attribute values',
+	notIncludedIn: 'device-fs'
+};
+it.func = async function(s) {
+	const { testFS } = s;
 
+	const file = 'fileWithEmptyAttrs';
+	const emptyStringAttr = 'empty.string';
+	const emptyBinaryAttr = 'empty.binary';
+	await testFS.writeTxtFile(file, '');
+	const attrsLst = await testFS.listXAttrs(file);
+	expect(attrsLst).not.toContain(emptyStringAttr);
+	expect(attrsLst).not.toContain(emptyBinaryAttr);
+
+	await testFS.updateXAttrs(file, {
+		set: {
+			[emptyStringAttr]: '',
+			[emptyBinaryAttr]: new Uint8Array(0)
+		}
+	});
+
+	const emptyStrAttrValue = await testFS.getXAttr(file, emptyStringAttr);
+	expect(typeof emptyStrAttrValue).toBe('string');
+	expect(emptyStrAttrValue).toBe('');
+
+	const emptyBinAttrValue: Uint8Array = await testFS.getXAttr(
+		file, emptyBinaryAttr
+	);
+	expect(typeof emptyBinAttrValue).toBe('object');
+	expect(emptyBinAttrValue.length).toBe(0);
+
+};
+specs.its.push(it);

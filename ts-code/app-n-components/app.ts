@@ -233,7 +233,12 @@ export class App {
 			appDomain, version, entrypoint, component, startCmd
 		);
 		if (this.devCAPsWrapper) {
-			caps = this.devCAPsWrapper(entrypoint, caps);
+			caps = this.devCAPsWrapper(
+				entrypoint, caps,
+				async () => {
+					gui.window.focus();
+				}
+			);
 		}
 		const {
 			windowOpts, watchWindowGeometry
@@ -373,7 +378,7 @@ export class App {
 			appDomain, version, entrypoint, component, undefined
 		);
 		if (this.devCAPsWrapper) {
-			caps = this.devCAPsWrapper(entrypoint, caps);
+			caps = this.devCAPsWrapper(entrypoint, caps, undefined);
 		}
 		const {
 			connectInfo, connect

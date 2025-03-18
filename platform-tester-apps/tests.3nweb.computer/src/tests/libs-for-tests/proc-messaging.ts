@@ -30,9 +30,7 @@ export function getOneMsgFromProcess<T>(
 				));
 			}
 		}, timeout);
-		const unsub = w3n.testStand.observeMsgsFromOtherLocalTestProcess(
-			userNum, appDomain, component,
-			{
+		const unsub = w3n.testStand.observeMsgsFromOtherLocalTestProcess({
 				next: msg => {
 					if (!promiseCompleted) {
 						promiseCompleted = true;
@@ -54,7 +52,8 @@ export function getOneMsgFromProcess<T>(
 						));
 					}
 				}
-			}
+			},
+			userNum, appDomain, component
 		);
 	});
 }
@@ -67,7 +66,6 @@ export function getMsgsStreamFromProcess<T>(
 	return new ReadableStream<T>({
 		start: async ctrl => {
 			unsub = w3n.testStand.observeMsgsFromOtherLocalTestProcess(
-				userNum, appDomain, component,
 				{
 					next: (msg: T) => ctrl.enqueue(msg),
 					error: err => {
@@ -75,7 +73,8 @@ export function getMsgsStreamFromProcess<T>(
 						ctrl.close();
 					},
 					complete: () => ctrl.close()
-				}
+				},
+				userNum, appDomain, component
 			);
 		},
 		cancel: () => unsub()

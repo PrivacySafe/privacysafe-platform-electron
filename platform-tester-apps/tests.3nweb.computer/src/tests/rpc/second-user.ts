@@ -34,23 +34,26 @@ export interface SignalWithSrvResult extends TestSignal<'service-result'> {
 
 export function setupSecondUserRPCTestReactions(): void {
 
-	w3n.testStand.observeMsgsFromOtherLocalTestProcess(1, undefined, undefined, {
-		next: async ({ testSignal, service }: SignalToCallSrv) => {
-			if (testSignal !== 'call-service') { return; }
-			const srvResult: SignalWithSrvResult = {
-				testSignal: 'service-result',
-				userId: ''
-			};
-			try {
-				srvResult.userId = await callGetUserIdSrv(service);
-			} catch (err) {
-				await w3n.testStand.log('error', `Error in calling `, err);
-				srvResult.err = stringifyErr(err);
+	w3n.testStand.observeMsgsFromOtherLocalTestProcess(
+		{
+			next: async ({ testSignal, service }: SignalToCallSrv) => {
+				if (testSignal !== 'call-service') { return; }
+				const srvResult: SignalWithSrvResult = {
+					testSignal: 'service-result',
+					userId: ''
+				};
+				try {
+					srvResult.userId = await callGetUserIdSrv(service);
+				} catch (err) {
+					await w3n.testStand.log('error', `Error in calling `, err);
+					srvResult.err = stringifyErr(err);
+				}
+				await w3n.testStand.sendMsgToOtherLocalTestProcess(
+					1, undefined, undefined, srvResult);
 			}
-			await w3n.testStand.sendMsgToOtherLocalTestProcess(
-				1, undefined, undefined, srvResult);
-		}
-	});
+		},
+		1, undefined, undefined
+	);
 
 }
 

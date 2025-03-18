@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2024 3NSoft Inc.
+ Copyright (C) 2021 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -87,7 +87,8 @@ export interface AppsRunnerForTesting {
 }
 
 export type WrapAppCAPsAndSetup = (
-	entrypoint: string, cap: AppCAPsAndSetup
+	entrypoint: string, cap: AppCAPsAndSetup,
+	focusThisWindow: (() => Promise<void>)|undefined
 ) => { w3n: web3n.testing.CommonW3N; close: () => void; setApp: AppSetter; };
 
 export type WrapSiteCAPsAndSetup = (
@@ -280,9 +281,11 @@ export class TestStand {
 			if (!params) { return; }
 			return {
 				params,
-				capsWrapper: (entrypoint, { w3n, setApp, close }) => {
+				capsWrapper: (
+					entrypoint, { w3n, setApp, close }, focusThisWindow
+				) => {
 					const { testStand, closeCAP } = this.makeTestStandCAP(
-						userParams, appDomain, entrypoint
+						userParams, appDomain, entrypoint, focusThisWindow
 					);
 					const rpcLogger = (params.logRPC ?
 						new RPCLogger(appDomain, entrypoint!) : undefined
@@ -318,7 +321,7 @@ export class TestStand {
 			// 	entrypoint = entrypointOfService(params.manifest, service!);
 			// }
 			const { testStand, closeCAP } = this.makeTestStandCAP(
-				userParams, appDomain, entrypoint
+				userParams, appDomain, entrypoint, undefined
 			);
 			// const rpcLogger = (params.logRPC ?
 			// 	new RPCLogger(appDomain, entrypoint!) : undefined
@@ -395,7 +398,8 @@ export class TestStand {
 
 	private makeTestStandCAP(
 		{ userId, userNum }: DevUserParams, appDomain: string,
-		component: string|undefined
+		component: string|undefined,
+		focusThisWindow: (() => Promise<void>)|undefined
 	): { testStand: web3n.testing.TestStand; closeCAP: () => void; } {
 		const capId = capIdFor(userNum, appDomain, component);
 		const listeners = new TestMsgListeners();
@@ -423,7 +427,7 @@ export class TestStand {
 			},
 
 			observeMsgsFromOtherLocalTestProcess: (
-				sender, senderApp, senderComponent, obs
+				obs, sender, senderApp, senderComponent
 			) => listeners.addListenerOf(
 				(sender === undefined) ? userNum : sender,
 				(senderApp === undefined) ? appDomain : senderApp,
@@ -444,6 +448,8 @@ export class TestStand {
 					l.passMsgFrom(userNum, appDomain, component, msg);
 				}
 			},
+
+			focusThisWindow
 
 		};
 

@@ -164,8 +164,11 @@
       currentWindowOnload();
     }
     // wait to allow load that may require to skip tests
-    setTimeout(() => {
+    setTimeout(async () => {
       if (window.skipW3NTests) { return; }
+      if (window.preTestProc) {
+        await window.preTestProc;
+      }
       htmlReporter.initialize();
       env.execute();
     }, 1000);

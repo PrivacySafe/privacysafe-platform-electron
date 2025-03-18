@@ -96,16 +96,19 @@ export async function setupSecondUserASMailTestReactions(): Promise<void> {
 	});
 
 	// attend signal asking to send message back
-	w3n.testStand.observeMsgsFromOtherLocalTestProcess(1, undefined, undefined, {
-		next: async (sig: AskToSendMsgBackSignal) => {
-			if (sig.testSignal !== 'ask-to-send-msg-back') { return; }
-			try {
-				await sendMsg(userOne, sig.msg);
-			} catch (err) {
-				await w3n.testStand.log('error', `Error in sending message to ${userOne}`, err);
+	w3n.testStand.observeMsgsFromOtherLocalTestProcess(
+		{
+			next: async (sig: AskToSendMsgBackSignal) => {
+				if (sig.testSignal !== 'ask-to-send-msg-back') { return; }
+				try {
+					await sendMsg(userOne, sig.msg);
+				} catch (err) {
+					await w3n.testStand.log('error', `Error in sending message to ${userOne}`, err);
+				}
 			}
-		}
-	});
+		},
+		1, undefined, undefined
+	);
 
 }
 

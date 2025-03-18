@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2024 3NSoft Inc.
+ Copyright (C) 2021 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,6 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { sleep } from './lib-common/processes/sleep.js';
 import { addMsgToPage, ClosingParams } from './test-page-utils.js';
 
 declare const w3n: web3n.testing.CommonW3N;
@@ -22,6 +23,11 @@ declare const w3n: web3n.testing.CommonW3N;
 (async () => {
 	const { userId, userNum } = await w3n.testStand.staticTestInfo();
 	if (userNum == 1) {
+		(window as any).preTestProc = sleep(1000)
+		.then(() => {
+			(window as any).preTestProc = undefined;
+			w3n.testStand.focusThisWindow!();
+		});
 		(window as any).closeW3NAfterTests = {
 			waitSecs: 15
 		} as ClosingParams;
