@@ -38,6 +38,9 @@ export function exposeSystemCAP(
 	if (cap.monitor) {
 		wrap.monitor = exposeSystemMonitorCAP(cap.monitor);
 	}
+	if (cap.logout) {
+		wrap.logout = jsonSrv.wrapReqReplyFunc(cap.logout);
+	}
 	return wrap;
 }
 

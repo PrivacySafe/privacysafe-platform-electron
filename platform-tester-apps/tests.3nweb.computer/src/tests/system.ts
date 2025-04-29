@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022, 2024 3NSoft Inc.
+ Copyright (C) 2022, 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -14,6 +14,16 @@
  You should have received a copy of the GNU General Public License along with
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
+
+describe(`system`, () => {
+
+	it(`has logout methods`, () => {
+		const system = w3n.system!;
+		expect(system).toBeDefined();
+		expect(typeof system.logout).toBe('function');
+	});
+
+});
 
 describe(`system.platform`, () => {
 
@@ -59,11 +69,7 @@ describe(`system.apps`, () => {
 		expect(typeof apps.installer!.removeAppPack).toBe('function');
 	});
 
-});
-
-describe(`system.apps.opener`, () => {
-
-	it(`.listApps lists installed apps`, async () => {
+	it(`opener.listApps lists installed apps`, async () => {
 		const lst = await w3n.system!.apps!.opener!.listApps();
 		expect(Array.isArray(lst)).toBeTrue();
 	});

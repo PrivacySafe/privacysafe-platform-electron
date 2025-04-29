@@ -23,7 +23,7 @@ import { Driver } from "./core-driver";
 import { AppCAPsAndSetup, SiteCAPsAndSetup } from "./caps";
 
 type SysUtils = web3n.system.SysUtils;
-type Logout = web3n.caps.Logout;
+type Logout = web3n.system.Logout;
 type AppComponent = web3n.caps.AppComponent;
 type SiteComponent = web3n.caps.SiteComponent;
 type CmdParams = web3n.shell.commands.CmdParams;

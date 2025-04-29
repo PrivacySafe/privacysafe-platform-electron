@@ -126,7 +126,6 @@ const extraCAPs = Object.freeze({
 	closeSelf: exposeJSONFunc,
 	myVersion: exposeJSONFunc,
 	system: exposeSystemCAP,
-	logout: exposeJSONFunc,
 	testStand: exposeTestStandCAP,
 	shell: exposeShellCAPs,
 	rpc: exposeRpcCAP,

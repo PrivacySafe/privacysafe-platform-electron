@@ -111,7 +111,7 @@ export class DeskTray {
 	} {
 		const appItems: Electron.MenuItemConstructorOptions[] = [
 			{
-				label: 'Apps',
+				label: 'Dashboard',
 				click: () => this.clicks.next({ userId, app: LAUNCHER_APP_DOMAIN })
 			}
 		];
@@ -128,7 +128,7 @@ export class DeskTray {
 				click: () => this.clicks.next({ userId, item: 'close-all-apps' })
 			},
 			{
-				label: `Logout`,
+				label: `Sign Out`,
 				click: () => this.clicks.next({ userId, item: 'logout' })
 			}
 		];
@@ -138,7 +138,7 @@ export class DeskTray {
 	private commonCmdItems(): Electron.MenuItemConstructorOptions[] {
 		return [
 			{
-				label: `Add account`,
+				label: `Add Account`,
 				click: () => this.clicks.next('add-user')
 			},
 			{

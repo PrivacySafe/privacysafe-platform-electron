@@ -32,7 +32,6 @@ import { CoreDriver } from "./index";
 import { AppSetter, SiteCAPsAndSetup, makeCAPsSetAppAndCloseFns } from "./caps";
 import { makeRpcCAP } from "./caps/rpc";
 import { connectivityCAP } from "./caps/connectivity";
-import { makeLogoutCAP } from "./caps/logout";
 import { makeSystemCAP } from "./caps/system";
 import { makeShellCAPs } from "./caps/shell";
 import { makeMediaDevicesCAP } from "./caps/mediaDevices";
@@ -40,7 +39,7 @@ import { makeMediaDevicesCAP } from "./caps/mediaDevices";
 type W3N = web3n.system.W3N;
 type SitesW3N = web3n.caps.sites.W3N;
 type SysUtils = web3n.system.SysUtils;
-type Logout = web3n.caps.Logout;
+type Logout = web3n.system.Logout;
 type AppComponent = web3n.caps.AppComponent;
 type GUIComponentDef = web3n.caps.GUIComponent;
 type SiteComponent = web3n.caps.SiteComponent;
@@ -188,9 +187,9 @@ export class Driver implements CoreDriver {
 			closeSelf: closeSelf.cap,
 			system: makeSystemCAP(
 				this.makeSystemCapFns,
+				this.logout,
 				(capsReq as web3n.system.RequestedCAPs).system
 			),
-			logout: makeLogoutCAP(this.logout, capsReq),
 			shell: shell?.cap,
 			rpc: rpc?.cap,
 			connectivity: connectivityCAP(capsReq.connectivity),

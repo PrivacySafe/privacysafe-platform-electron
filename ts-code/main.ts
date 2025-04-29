@@ -120,7 +120,8 @@ if (utilityInvocation) {
 			if (isFstInstance) {
 				app.on('second-instance', async (event, argv, workDir) => {
 					const cmdToken = cmdTokenFromCli(argv);
-					if (cmdToken && !init.runCmd(cmdToken)) {
+					const cmdRan = (cmdToken && init.runCmd(cmdToken));
+					if (!cmdRan) {
 						await init.openAllLaunchers();
 					}
 				});

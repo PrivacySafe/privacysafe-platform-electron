@@ -364,24 +364,24 @@ export class TestStand {
 			record: async (type, msg) => {
 				if (type === 'spec-pass') {
 					this.someSpecsExecuted = true;
-					console.log(`PASS: ${msg}`);
+					console.log(`✔️ PASS: ${msg}`);
 				} else if (type === 'spec-pending') {
-					console.log(`PENDING: ${msg}`);
+					console.log(`⏸️ PENDING: ${msg}`);
 				} else if (type === 'spec-fail') {
 					this.someSpecsExecuted = true;
 					this.haveFailedTests = true;
-					console.log(`FAIL: ${msg}`);
+					console.log(`❌ FAIL: ${msg}`);
 				} else if (type === 'suite-fail') {
 					this.haveFailedTests = true;
-					console.log(`FAIL: ${msg}`);
+					console.log(`❌ FAIL: ${msg}`);
 				} else if (type === 'tests-start') {
 					this.testsStarted = true;
-					console.log(`\nTests started in ${app}\nwith test user '${userId}'.\n`);
+					console.log(`\n▶️ Tests started in ${app}\nwith test user '${userId}'.\n`);
 				} else if (type === 'tests-pass') {
-					console.log(`\nTests passed in ${app}\nwith test user '${userId}'.\n${msg}`);
+					console.log(`\n✔️ Tests passed in ${app}\nwith test user '${userId}'.\n${msg}`);
 				} else if (type === 'tests-fail') {
 					this.haveFailedTests = true;
-					console.log(`\nTests failed in ${app}\nwith test user '${userId}'.\n${msg}`);
+					console.log(`\n❌ Tests failed in ${app}\nwith test user '${userId}'.\n${msg}`);
 				} else {
 					assert(false, `Type ${type} is unknown`);
 				}

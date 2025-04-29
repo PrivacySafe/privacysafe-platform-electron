@@ -27,19 +27,29 @@ type Platform = web3n.system.platform.Platform;
 type PlatformUpdateEvents = web3n.system.platform.PlatformUpdateEvents;
 type AppsOpener = web3n.system.apps.AppsOpener;
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
+type Logout = web3n.system.Logout;
 
 export function makeSystemCaller(caller: Caller, sysPath: string[]): SysUtils {
 	if (!caller.listObj) {
 		throw new Error(`Caller here expects to have method 'listObj'`);
 	}
-	const system: SysUtils = {};
 	const lstSystemCAP = caller.listObj(sysPath) as (keyof SysUtils)[];
-	if (lstSystemCAP.includes('apps')) {
+	const lstAppsCAP = (lstSystemCAP.includes('apps') ?
+		caller.listObj(sysPath.concat('apps')) as (keyof Apps)[] : undefined
+	);
+	return makeSystemBasedOnListing(
+		caller, sysPath, lstSystemCAP, lstAppsCAP
+	);
+}
+
+function makeSystemBasedOnListing(
+	caller: Caller, sysPath: string[], lstSystemCAP: (keyof SysUtils)[],
+	lstAppsCAP: (keyof NonNullable<SysUtils['apps']>)[]|undefined
+): SysUtils {
+	const system: SysUtils = {};
+	if (lstAppsCAP) {
 		const appsPath = sysPath.concat('apps');
-		system.apps = makeAppsFollowingListing(
-			caller.listObj(appsPath) as (keyof Apps)[],
-			caller, appsPath
-		);
+		system.apps = makeAppsFollowingListing(lstAppsCAP, caller, appsPath);
 	}
 	if (lstSystemCAP.includes('platform')) {
 		const platformPath = sysPath.concat('platform');
@@ -52,6 +62,10 @@ export function makeSystemCaller(caller: Caller, sysPath: string[]): SysUtils {
 		system.monitor = makeSystemMonitorCaller(
 			caller, platformPath
 		);
+	}
+	if (lstSystemCAP.includes('logout')) {
+		const logoutPath = sysPath.concat('logout');
+		system.logout = jsonCall.makeReqRepFuncCaller<Logout>(caller, logoutPath);
 	}
 	return system;
 }
@@ -62,30 +76,16 @@ export async function promiseSystemCaller(
 	if (!caller.listObjAsync) {
 		throw new Error(`Caller here expects to have method 'listObjAsync'`);
 	}
-	const system: SysUtils = {};
 	const lstSystemCAP = (
 		await caller.listObjAsync(sysPath)
 	) as (keyof SysUtils)[];
-	if (lstSystemCAP.includes('apps')) {
-		const appsPath = sysPath.concat('apps');
-		system.apps = makeAppsFollowingListing(
-			(await caller.listObjAsync(appsPath)) as (keyof Apps)[],
-			caller, appsPath
-		);
-	}
-	if (lstSystemCAP.includes('platform')) {
-		const platformPath = sysPath.concat('platform');
-		system.platform = makePlatformDownloaderCaller(
-			caller, platformPath
-		);
-	}
-	if (lstSystemCAP.includes('monitor')) {
-		const platformPath = sysPath.concat('monitor');
-		system.monitor = makeSystemMonitorCaller(
-			caller, platformPath
-		);
-	}
-	return system;
+	const lstAppsCAP = (lstSystemCAP.includes('apps') ?
+		(await caller.listObjAsync(sysPath.concat('apps'))) as (keyof Apps)[] :
+		undefined
+	);
+	return makeSystemBasedOnListing(
+		caller, sysPath, lstSystemCAP, lstAppsCAP
+	);
 }
 
 function makeAppsFollowingListing(

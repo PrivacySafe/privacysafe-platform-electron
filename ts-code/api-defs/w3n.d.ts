@@ -51,14 +51,11 @@ declare namespace web3n.caps {
 		//   addListener: (event, hook) => void;
 		// };
 
-		logout?: Logout;
 		shell?: shell.ShellCAPs;
 		rpc?: rpc.RPC;
 		connectivity?: connectivity.Connectivity;
 		mediaDevices?: media.MediaDevices;
 
 	}
-
-	type Logout = (closePlatform: boolean) => Promise<void>;
 
 }

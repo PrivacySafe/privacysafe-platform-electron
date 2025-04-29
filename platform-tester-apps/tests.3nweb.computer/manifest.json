@@ -41,7 +41,6 @@
 					"sysFS": "all"
 				},
 				"mailerid": true,
-				"logout": "all",
 				"logToPlatform": true,
 				"shell": {
 					"userNotifications": true,
@@ -62,7 +61,8 @@
 				"system": {
 					"apps": "all",
 					"platform": "all",
-					"monitor": "all"
+					"monitor": "all",
+					"logout": true
 				}
 			},
 			"windowOpts": {
