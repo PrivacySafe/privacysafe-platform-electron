@@ -1,12 +1,33 @@
-
-
-# Client-side 3NWeb platform
+# PrivacySafe - client-side 3NWeb platform
 
 This repository contains client-side 3NWeb platform.
 Platform's core talks 3NWeb protocols with servers, does all of crypto, keeps all user's keys, and provides an easy-to-use API for apps that run in 3NWeb platform.
 
 This is a desktop implementation of 3NWeb platform, and it uses [Electron](https://www.electronjs.org/).
 Platform's core runs as a main process, while apps run in renderer processes.
+
+```mermaid
+flowchart LR
+  subgraph W["World"]
+    MS{ASMail server <br> messaging}
+    SS{3NStorage server <br> storage}
+    IS{MailerId server <br> identity}
+    DS{DNS server}
+  end
+  P("PrivacySafe <br> (3NWeb platform <br> client side)")
+  subgraph UA["User's 3NWeb apps"]
+    A1[App 1]
+    A2[App ...]
+    AN[App N]
+  end
+  A1 <--> P
+  A2 <--> P
+  AN <--> P
+  P <--> MS
+  P <--> SS
+  P <--> IS
+  P <--> DS
+```
 
 
 ## Platform setup notes
@@ -38,7 +59,7 @@ Ensure that bash is accessible in path. Adding something like `C:\Program Files\
 
 To use this repo, you need [Node.js](https://nodejs.org/), minimum version 18.x.
 
-First run, in a folder for your os, `linux`, `windows` or `mac`:
+First run
 ```
 npm ci
 ```
@@ -51,7 +72,7 @@ npm run
 ```
 will show different available tasks.
 
-When you update/change any npm dependencies, remove `node_modules` and run `npm ci` to have clean setup. Otherwise you may get non-obvious errors, changes may override patching done by npm's `postinstall` script(s).
+When you update/change any npm dependencies, remove `node_modules` and run `npm ci` to have clean setup. Otherwise you may get non-obvious errors. For installation use `packing/npm-install.sh` that does all aforementioned steps.
 
 
 # License
