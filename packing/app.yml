@@ -1,12 +1,17 @@
 appId: io.privacysafe.os
 productName: PrivacySafe
 executableName: privacysafe
-copyright: Copyright © 2017 - 2024, 3NSoft, Inc.
+copyright: Copyright © 2017 - 2025, 3NSoft, Inc.
 
 linux:
   category: Utility
   packageCategory: Utility
-  icon:  ./packing/icons/linux/256x256.png
+  icon:  ./packing/icons/linux/logo.icns
+  artifactName: PrivacySafe-${arch}.${ext}
+deb:
+  category: Utility
+  packageCategory: Utility
+  icon:  ./packing/icons/linux/logo.icns
   artifactName: PrivacySafe-${arch}.${ext}
 
 win:

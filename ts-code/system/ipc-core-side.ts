@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2023, 2024 3NSoft Inc.
+ Copyright (C) 2020 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -64,12 +64,25 @@ function exposeAppsInstallerCAP(
 	cap: AppsInstaller
 ): ExposedObj<AppsInstaller> {
 	return {
-		unpackBundledApp: jsonSrv.wrapObservingFunc(
-			(obs, id) => cap.unpackBundledApp(id, obs)
+		listBundledApps: jsonSrv.wrapReqReplySrvMethod(cap, 'listBundledApps'),
+		addPackFromBundledApps: jsonSrv.wrapObservingFunc(
+			(obs, id) => cap.addPackFromBundledApps(id, obs)
 		),
+		addAppPackFromFolder: jsonSrv.wrapObservingFunc(
+			(obs, appPackFS) => cap.addAppPackFromFolder(appPackFS, obs)
+		),
+		addAppPackFromZipFile: jsonSrv.wrapObservingFunc(
+			(obs, appPackFile) => cap.addAppPackFromZipFile(appPackFile, obs)
+		),
+		listAllAppsPacks: jsonSrv.wrapReqReplySrvMethod(cap, 'listAllAppsPacks'),
+		listAppPacks: jsonSrv.wrapReqReplySrvMethod(cap, 'listAppPacks'),
 		installApp: jsonSrv.wrapReqReplySrvMethod(cap, 'installApp'),
+		removeAppPack: jsonSrv.wrapReqReplySrvMethod(cap, 'removeAppPack'),
 		uninstallApp: jsonSrv.wrapReqReplySrvMethod(cap, 'uninstallApp'),
-		removeAppPack: jsonSrv.wrapReqReplySrvMethod(cap, 'removeAppPack')
+		removeAppData: jsonSrv.wrapReqReplySrvMethod(cap, 'removeAppData'),
+		getAppFileBytes: jsonSrv.wrapReqReplySrvMethod(cap, 'getAppFileBytes'),
+		getAppManifest: jsonSrv.wrapReqReplySrvMethod(cap, 'getAppManifest'),
+		watchApps: jsonSrv.wrapObservingFunc(cap.watchApps)
 	};
 }
 
@@ -105,7 +118,8 @@ function exposePlatformDownloaderCAP(
 			(obs, newBundleVersion) => cap.setupUpdater(newBundleVersion, obs)
 		),
 		downloadUpdate: jsonSrv.wrapReqReplySrvMethod(cap, 'downloadUpdate'),
-		quitAndInstall: jsonSrv.wrapReqReplySrvMethod(cap, 'quitAndInstall')
+		quitAndInstall: jsonSrv.wrapReqReplySrvMethod(cap, 'quitAndInstall'),
+		wipeFromThisDevice: jsonSrv.wrapReqReplySrvMethod(cap, 'wipeFromThisDevice')
 	};
 }
 
@@ -113,7 +127,7 @@ function exposeAppsOpenerCAP(
 	cap: AppsOpener
 ): ExposedObj<AppsOpener> {
 	return {
-		listApps: jsonSrv.wrapReqReplySrvMethod(cap, 'listApps'),
+		listCurrentApps: jsonSrv.wrapReqReplySrvMethod(cap, 'listCurrentApps'),
 		openApp: jsonSrv.wrapReqReplySrvMethod(cap, 'openApp'),
 		executeCommand: jsonSrv.wrapReqReplySrvMethod(cap, 'executeCommand'),
 		triggerAllStartupLaunchers: jsonSrv.wrapReqReplySrvMethod(
@@ -122,10 +136,8 @@ function exposeAppsOpenerCAP(
 		closeAppsAfterUpdate: jsonSrv.wrapReqReplySrvMethod(
 			cap, 'closeAppsAfterUpdate'
 		),
-		getAppFileBytes: jsonSrv.wrapReqReplySrvMethod(cap, 'getAppFileBytes'),
-		getAppManifest: jsonSrv.wrapReqReplySrvMethod(cap, 'getAppManifest'),
-		getAppVersions: jsonSrv.wrapReqReplySrvMethod(cap, 'getAppVersions'),
-		watchApps: jsonSrv.wrapObservingFunc(cap.watchApps)
+		getAppFileBytesOfCurrent: jsonSrv.wrapReqReplySrvMethod(cap, 'getAppFileBytesOfCurrent'),
+		getAppManifestOfCurrent: jsonSrv.wrapReqReplySrvMethod(cap, 'getAppManifestOfCurrent')
 	};
 }
 

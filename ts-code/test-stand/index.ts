@@ -29,59 +29,24 @@ import { MAIN_GUI_ENTRYPOINT } from "../lib-common/manifest-utils";
 import { MapOfSets } from "../lib-common/map-of-sets";
 import { DesktopUI, UserAppInfo } from "../desktop-integration";
 import { RPCLogger } from "./log-rpc";
+import { makeTestStandUICap } from "../ui";
 
 type AppManifest = web3n.caps.AppManifest;
 type SiteManifest = web3n.caps.SiteManifest;
-
-export interface TestStandConfig {
-	apps?: { [appDomain: string]: DevApp; };
-	sites?: { [domain: string]: DevSite; };
-	startupApp?: { domain: string; } & DevApp;
-	users?: DevUser[];
-	userCreds?: string;
-}
-
-export interface DevApp {
-	dir: string;
-	url?: string;
-	logRPC?: true;
-	skipAutoLaunch?: true;
-}
-
-export interface DevAppParams extends DevApp {
-	manifest: AppManifest;
-}
-
-export interface DevSite {
-	dir: string;	// code, content, manifest inside of it 
-	url?: string;
-	logRPC?: true;
-}
-
-export interface DevSiteParams extends DevSite {
-	manifest: SiteManifest;
-}
-
-interface DevUser {
-	idTemplate: string;
-	signupToken?: string;
-	testStartup?: true;
-}
-
-export interface DevUserParams {
-	userId: string;
-	pass: string;
-	userNum: number;
-	signupToken?: string;
-	testStartup?: true;
-}
+type TestStandConfig = web3n.testing.config.TestStandConfig;
+type DevUserParams = web3n.testing.config.DevUserParams;
+type DevUser = web3n.testing.config.DevUser;
+type DevAppParams = web3n.testing.config.DevAppParams;
+type DevApp = web3n.testing.config.DevApp;
+type DevSiteParams = web3n.testing.config.DevSiteParams;
+type DevSite = web3n.testing.config.DevSite;
 
 export interface AppsRunnerForTesting {
 	runStartupDevApp: (
 		params: DevAppParams, addTestStandCAP: WrapStartupCAPs
 	) => Promise<{ init: Promise<boolean>; }>;
 	initForDirectStartup: () => ReturnType<CoreDriver['start']>;
-	openApp: (appDomain: string) => Promise<void>;
+	openApp: (appDomain: string, entrypoint?: string) => Promise<void>;
 	openSite: (siteDomain: string) => Promise<void>;
 	listInstalled(): Promise<UserAppInfo[]>;
 }
@@ -203,13 +168,10 @@ export class TestStand {
 				!!testStartupApp,
 				`Test user #${userParams.userNum} should be used with startup test, but there is no startupApp in a setup file.`
 			);
-			const basicTestStand = this.makeBasicTestStand(
-				testStartupApp!, userParams.userId, undefined
-			);
+			const basicTestStand = this.makeBasicTestStand(testStartupApp!, userParams.userId, undefined);
 			console.log(`🏁 starting ${testStartupApp} with 🗝️  login for test user ${userParams.userId}`);
 			await startUserWithDevStartupApp(
-				userParams, this.devStartupApp!,
-				runner.runStartupDevApp, basicTestStand
+				userParams, this.devStartupApp!, runner.runStartupDevApp, basicTestStand
 			);
 		} else {
 			await startUserDirectly(userParams, runner);
@@ -246,10 +208,12 @@ export class TestStand {
 		console.log(`\n🏁 opening apps for test user ${userParams.userId}`);
 		const testStartupApp = this.devStartupApp?.manifest.appDomain;
 		let devAppsOpened = 0;
-		for (const [ appDomain, { skipAutoLaunch } ] of this.devApps.entries()) {
+		for (const [
+			appDomain, { skipAutoLaunch, launchComponent, formFactor }
+		] of this.devApps.entries()) {
 			if ((appDomain !== testStartupApp) && !skipAutoLaunch) {
-				console.log(`▶ starting app ${appDomain}`);
-				await runner.openApp(appDomain);
+				console.log(`▶ starting app ${appDomain}${launchComponent ? ` component ${launchComponent}` : ''}${formFactor ? ` in ${formFactor} form factor` : ''}`);
+				await runner.openApp(appDomain, launchComponent);
 				devAppsOpened += 1;
 			}
 		}
@@ -279,6 +243,7 @@ export class TestStand {
 		return appDomain => {
 			const params = this.devApps.get(appDomain);
 			if (!params) { return; }
+			const formFactorOverride = params.formFactor;
 			return {
 				params,
 				capsWrapper: (
@@ -290,10 +255,12 @@ export class TestStand {
 					const rpcLogger = (params.logRPC ?
 						new RPCLogger(appDomain, entrypoint!) : undefined
 					);
-						const w3nWithStand = { testStand } as web3n.testing.CommonW3N;
+					const w3nWithStand = { testStand } as web3n.testing.CommonW3N;
 					for (const cap in w3n) {
 						if ((cap === 'rpc') && rpcLogger) {
 							w3nWithStand[cap] = rpcLogger.wrapRPC(w3n[cap]!);
+						} else if ((cap === 'ui') && formFactorOverride) {
+							w3nWithStand[cap] = makeTestStandUICap(formFactorOverride);
 						} else {
 							w3nWithStand[cap] = w3n[cap];
 						}
@@ -398,7 +365,7 @@ export class TestStand {
 
 	private makeTestStandCAP(
 		{ userId, userNum }: DevUserParams, appDomain: string,
-		component: string|undefined,
+		component = MAIN_GUI_ENTRYPOINT,
 		focusThisWindow: (() => Promise<void>)|undefined
 	): { testStand: web3n.testing.TestStand; closeCAP: () => void; } {
 		const capId = capIdFor(userNum, appDomain, component);
@@ -428,20 +395,42 @@ export class TestStand {
 
 			observeMsgsFromOtherLocalTestProcess: (
 				obs, sender, senderApp, senderComponent
-			) => listeners.addListenerOf(
-				(sender === undefined) ? userNum : sender,
-				(senderApp === undefined) ? appDomain : senderApp,
-				senderComponent, obs
-			),
+			) => {
+				if (!sender) {
+					sender = userNum;
+				}
+				if (!senderApp) {
+					senderApp = appDomain;
+				}
+				if (!senderComponent) {
+					senderComponent = component;
+				}
+				if (capIdFor(sender, senderApp, senderComponent) === capId) {
+					throw new Error(`Can't listen for test signal from the same instance. At least one of address part should be different: user, app, or component`);
+				}
+				return listeners.addListenerOf(
+					sender, senderApp, senderComponent, obs
+				)
+			},
 
 			sendMsgToOtherLocalTestProcess: async (
 				recipient, recipientApp, recipientComponent, msg
 			) => {
+				if (!recipient) {
+					recipient = userNum;
+				}
+				if (!recipientApp) {
+					recipientApp = appDomain;
+				}
+				if (!recipientComponent) {
+					recipientComponent = component;
+				}
 				const recipientListenerId = capIdFor(
-					(recipient === undefined) ? userNum : recipient,
-					(recipientApp === undefined) ? appDomain : recipientApp,
-					recipientComponent
+					recipient, recipientApp, recipientComponent
 				);
+				if (recipientListenerId === capId) {
+					throw new Error(`Can't send test signal to the same instance. At least one of address part should be different: user, app, or component`);
+				}
 				const recipientListeners = this.listeners.get(recipientListenerId);
 				if (!recipientListeners) { return; }
 				for (const l of recipientListeners) {
@@ -492,15 +481,13 @@ function toDevAppParams(
 		typeof app === 'object',
 		`Test stand app configuration should be an object.`
 	);
-	const { dir, url, logRPC, skipAutoLaunch } = app;
-	assert(
-		typeof dir === 'string',
-		`Test stand app configuration should have string 'dir' field.`
-	);
-	assert(
-		(url === undefined) || (typeof url === 'string'),
-		`If 'url' field is present in test stand app configuration, it should be a string.`
-	);
+	const {
+		dir, url, logRPC, skipAutoLaunch, launchComponent, formFactor
+	} = app;
+	assertMandatoryString('dir', dir);
+	assertOptionalString('url', url);
+	assertOptionalString('launchComponent', launchComponent);
+	assertOptionalString('formFactor', formFactor);
 	const { appDir, manifest } = checkAppDir(
 		isAbsolute(dir) ? dir : resolve(dirname(confFile), dir)
 	);
@@ -509,10 +496,24 @@ function toDevAppParams(
 		`App domain '${appDomain}' in test stand configuration should be equal to appDomain value in manifest file '${join(app.dir, MANIFEST_FILE)}'.`
 	);
 	return {
-		manifest, dir: appDir, url,
+		manifest, dir: appDir, url, launchComponent, formFactor,
 		logRPC: (logRPC === true) || undefined,
 		skipAutoLaunch: (skipAutoLaunch === true) || undefined
 	};
+}
+
+function assertMandatoryString(name: string, value: string): void {
+	assert(
+		typeof value === 'string',
+		`Test stand app configuration should have string '${name}' field.`
+	);
+}
+
+function assertOptionalString(name: string, value: string|undefined): void {
+	assert(
+		(value === undefined) || (typeof value === 'string'),
+		`If '${name}' field is present in test stand app configuration, it should be a string.`
+	);
 }
 
 function checkAppDir(dir: string): { manifest: AppManifest; appDir: string; } {
@@ -786,11 +787,8 @@ async function startUserDirectly(
 }
 
 function capIdFor(
-	userNum: number, appDomain: string, component: string|undefined
+	userNum: number, appDomain: string, component: string
 ): string {
-	if (!component) {
-		component = MAIN_GUI_ENTRYPOINT;
-	}
 	return `${userNum}/${appDomain}/${component}`;
 }
 
@@ -805,7 +803,7 @@ class TestMsgListeners {
 	}
 
 	addListenerOf(
-		userNum: number, appDomain: string, component: string|undefined,
+		userNum: number, appDomain: string, component: string,
 		obs: web3n.Observer<any>
 	): (() => void) {
 		const srcId = capIdFor(userNum, appDomain, component);
@@ -817,7 +815,7 @@ class TestMsgListeners {
 	}
 
 	passMsgFrom(
-		userNum: number, appDomain: string, component: string|undefined, msg: any
+		userNum: number, appDomain: string, component: string, msg: any
 	): void {
 		const srcId = capIdFor(userNum, appDomain, component);
 		const observers = this.srcIdToObservers.get(srcId);

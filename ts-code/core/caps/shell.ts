@@ -20,7 +20,7 @@ import { makeAppCmdsCaller, makeCmdsHandler } from "../../shell/cmd-invocation";
 import { GUIComponent } from "../../app-n-components/gui-component";
 import { GetAppFSResourceFor, getFSResourceCAP } from "../../shell/fs-resource";
 import { AppSetter, CAPsSetupFns, makeCAPsSetAppAndCloseFns } from "./index";
-import { Driver } from "../core-driver";
+import { CoreDriver } from "../index";
 
 type W3N = web3n.caps.W3N;
 type GUIComponentDef = web3n.caps.GUIComponent;
@@ -33,8 +33,8 @@ export function makeShellCAPs(
 	cmdHandlerDef: GUIComponentDef['startCmds'],
 	startCmd: CmdParams|undefined,
 	getAppFSResourceFor: GetAppFSResourceFor,
-	userNotificationsImpl: Driver['userNotifications'],
-	startAppWithCmd: Driver['startAppWithCmd']
+	userNotificationsImpl: CoreDriver['userNotifications'],
+	startAppWithCmd: CoreDriver['startAppWithCmd']
 ): {
 	cap: NonNullable<W3N['shell']>; setApp: AppSetter; close: () => void;
 }|undefined {
@@ -85,7 +85,7 @@ export function makeShellCAPs(
 function makeUserNotificationsShellCAP(
 	appDomain: string, component: string,
 	notifCAPsReq: web3n.caps.ShellCAPsSetting['userNotifications'],
-	userNotifications: Driver['userNotifications']
+	userNotifications: CoreDriver['userNotifications']
 ): {
 	cap: web3n.shell.notifications.UserNotifications;
 	setApp: AppSetter; close(): void;
@@ -100,7 +100,7 @@ function makeUserNotificationsShellCAP(
 function startAppWithParamsShellCAP(
 	appDomain: string, component: string,
 	capsReq: web3n.caps.ShellCAPsSetting['startAppCmds'],
-	startAppWithCmd: Driver['startAppWithCmd']
+	startAppWithCmd: CoreDriver['startAppWithCmd']
 ): {
 	cap: web3n.shell.ShellCAPs['startAppWithParams'];
 }|undefined {

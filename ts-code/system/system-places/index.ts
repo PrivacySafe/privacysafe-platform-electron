@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2024 3NSoft Inc.
+ Copyright (C) 2021 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -27,17 +27,16 @@ import { makeRuntimeException } from '../../lib-common/exceptions/runtime';
 import { checkAppManifest, hasStartupLaunchersDefined } from '../../lib-common/manifest-utils';
 import { toRxObserver } from '../../lib-common/utils-for-observables';
 import { readManifestFromZip, unzipAppVersion, APP_ROOT_FOLDER, MANIFEST_FILE, readFileBytesFromZip } from './unpack-zipped-app';
-import { SingleProc } from '../../lib-common/processes/single';
 import { appAndManifestOnDev, appManifestOnDev } from '../../app-n-components/utils';
 
 type Observer<T> = web3n.Observer<T>;
 type ReadonlyFS = web3n.files.ReadonlyFS;
+type ReadonlyFile = web3n.files.ReadonlyFile;
 type WritableFS = web3n.files.WritableFS;
 type FSCollection = web3n.files.FSCollection;
 type StorageType = web3n.storage.StorageType;
 type BundleUnpackProgress = web3n.system.apps.BundleUnpackProgress;
-type AppVersions = web3n.system.apps.AppVersions;
-type AppState = web3n.system.apps.AppState;
+type AppInitException = web3n.system.apps.AppInitException;
 type AppEvent = web3n.system.apps.AppEvent;
 type SystemParamsForInstalledApp = web3n.system.apps.SystemParamsForInstalledApp;
 type AppManifest = web3n.caps.AppManifest;
@@ -95,85 +94,21 @@ export class SystemPlaces {
 		return componentFS;
 	}
 
-	async listApps(filter?: AppState[]): Promise<AppVersions[]> {
-		const infos = new Map<string, AppVersions>();
-		if (!filter || filter.includes('current')) {
-			for (const info of await listInstalledApps(
-				await this.getAppsCodeFS()
-			)) {
-				infos.set(info.id, info);
-			}
-			for (const info of await listInstalledBundledApps(sysApps)) {
-				infos.set(info.id, info);
-			}
-		}
-		if (!filter || filter.includes('packs')) {
-			for (const info of await listCompleteAppPacks(
-				await this.getPackagesFS()
-			)) {
-				const existing = infos.get(info.id);
-				if (existing) {
-					existing.packs = info.packs;
-				} else {
-					infos.set(info.id, info);
-				}
-			}
-			for (const { id, version } of await listBundledAppPacks()) {
-				const existing = infos.get(id);
-				if (!existing) {
-					infos.set(id, { id, packs: [ version ] });
-				} else if (!existing.packs) {
-					existing.packs = [ version ];
-				} else if (!existing.packs.includes(version)) {
-					existing.packs.push(version);
-				}
-			}
-		}
-		return Array.from(infos.values());
+	async listCurrentApps(): Promise<{ id: string; version: string; }[]> {
+		const lst = await listInstalledApps(await this.getAppsCodeFS());
+		return lst.concat(await listInstalledBundledApps(sysApps));
 	}
 
-	async getAppVersions(
-		id: string, filter?: AppState[]
-	): Promise<AppVersions|undefined> {
-		const appFolder = reverseDomain(id);
-		const info: AppVersions = { id };
-		if (!filter || filter.includes('current')) {
-			const bundledAppManifest = await appManifestOnDev(id)
-			.catch((exc: FileException) => {
-				if (exc.notFound) { return; }
-				else { throw exc; }
-			});
-			if (bundledAppManifest) {
-				info.current = bundledAppManifest.version;
-			} else {
-				const appFS = await getInstalledAppDir(
-					await this.getAppsCodeFS(), appFolder
-				);
-				if (appFS) {
-					const m = await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
-					info.current = m.version;
-				}
-			}
-		}
-		if (!filter || filter.includes('packs')) {
-			const completePacks = await getAppPacksVersions(
-				await this.getPackagesFS(), appFolder
-			);
-			if (completePacks) {
-				info.packs = completePacks.packs;
-			}
-			const m = await getBundledPackManifest(id);
-			if (m) {
-				if (!info.packs) {
-					info.packs = [ m.version ];
-				} else if (!info.packs.includes(m.version)) {
-					info.packs.push(m.version);
-				}
-			}
-		}
-		return ((!info.current && !info.packs) ?
-			undefined : info
-		);
+	async listBundledApps(): Promise<{ id: string; version: string; }[]> {
+		return listBundledAppPacks();
+	}
+
+	async listAllAppsPacks(): Promise<{ id: string; versions: string[]; }[]> {
+		return await listCompleteAppPacks(await this.getPackagesFS());
+	}
+
+	async listAppPacks(id: string): Promise<string[]|undefined> {
+		return await listCompletePacksOf(id, await this.getPackagesFS());
 	}
 
 	private async getAppFS(
@@ -247,7 +182,7 @@ export class SystemPlaces {
 		return () => sub.unsubscribe();
 	}
 
-	unpackBundledApp(
+	addPackBundledApps(
 		appDomain: string, observer: Observer<BundleUnpackProgress>
 	): () => void {
 		const sub = from(this.getPackagesFS())
@@ -257,6 +192,24 @@ export class SystemPlaces {
 		)
 		.subscribe(toRxObserver(observer));
 		return () => sub.unsubscribe();
+	}
+
+	addAppPackFromFolder(
+		appPackFS: ReadonlyFS, observer: Observer<BundleUnpackProgress>
+	): () => void {
+
+		// XXX
+
+		throw `In platform, SystemPlaces.addAppPackFromFolder() isn't implemented, yet`;
+	}
+
+	addAppPackFromZipFile(
+		appPackFile: ReadonlyFile, observer: Observer<BundleUnpackProgress>
+	): () => void {
+
+		// XXX
+
+		throw `In platform, SystemPlaces.addAppPackFromFolder() isn't implemented, yet`;
 	}
 
 	async installApp(
@@ -358,22 +311,21 @@ export class SystemPlaces {
 	}
 
 	async removeAppPack(id: string, version: string): Promise<void> {
-		const appVersions = await this.getAppVersions(id, [ 'current', 'packs' ]);
-		if (!appVersions || !appVersions.packs
-		|| !appVersions.packs.includes(version)) {
+		const packsFS = await this.getPackagesFS();
+		const appVersions = await listCompleteAppPacks(packsFS);
+		if (!appVersions.find(app => ((app.id === id) && app.versions.includes(version)))) {
 			return;
 		}
-		if (appVersions.current === version) {
+		const installed = await listInstalledApps(await this.getAppsCodeFS());
+		if (installed.find(app => ((app.id === id) && (app.version === version)))) {
 			throw makeAppInitExc(id, { errAtPackRemoval: true }, {
 				version,
 				message: `Can't remove pack version that is installed as current. Uninstall it first.`
 			});
 		}
 		try {
-			const packsFS = await this.getPackagesFS();
-			await packsFS.deleteFolder(
-				completePackAppVersionFolder(id, version), true
-			);
+			await packsFS.deleteFolder(completePackAppVersionFolder(id, version), true);
+			this.appEventSink.next({ type: 'uninstalled', id, version });
 		} catch (err) {
 			throw makeAppInitExc(
 				id, { errAtPackRemoval: true }, { cause: err, version }
@@ -381,25 +333,17 @@ export class SystemPlaces {
 		}
 	}
 
+	async removeAppData(id: string): Promise<void> {
+
+		// XXX
+
+		throw `In platform, SystemPlaces.removeAppData() isn't implemented, yet`;
+	}
+
 }
 Object.freeze(SystemPlaces.prototype);
 Object.freeze(SystemPlaces);
 
-
-export interface AppInitException extends web3n.RuntimeException {
-	type: 'app-init',
-	appDomain: string;
-	entrypoint?: string;
-	service?: string;
-	command?: string;
-	version?: string;
-	badAppPack?: true;
-	notInstalled?: true;
-	noBundledPack?: true;
-	errAtInstall?: true;
-	errAtUninstall?: true;
-	errAtPackRemoval?: true;
-}
 
 export function makeAppInitExc(
 	appDomain: string, flags: Partial<AppInitException>,
@@ -532,9 +476,13 @@ function appDomainFromFolder(fName: string): string {
 	return reverseDomain(fName);
 }
 
-async function listInstalledApps(codeFS: ReadonlyFS): Promise<AppVersions[]> {
+function completePacksAppFolder(appDomain: string): string {
+	return `${COMPLETE_PACKS_DIR}/${reverseDomain(appDomain)}`;
+}
+
+async function listInstalledApps(codeFS: ReadonlyFS): Promise<{ id: string; version: string; }[]> {
 	const lst = await codeFS.listFolder('/');
-	const infos: AppVersions[] = [];
+	const infos: { id: string; version: string; }[] = [];
 	for (const entry of lst) {
 		const appFS = await getInstalledAppDir(codeFS, entry.name)
 		.catch(err => logError(
@@ -544,9 +492,9 @@ async function listInstalledApps(codeFS: ReadonlyFS): Promise<AppVersions[]> {
 			continue;
 		}
 		const {
-			appDomain: id, version: current
+			appDomain: id, version
 		} = await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
-		infos.push({ id, current });
+		infos.push({ id, version });
 	}
 	return infos;
 }
@@ -555,14 +503,7 @@ async function getInstalledAppDir(
 	codeFS: ReadonlyFS, appFolder: string
 ): Promise<ReadonlyFS|undefined> {
 	const lstOfAppFolder = await codeFS.listFolder(appFolder)
-	.then(async lst => {
-		if (lst.find(item => (item.name === 'web'))) {
-			await removeWebSectionInInstallLinks(codeFS as WritableFS, appFolder);
-			return await codeFS.listFolder(appFolder);
-		} else {
-			return lst;
-		}
-	}, (exc: FileException) => {
+	.catch((exc: FileException) => {
 		if (!exc.notFound) { throw exc; }
 	});
 	if (!lstOfAppFolder
@@ -615,11 +556,11 @@ async function manifestsOfInstalledBundledApps(
 
 export async function listInstalledBundledApps(
 	skipApps?: string[]
-): Promise<AppVersions[]> {
+): Promise<{ id: string; version: string; }[]> {
 	return (await manifestsOfInstalledBundledApps(skipApps))
 	.map(m => ({
 		id: m.appDomain,
-		current: m.version
+		version: m.version
 	}));
 }
 
@@ -651,13 +592,13 @@ function getBundledPackFileBytes(
 
 async function listCompleteAppPacks(
 	packsFS: ReadonlyFS
-): Promise<AppVersions[]> {
+): Promise<{ id: string; versions: string[]; }[]> {
 	const lst = await packsFS.listFolder(COMPLETE_PACKS_DIR)
 	.catch((exc: FileException) => {
 		if (exc.notFound) { return []; }
 		else { throw exc; }
 	});
-	const infos: AppVersions[] = [];
+	const infos: { id: string; versions: string[]; }[] = [];
 	for (const entry of lst) {
 		const info = await getAppPacksVersions(packsFS, entry.name);
 		if (info) {
@@ -667,50 +608,35 @@ async function listCompleteAppPacks(
 	return infos;
 }
 
+async function listCompletePacksOf(
+	appId: string, packsFS: ReadonlyFS
+): Promise<string[]|undefined> {
+	try {
+		const lst = await packsFS.listFolder(completePacksAppFolder(appId))
+		return lst.filter(entry => entry.isFolder).map(entry => entry.name);
+	} catch (exc) {
+		if (!(exc as FileException).notFound) {
+			throw exc;
+		}
+	}
+}
+
 async function getAppPacksVersions(
 	packsFS: ReadonlyFS, appFolder: string
-): Promise<AppVersions|undefined> {
+): Promise<{ id: string; versions: string[]; }|undefined> {
 	const packsFolder = `${COMPLETE_PACKS_DIR}/${appFolder}`;
 	const lstOfAppFolder = await packsFS.listFolder(packsFolder)
-	.then(async lst => {
-		if (lst.find(item => (item.name === 'web'))) {
-			await removeWebSectionInInstallLinks(
-				packsFS as WritableFS, packsFolder
-			);
-			return await packsFS.listFolder(packsFolder);
-		} else {
-			return lst;
-		}
-	}, async (exc: FileException) => {
+	.catch(async (exc: FileException) => {
 		if (!exc.notFound) { throw exc; }
 	});
 	if (!lstOfAppFolder) { return; }
-	const packs = (await packsFS.listFolder(packsFolder))
+	const versions = (await packsFS.listFolder(packsFolder))
 	.filter(entry => entry.isFolder)
 	.map(entry => entry.name);
-	return ((packs.length > 0) ? {
+	return ((versions.length > 0) ? {
 		id: appDomainFromFolder(appFolder),
-		packs
+		versions
 	} : undefined);
-}
-
-const webSectionRemovalSyncProc = new SingleProc();
-async function removeWebSectionInInstallLinks(
-	codeFS: WritableFS, appFolder: string
-): Promise<void> {
-	await webSectionRemovalSyncProc.startOrChain(async () => {
-		if (!(await codeFS.checkFolderPresence(`${appFolder}/web`))) {
-			return;
-		}
-		for (const item of await codeFS.listFolder(`${appFolder}/web`)) {
-			await codeFS.move(
-				`${appFolder}/web/${item.name}`,
-				`${appFolder}/${item.name}`
-			);
-		}
-		await codeFS.deleteFolder(`${appFolder}/web`);
-	})
-	.catch(exc => logError(exc, `Exception thrown in removal of 'web' section from install path within ${appFolder} app folder`));
 }
 
 async function getAppDirInPacks(

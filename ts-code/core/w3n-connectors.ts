@@ -37,6 +37,7 @@ import { exposeShellCAPs } from "../shell/ipc-core-side";
 import { exposeRpcCAP } from "../rpc/ipc-core-side";
 import { exposeMediaDevicesCAP } from "../media-devices/ipc-core-side";
 import { unlink } from "../lib-common/async-fs-node";
+import { exposeUICAP } from "../ui/ipc-core-side";
 
 type StartupW3N = web3n.startup.W3N;
 type W3N = web3n.caps.W3N;
@@ -125,6 +126,7 @@ function exposeJSONFunc<F extends Function>(fn: F): ExposedFn {
 const extraCAPs = Object.freeze({
 	closeSelf: exposeJSONFunc,
 	myVersion: exposeJSONFunc,
+	ui: exposeUICAP,
 	system: exposeSystemCAP,
 	testStand: exposeTestStandCAP,
 	shell: exposeShellCAPs,

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2024 3NSoft Inc.
+ Copyright (C) 2020 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -136,15 +136,34 @@ function makeAppsInstallerCaller(
 	caller: Caller, objPath: string[]
 ): AppsInstaller {
 	return {
-		unpackBundledApp: (() => {
+		listBundledApps: callAppsInstaller(caller, objPath, 'listBundledApps'),
+		addPackFromBundledApps: (() => {
 			const fn = jsonCall.makeObservableFuncCaller<BundleUnpackProgress>(
-				caller, objPath.concat('unpackBundledApp')
+				caller, objPath.concat('addPackFromBundledApps')
 			);
 			return (id, obs) => fn(obs, id);
 		})(),
+		addAppPackFromFolder: (() => {
+			const fn = jsonCall.makeObservableFuncCaller<BundleUnpackProgress>(
+				caller, objPath.concat('addAppPackFromFolder')
+			);
+			return (appPackFS, obs) => fn(obs, appPackFS);
+		})(),
+		addAppPackFromZipFile: (() => {
+			const fn = jsonCall.makeObservableFuncCaller<BundleUnpackProgress>(
+				caller, objPath.concat('addAppPackFromZipFile')
+			);
+			return (appPackFile, obs) => fn(obs, appPackFile);
+		})(),
+		listAllAppsPacks: callAppsInstaller(caller, objPath, 'listAllAppsPacks'),
+		listAppPacks: callAppsInstaller(caller, objPath, 'listAppPacks'),
 		installApp: callAppsInstaller(caller, objPath, 'installApp'),
+		removeAppPack: callAppsInstaller(caller, objPath, 'removeAppPack'),
 		uninstallApp: callAppsInstaller(caller, objPath, 'uninstallApp'),
-		removeAppPack: callAppsInstaller(caller, objPath, 'removeAppPack')
+		removeAppData: callAppsInstaller(caller, objPath, 'removeAppData'),
+		watchApps: jsonCall.makeObservableFuncCaller(caller, objPath.concat('watchApps')),
+		getAppManifest: callAppsInstaller(caller, objPath, 'getAppManifest'),
+		getAppFileBytes: callAppsInstaller(caller, objPath, 'getAppFileBytes')
 	};
 }
 
@@ -168,7 +187,8 @@ function makePlatformDownloaderCaller(
 			return (newBundleVersion, obs) => fn(obs, newBundleVersion);
 		})(),
 		downloadUpdate: callPlatform(caller, objPath, 'downloadUpdate'),
-		quitAndInstall: callPlatform(caller, objPath, 'quitAndInstall')
+		quitAndInstall: callPlatform(caller, objPath, 'quitAndInstall'),
+		wipeFromThisDevice: callPlatform(caller, objPath, 'wipeFromThisDevice')
 	};
 }
 
@@ -182,7 +202,7 @@ function makeAppsOpenerCaller(
 	caller: Caller, objPath: string[]
 ): AppsOpener {
 	return {
-		listApps: callAppsOpener(caller, objPath, 'listApps'),
+		listCurrentApps: callAppsOpener(caller, objPath, 'listCurrentApps'),
 		openApp: callAppsOpener(caller, objPath, 'openApp'),
 		executeCommand: callAppsOpener(caller, objPath, 'executeCommand'),
 		triggerAllStartupLaunchers: callAppsOpener(
@@ -191,10 +211,8 @@ function makeAppsOpenerCaller(
 		closeAppsAfterUpdate: callAppsOpener(
 			caller, objPath, 'closeAppsAfterUpdate'
 		),
-		getAppFileBytes: callAppsOpener(caller, objPath, 'getAppFileBytes'),
-		getAppManifest: callAppsOpener(caller, objPath, 'getAppManifest'),
-		getAppVersions: callAppsOpener(caller, objPath, 'getAppVersions'),
-		watchApps: jsonCall.makeObservableFuncCaller(caller, objPath)
+		getAppFileBytesOfCurrent: callAppsOpener(caller, objPath, 'getAppFileBytesOfCurrent'),
+		getAppManifestOfCurrent: callAppsOpener(caller, objPath, 'getAppManifestOfCurrent')
 	};
 }
 

@@ -33,7 +33,6 @@ usb64BitsToChar.forEach(
 );
 
 function encodeBytes(bytes: Uint8Array, map: string[]): string {
-	throw new Error(`This isn't ready+tested`);
 	if (bytes.length === 0) {
 		return '';
 	}
@@ -72,13 +71,12 @@ function encodeBytes(bytes: Uint8Array, map: string[]): string {
 }
 
 function decodeBytes(b64: string, map: Map<string, number>): Uint8Array {
-	throw new Error(`This isn't ready+tested`);
 	if (b64.length === 0) {
 		return new Uint8Array(0);
 	} else if ((b64.length % 4) !== 0) {
 		throw new Error(`Length of a given string is uneven`);
 	}
-	const lastTwoChars = b64.substring(0, b64.length-2);
+	const lastTwoChars = b64.substring(b64.length-2);
 	const tail = ((lastTwoChars === twoPadChars) ?
 		1 :
 		((lastTwoChars[1] === padChar) ? 2 : 0)

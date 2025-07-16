@@ -27,6 +27,7 @@ import { Component, Service } from '.';
 import { toBuffer } from '../lib-common/buffer-utils';
 import { CmdsHandler } from '../shell/cmd-invocation';
 import { PostponedValuesFixedKeysMap } from '../lib-common/postponed-values-map';
+import { conformWinOptsToFormFactor } from '../ui';
 
 type WindowOptions = web3n.ui.WindowOptions;
 type Session = Electron.Session;
@@ -155,8 +156,9 @@ export class GUIComponent implements Component {
 		const preload = ((Object.keys(caps.w3n).length > 0) ?
 			IPC_PRELOAD : undefined
 		);
+		const formFactor = await caps.w3n.ui.uiFormFactor();
 		const opts = prepareWindowOpts(
-			session, preload, winOpts, parent?.window, devTools
+			session, preload, winOpts, parent?.window, devTools, formFactor
 		);
 		if (icon) {
 			opts.icon = await nativeImageFromFile(appRoot, icon, domain);
@@ -231,8 +233,11 @@ Object.freeze(GUIComponent);
 function prepareWindowOpts(
 	session: Session, preload: string|undefined,
 	winOpts: WindowOptions|undefined, parent: BrowserWindow|undefined,
-	devTools: boolean
+	devTools: boolean, formFactor?: web3n.ui.FormFactor
 ): Electron.BrowserWindowConstructorOptions {
+
+	winOpts = conformWinOptsToFormFactor(winOpts, formFactor);
+
 	// make a sanitized copy
 	const opts = copyWinOpts(winOpts);
 
@@ -326,8 +331,9 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 		const preload = ((Object.keys(caps.w3n).length > 0) ?
 			IPC_PRELOAD : undefined
 		);
+		const formFactor = await caps.w3n.ui.uiFormFactor();
 		const opts = prepareWindowOpts(
-			session, preload, winOpts, parent?.window, true
+			session, preload, winOpts, parent?.window, true, formFactor
 		);
 		if (icon) {
 			opts.icon = await nativeImageFromURL(appUrl, icon, domain);

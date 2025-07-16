@@ -23,6 +23,7 @@
 /// <reference path="./connectivity.d.ts" />
 /// <reference path="./rpc.d.ts" />
 /// <reference path="./ui.d.ts" />
+/// <reference path="./manifest.d.ts" />
 /// <reference path="./media.d.ts" />
 /// <reference path="./test-stand.d.ts" />
 
@@ -45,6 +46,8 @@ declare namespace web3n.caps {
 		 * myVersion returns version of current app.
 		 */
 		myVersion: () => Promise<string>;
+
+		ui: ui.UI;
 
 		// idea for lifecycle methods
 		// lifecycle: {

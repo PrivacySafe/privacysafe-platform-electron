@@ -15,12 +15,14 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { TestStandConfig } from "./test-stand";
 import { readdirSync, readFileSync } from "fs";
 import { isAbsolute, join } from "path";
 import { assert } from "./lib-common/assert";
 import { parseArgv, ArgDef, cliUsageToString, CliUsageSection } from "./lib-common/parse-argv";
 import { PLATFORM_NAME } from "./bundle-confs";
+
+type TestStandConfig = web3n.testing.config.TestStandConfig;
+type FormFactor = web3n.ui.FormFactor;
 
 function checkedFolderArgType(
 	folder: string
@@ -59,6 +61,20 @@ function testStandConfigType(
 			console.error(err);
 			process.exit(-1);
 		}
+	}
+}
+
+function formFactorType(uiFF: FormFactor): FormFactor {
+	switch (uiFF) {
+		case 'phone':
+		case 'phone+screen':
+		case 'tablet':
+		case 'tablet+screen':
+		case 'desktop':
+			return uiFF;
+		default:
+			console.error(`\n❌ Form factor ${uiFF} is not a known form factor`);
+			process.exit(-1);
 	}
 }
 
@@ -109,6 +125,11 @@ const platformArgDefs: ArgDef[] = [
 		type: testStandConfigType,
 		typeLabel: '{underline <conf file>}',
 		description: `Test stand configuration file.`
+	},
+	{
+		name: 'form-factor',
+		type: formFactorType,
+		description: `Form factor overrides device-derived value, useful for testing.`
 	},
 	{
 		name: 'skip-app-error-dialog',
@@ -174,9 +195,11 @@ export const HTTP_LOG_TO_CONSOLE_FLAG = !!parsedCliArgs['console-log-http'];
 
 export const MULTI_INSTANCE_FLAG = !!parsedCliArgs['allow-multi-instances'];
 
-export const CUSTOM_DATA_DIR = parsedCliArgs['data-dir'] as ReturnType<typeof checkedFolderArgType>;
+export const CUSTOM_DATA_DIR = parsedCliArgs['data-dir'] as ReturnType<typeof checkedFolderArgType>|undefined;
 
-export const TEST_STAND_CONF = parsedCliArgs['test-stand'] as ReturnType<typeof testStandConfigType>;
+export const TEST_STAND_CONF = parsedCliArgs['test-stand'] as ReturnType<typeof testStandConfigType>|undefined;
+
+export const FORM_FACTOR_OVERRIDE = parsedCliArgs['form-factor'] as ReturnType<typeof formFactorType>|undefined;
 
 export const PLATFORM_CALL_CMD = parsedCliArgs['platform-cmd'] as string|undefined;
 

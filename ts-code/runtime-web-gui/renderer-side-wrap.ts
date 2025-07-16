@@ -53,7 +53,8 @@ export function makeStartupW3N(ipc: InitIPC): StartupW3N {
 	const clientW3N = makeStartupW3Nclient<web3n.testing.StartupW3N>(
 		clientSide, {
 			testStand: makeStartupTestStandCaller
-		});
+		}
+	);
 	return clientW3N;
 }
 

@@ -19,18 +19,23 @@ import { TitleGenerator } from '../app-n-components/gui-component';
 import { CoreConf } from 'core-3nweb-client-lib';
 import { makeCoreDriver } from '../core';
 import { ElectronIPCConnectors, SocketIPCConnectors } from '../core/w3n-connectors';
-import { app } from 'electron';
+import { app, dialog } from 'electron';
 import { logError } from '../confs';
 import { setTimeout } from 'timers';
 import { DevToolsAppAllowance } from '../process-args';
 import { PlatformDownloader } from '../system/platform';
 import { UserAppOpenCmd, UserSystemCmd, UserCmd, AppInfoForUI } from '../desktop-integration';
-import { WrapStartupCAPs, AppsRunnerForTesting, DevAppParams, TestStand, TestStandConfig } from '../test-stand';
+import { WrapStartupCAPs, AppsRunnerForTesting, TestStand } from '../test-stand';
 import { toCanonicalAddress } from '../lib-common/canonical-address';
 import { DesktopUI } from '../desktop-integration';
 import { UserApps } from './user-apps';
 import { assert } from '../lib-common/assert';
+import { PLATFORM_NAME } from '../bundle-confs';
+import { rm } from 'fs/promises';
+import { sleep } from '../lib-common/processes/sleep';
 
+type TestStandConfig = web3n.testing.config.TestStandConfig;
+type DevAppParams = web3n.testing.config.DevAppParams;
 
 export class InitProc {
 
@@ -246,7 +251,7 @@ export class InitProc {
 			}
 
 			if ((cmd as UserAppOpenCmd).app) {
-				await apps.openApp((cmd as UserAppOpenCmd).app);
+				await apps.openAppInProperFormFactor((cmd as UserAppOpenCmd).app);
 			}
 
 			if ((cmd as UserSystemCmd).item === 'logout') {
@@ -279,10 +284,32 @@ export class InitProc {
 		if (cmd.type === 'open-app') {
 			const userApps = this.userApps.get(toCanonicalAddress(cmd.userId));
 			if (!userApps) { return false; }
-			userApps.openApp(cmd.app);
+			userApps.openAppInProperFormFactor(cmd.app);
 			return true;
 		} else {
 			return false;
+		}
+	}
+
+	private async wipeFromThisDevice(): Promise<void> {
+		const {
+			checkboxChecked: removePlatform, response: btnInd
+		} = await dialog.showMessageBox({
+			type: 'warning',
+			title: PLATFORM_NAME,
+			message: `Removing ${PLATFORM_NAME} data from ${this.conf.dataDir} on this device.${'\n\n'}Do you want to proceed?`,
+			// XXX add attempt to remove binaries
+			// checkboxLabel: `Attempt to remove ${PLATFORM_NAME} binary as well`,
+			// checkboxChecked: true,
+			buttons: [ `Remove`, `Cancel` ]
+		});
+		if (btnInd === 0) {
+			await this.closeAllUserAppsAndUI();
+			await sleep(2000);
+			await rm(this.conf.dataDir, { recursive: true, force: true });
+			// XXX add attempt to remove binaries
+			// if (removePlatform) {
+			// }
 		}
 	}
 
@@ -292,15 +319,19 @@ export class InitProc {
 		getLatestVersion: this.platform.getLatestVersion.bind(this.platform),
 		setupUpdater: this.platform.setupUpdater.bind(this.platform),
 		downloadUpdate: this.platform.downloadUpdate.bind(this.platform),
-		quitAndInstall: this.platform.quitAndInstall.bind(this.platform)
+		quitAndInstall: this.platform.quitAndInstall.bind(this.platform),
+		wipeFromThisDevice: this.wipeFromThisDevice.bind(this)
 	};
 
-	async exit(exitCode = 0): Promise<void> {
+	private async closeAllUserAppsAndUI(): Promise<void> {
 		await Promise.all(Array.from(this.userApps.values()).map(
 			apps => apps.exit().catch(logError)
 		));
-
 		await this.deskUI.close();
+	}
+
+	async exit(exitCode = 0): Promise<void> {
+		await this.closeAllUserAppsAndUI();
 
 		// note that when everything is closed, platform will exit even before
 		// call to app.exit()

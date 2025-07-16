@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2024 3NSoft Inc.
+ Copyright (C) 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -17,6 +17,8 @@
 
 import { addMsgToPage } from './test-page-utils.js';
 
+const mainTestAppComponent = '/main-tester.html';
+
 const fstCmd = await w3n.shell!.getStartedCmd!();
 addMsgToPage(`w3n.shell.getStartedCmd is`);
 addMsgToPage(JSON.stringify(fstCmd, undefined, 2));
@@ -32,7 +34,7 @@ const unsub = w3n.shell!.watchStartCmds!({
 		addMsgToPage(`Will close soon`);
 		setTimeout(() => w3n.closeSelf!(), 1000);
 		w3n.testStand.sendMsgToOtherLocalTestProcess(
-			undefined, undefined, undefined, { cmdCount, cmd: sndCmd }
+			undefined, undefined, mainTestAppComponent, { cmdCount, cmd: sndCmd }
 		);
 	},
 	error: err => {},
@@ -40,6 +42,6 @@ const unsub = w3n.shell!.watchStartCmds!({
 });
 
 await w3n.testStand.sendMsgToOtherLocalTestProcess(
-	undefined, undefined, undefined, { cmdCount, cmd: fstCmd }
+	undefined, undefined, mainTestAppComponent, { cmdCount, cmd: fstCmd }
 );
 

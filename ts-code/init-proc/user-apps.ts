@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2024 3NSoft Inc.
+ Copyright (C) 2016 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -24,7 +24,7 @@ import { SystemPlaces } from '../system/system-places';
 import { AppDownloader } from '../system/apps-downloader';
 import { UserAppInfo } from '../desktop-integration';
 import { Subject } from 'rxjs';
-import { WrapStartupCAPs, DevAppParams, DevAppParamsGetter, DevSiteParamsGetter } from '../test-stand';
+import { WrapStartupCAPs, DevAppParamsGetter, DevSiteParamsGetter } from '../test-stand';
 import { Component, Service, LiveApps } from '../app-n-components';
 import { sleep } from '../lib-common/processes/sleep';
 import { NamedProcs } from '../lib-common/processes/named-procs';
@@ -36,7 +36,10 @@ import { InitProc } from '.';
 import { StartupApp } from '../app-n-components/startup-app';
 import { defer } from '../lib-common/processes/deferred';
 import { GetAppStorage } from '../app-n-components/app';
+import { dialog } from 'electron';
+import { stringifyErr } from '../lib-common/exceptions/error';
 
+type DevAppParams = web3n.testing.config.DevAppParams;
 
 type UserAppsEvents = 'start-closing' | {
 	type: 'closed';
@@ -135,11 +138,11 @@ export class UserApps {
 
 	async listInstalled(): Promise<UserAppInfo[]> {
 		const infos: UserAppInfo[] = [];
-		const allApps = await this.sysPlaces.listApps();
-		for (const { id, current } of allApps) {
+		const allApps = await this.sysPlaces.listCurrentApps();
+		for (const { id } of allApps) {
 			const m = await this.sysPlaces.getAppManifest(id);
 			infos.push({
-				id, name: (m ? m.name : id), isInstalled: !!current
+				id, name: (m ? m.name : id), isInstalled: true
 			});
 		}
 		return infos;
@@ -214,9 +217,14 @@ export class UserApps {
 		entrypoint = MAIN_GUI_ENTRYPOINT,
 		devTools = false
 	): Promise<void> {
-		devTools = devTools || this.devToolsAllowance(appDomain);
+		try {
+			devTools = devTools || this.devToolsAllowance(appDomain);
 		const app = await this.apps.get(appDomain, devTools);
 		await app.launchWebGUI(entrypoint, devTools);
+		} catch (err) {
+			dialog.showErrorBox(`Fail to open App`, `Opening 3NWeb app ${appDomain} threw an error:`+'\n'+stringifyErr(err));
+			throw err;
+		}
 	}
 
 	private async executeCommand(
@@ -227,13 +235,24 @@ export class UserApps {
 		await app.handleCmdFromUser(cmd, devTools);
 	}
 
+	async openAppInProperFormFactor(appDomain: string): Promise<void> {
+		try {
+			const devTools = this.devToolsAllowance(appDomain);
+			const app = await this.apps.get(appDomain, devTools);
+			await app.launchFormFactorAppropriateWebGUI(devTools);
+		} catch (err) {
+			dialog.showErrorBox(`Fail to open App`, `Opening 3NWeb app ${appDomain} threw an error:`+'\n'+stringifyErr(err));
+			throw err;
+		}
+	}
+
 	async openAppLauncher(): Promise<void> {
-		await this.openApp(LAUNCHER_APP_DOMAIN);
+		await this.openAppInProperFormFactor(LAUNCHER_APP_DOMAIN);
 	}
 
 	async doUserSystemStartup(): Promise<void> {
 		this.triggerAllStartupLaunchers();
-		await this.openApp(LAUNCHER_APP_DOMAIN);
+		await this.openAppLauncher();
 	}
 
 	private async triggerAllStartupLaunchers(): Promise<void> {
@@ -355,15 +374,13 @@ function systemCAPsFrom(
 ): SysUtils {
 	const apps: Apps = {
 		opener: {
-			listApps: sysPlaces.listApps.bind(sysPlaces),
+			listCurrentApps: sysPlaces.listCurrentApps.bind(sysPlaces),
 			openApp,
 			executeCommand,
 			triggerAllStartupLaunchers,
 			closeAppsAfterUpdate,
-			getAppVersions: sysPlaces.getAppVersions.bind(sysPlaces),
-			getAppManifest: sysPlaces.getAppManifest.bind(sysPlaces),
-			getAppFileBytes: sysPlaces.getAppFileBytes.bind(sysPlaces),
-			watchApps: sysPlaces.watchApps.bind(sysPlaces)
+			getAppManifestOfCurrent: sysPlaces.getAppManifest.bind(sysPlaces),
+			getAppFileBytesOfCurrent: sysPlaces.getAppFileBytes.bind(sysPlaces)
 		},
 		downloader: {
 			downloadWebApp: appDownloader.downloadWebApp.bind(
@@ -380,16 +397,28 @@ function systemCAPsFrom(
 			)
 		},
 		installer: {
-			unpackBundledApp: sysPlaces.unpackBundledApp.bind(sysPlaces),
+			listBundledApps: sysPlaces.listBundledApps.bind(sysPlaces),
+			addPackFromBundledApps: sysPlaces.addPackBundledApps.bind(sysPlaces),
+			addAppPackFromFolder: sysPlaces.addAppPackFromFolder.bind(sysPlaces),
+			addAppPackFromZipFile: sysPlaces.addAppPackFromZipFile.bind(sysPlaces),
+			listAllAppsPacks: sysPlaces.listAllAppsPacks.bind(sysPlaces),
+			listAppPacks: sysPlaces.listAppPacks.bind(sysPlaces),
 			installApp: async (id, version) => {
 				await sysPlaces.installApp(id, version);
 				return liveApps.followupAppInstall(id, version);
 			},
+			removeAppPack: sysPlaces.removeAppPack.bind(sysPlaces),
 			uninstallApp: async id => {
 				await liveApps.closeAppToUninstall(id);
 				await sysPlaces.uninstallApp(id);
 			},
-			removeAppPack: sysPlaces.removeAppPack.bind(sysPlaces)
+			removeAppData: async id => {
+				await liveApps.closeAppToUninstall(id);
+				await sysPlaces.removeAppData(id);
+			},
+			watchApps: sysPlaces.watchApps.bind(sysPlaces),
+			getAppManifest: sysPlaces.getAppManifest.bind(sysPlaces),
+			getAppFileBytes: sysPlaces.getAppFileBytes.bind(sysPlaces)
 		}
 	};
 	const monitor = liveApps.makeMonitor();

@@ -45,8 +45,8 @@ export class PlatformDownloader {
 
 	async getCurrentVersion(): Promise<BundleVersions> {
 		const bundledApps: BundleVersions['apps'] = {};
-		for (const { id, current } of await listInstalledBundledApps()) {
-			bundledApps[id] = current!;
+		for (const { id, version } of await listInstalledBundledApps()) {
+			bundledApps[id] = version;
 		}
 		const bundledAppPacks: BundleVersions['app-packs'] = {};
 		for (const { id, version } of await listBundledAppPacks()) {

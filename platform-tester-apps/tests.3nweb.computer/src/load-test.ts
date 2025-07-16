@@ -56,4 +56,6 @@ declare const w3n: web3n.testing.CommonW3N;
 		await setupSecondUserASMailTestReactions();
 		setupSecondUserRPCTestReactions();
 	}
-})();
+})().catch(err =>{
+	addMsgToPage(`❌ Error occured in test loading: ${err.stack}`);
+});

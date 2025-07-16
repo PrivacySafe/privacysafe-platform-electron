@@ -21,16 +21,18 @@ import { toCanonicalAddress } from "../lib-common/canonical-address";
 import { DevAppInstanceFromUrl, GUIComponent } from "./gui-component";
 import { appAndManifestOnDev } from "./utils";
 import { CoreDriver } from "../core";
-import { MAIN_GUI_ENTRYPOINT, getWebGUIComponent } from "../lib-common/manifest-utils";
+import { MAIN_GUI_ENTRYPOINT, getLaunchersForUser, getWebGUIComponent } from "../lib-common/manifest-utils";
 import { applyingStartupWindowPlacement } from "../window-utils/screen-gui-placements";
 import { errWithCause } from "../lib-common/exceptions/error";
-import { DevAppParams, WrapStartupCAPs } from "../test-stand";
+import { WrapStartupCAPs } from "../test-stand";
 import { DeviceFS } from "core-3nweb-client-lib";
+import { getSytemFormFactor } from "../ui";
 
 
 type AppManifest = web3n.caps.AppManifest;
 type StartupW3N = web3n.startup.W3N;
 type WindowOptions = web3n.ui.WindowOptions;
+type DevAppParams = web3n.testing.config.DevAppParams;
 
 type InstantiateGUI = (
 	entrypoint: string, winOpts: WindowOptions|undefined,
@@ -93,14 +95,12 @@ export class StartupApp {
 		const startProc = DeviceFS.makeReadonly(dir)
 		.then((appRoot) => {
 			const instantiate: InstantiateGUI = (url ?
-				(entrypoint, winOpts, icon) =>
-					DevAppInstanceFromUrl.makeStartupFor(
-						STARTUP_APP_DOMAIN, url, entrypoint, winOpts, icon
-					) :
-				(entrypoint, winOpts, icon) =>
-					GUIComponent.makeStartup(
-						STARTUP_APP_DOMAIN, appRoot, entrypoint, winOpts, icon, true
-					)
+				(entrypoint, winOpts, icon) => DevAppInstanceFromUrl.makeStartupFor(
+					STARTUP_APP_DOMAIN, url, entrypoint, winOpts, icon
+				) :
+				(entrypoint, winOpts, icon) => GUIComponent.makeStartup(
+					STARTUP_APP_DOMAIN, appRoot, entrypoint, winOpts, icon, true
+				)
 			);
 			return startupApp.startRegularOrDevelopmentGUI(
 				manifest, caps, connectIPC, instantiate
@@ -115,7 +115,9 @@ export class StartupApp {
 		connectIPC: ConnectIPC, instantiate: InstantiateGUI
 	): Promise<void> {
 		try {
-			const entrypoint = MAIN_GUI_ENTRYPOINT;
+			const uiFF = getSytemFormFactor();
+			const launchers = getLaunchersForUser(manifest, uiFF);
+			const entrypoint = launchers?.[0]?.component || MAIN_GUI_ENTRYPOINT;
 			const component = getWebGUIComponent(manifest, entrypoint);
 			const winOpts = applyingStartupWindowPlacement(component.windowOpts);
 			this.gui = await instantiate(entrypoint, winOpts, component.icon);
@@ -180,7 +182,8 @@ function addIdsFilteringToCAPs(
 					}
 					return w3n.signIn.useExistingStorage(address, pass, progressCB);
 				}
-			)
+			),
+			watchBoot: w3n.signIn.watchBoot
 		},
 		signUp: w3n.signUp
 	};

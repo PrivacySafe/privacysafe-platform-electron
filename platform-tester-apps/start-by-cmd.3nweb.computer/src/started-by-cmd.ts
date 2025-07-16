@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2024 3NSoft Inc.
+ Copyright (C) 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -18,7 +18,7 @@
 import { addMsgToPage } from './test-page-utils.js';
 
 const mainTestApp = 'tests.3nweb.computer';
-const mainTestAppComponent = '/index.html';
+const mainTestAppComponent = '/main-tester.html';
 
 const fstCmd = await w3n.shell!.getStartedCmd!();
 addMsgToPage(`w3n.shell.getStartedCmd is`);

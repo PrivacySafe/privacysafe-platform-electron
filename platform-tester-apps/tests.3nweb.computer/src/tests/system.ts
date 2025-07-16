@@ -36,6 +36,7 @@ describe(`system.platform`, () => {
 		expect(typeof platform.setupUpdater).toBe('function');
 		expect(typeof platform.downloadUpdate).toBe('function');
 		expect(typeof platform.quitAndInstall).toBe('function');
+		expect(typeof platform.wipeFromThisDevice).toBe('function');
 	});
 
 	it('can get platform version', async () => {
@@ -52,9 +53,9 @@ describe(`system.apps`, () => {
 		const apps = w3n.system!.apps!;
 		expect(apps).toBeDefined();
 		expect(apps.opener).toBeDefined();
-		expect(typeof apps.opener!.getAppManifest).toBe('function');
-		expect(typeof apps.opener!.getAppFileBytes).toBe('function');
-		expect(typeof apps.opener!.listApps).toBe('function');
+		expect(typeof apps.opener!.getAppManifestOfCurrent).toBe('function');
+		expect(typeof apps.opener!.getAppFileBytesOfCurrent).toBe('function');
+		expect(typeof apps.opener!.listCurrentApps).toBe('function');
 		expect(typeof apps.opener!.openApp).toBe('function');
 		expect(typeof apps.opener!.triggerAllStartupLaunchers).toBe('function');
 		expect(apps.downloader).toBeDefined();
@@ -63,14 +64,18 @@ describe(`system.apps`, () => {
 		expect(typeof apps.downloader!.getAppVersionFilesList).toBe('function');
 		expect(typeof apps.downloader!.getLatestAppVersion).toBe('function');
 		expect(apps.installer).toBeDefined();
-		expect(typeof apps.installer!.unpackBundledApp).toBe('function');
+		expect(typeof apps.installer!.listBundledApps).toBe('function');
+		expect(typeof apps.installer!.listAppPacks).toBe('function');
+		expect(typeof apps.installer!.addPackFromBundledApps).toBe('function');
+		expect(typeof apps.installer!.addAppPackFromFolder).toBe('function');
+		expect(typeof apps.installer!.addAppPackFromZipFile).toBe('function');
 		expect(typeof apps.installer!.installApp).toBe('function');
 		expect(typeof apps.installer!.uninstallApp).toBe('function');
 		expect(typeof apps.installer!.removeAppPack).toBe('function');
 	});
 
-	it(`opener.listApps lists installed apps`, async () => {
-		const lst = await w3n.system!.apps!.opener!.listApps();
+	it(`opener.listCurrentApps lists installed apps`, async () => {
+		const lst = await w3n.system!.apps!.opener!.listCurrentApps();
 		expect(Array.isArray(lst)).toBeTrue();
 	});
 

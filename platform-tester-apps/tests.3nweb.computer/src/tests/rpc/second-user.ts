@@ -49,7 +49,8 @@ export function setupSecondUserRPCTestReactions(): void {
 					srvResult.err = stringifyErr(err);
 				}
 				await w3n.testStand.sendMsgToOtherLocalTestProcess(
-					1, undefined, undefined, srvResult);
+					1, undefined, undefined, srvResult
+				);
 			}
 		},
 		1, undefined, undefined

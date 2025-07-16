@@ -45,8 +45,8 @@ Bundle includes:
 ${
 	(await listInstalledBundledApps())
 	.map(({
-		id, current
-	}) => `    • ${id}: ${current}`)
+		id, version
+	}) => `    • ${id}: ${version}`)
 	.join('\n')
 }
 `;

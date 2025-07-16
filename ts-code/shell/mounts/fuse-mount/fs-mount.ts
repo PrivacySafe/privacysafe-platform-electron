@@ -28,6 +28,15 @@ import { sleep } from '../../../lib-common/processes/sleep';
 import { Action } from '../../../lib-common/processes/single';
 
 const fuse = (function() {
+
+	// XXX we'll do fuse-native for now. This works in linux and mac, so, for
+	//     cool kids this should be enough.
+	//   Unless we rebuild node-fuse-bindings ourselves.
+	//  Dokany have rust library side, and there is fuser (fuse in rust), both of
+	//  which should be be used long term that will start with gradual rusting.
+	//  With steps going (1) core in embedded deno, (2) still attached to
+	//  electron-driven web-gui, rust-mitigated mounting into OS's won't be out
+	//  of place.
 	try {
 		return require('node-fuse-bindings');
 	} catch (err) {
@@ -38,7 +47,8 @@ const fuse = (function() {
 function throwIfNoFUSE(): void {
 	if (!fuse) {
 		throw makeRuntimeException<FSMountException>(
-			'fs-mount', {}, { fuseNotAvailable: true });
+			'fs-mount', {}, { fuseNotAvailable: true }
+		);
 	}
 }
 
@@ -110,8 +120,9 @@ export class FSMount {
 
 			options: (options ?
 				combineOptions(MOUNT_OPTIONS, options) :
-				MOUNT_OPTIONS),
-			
+				MOUNT_OPTIONS
+			),
+
 			context: this.context,
 			getattr: this.getattr,
 			readdir: this.readdir,
@@ -139,7 +150,8 @@ export class FSMount {
 				} else {
 					resolve();
 				}
-			}));
+			}
+		));
 		this.mountPath = path;
 	}
 
@@ -150,7 +162,8 @@ export class FSMount {
 			try {
 				await new Promise<void>((resolve, reject) => fuse.unmount(
 					this.mountPath!,
-					err => { if (err) { reject(err); } else { resolve(); } }));
+					err => { if (err) { reject(err); } else { resolve(); } }
+				));
 				this.mountPath = undefined;
 				return;
 			} catch (err) {
@@ -209,60 +222,64 @@ export class FSMount {
 		return d;
 	}
 
-	private getattr: NonNullable<MountOptions['getattr']> = (path, cb) => {
-		this.runSynced(path, cb, 'getattr', async () => {
-			const d = this.fds.getOrMakeUnnumberedFor(path);
-			const stats = await d.getattr(this.ctx, this.roots.getDevId);
-			cb(0, stats);
-		});
-	};
+	private getattr: NonNullable<MountOptions['getattr']> = (
+		path, cb
+	) => this.runSynced(path, cb, 'getattr', async () => {
+		const d = this.fds.getOrMakeUnnumberedFor(path);
+		const stats = await d.getattr(this.ctx, this.roots.getDevId);
+		cb(0, stats);
+	});
 
-	private readdir: NonNullable<MountOptions['readdir']> = (path, cb) => 
-		this.runSynced(path, cb, 'readdir', async () => {
-			const d = this.fds.getOrMakeUnnumberedFor(path);
-			const lst = await d.readdir();
-			cb(0, lst);
-		});
+	private readdir: NonNullable<MountOptions['readdir']> = (
+		path, cb
+	) => this.runSynced(path, cb, 'readdir', async () => {
+		const d = this.fds.getOrMakeUnnumberedFor(path);
+		const lst = await d.readdir();
+		cb(0, lst);
+	});
 
-	private open: NonNullable<MountOptions['open']> = (path, flags, cb) =>
-		this.runSynced(path, cb, 'open', async () => {
-			const { d, fd } = this.fds.makeNumberedFor(path);
-			try {
-				const { create, exclusive } = creationParamsFrom(flags);
-				if ((flags & masks.O_RDWR) || (flags & masks.O_WRONLY)) {
-					if (!d.isInWritableFS()) {
-						throw fuse.EROFS;
-					}
-					if (create && exclusive) {
-						await d.createFile(fd);
-					}
-				} else {
-					await d.checkFilePresence(true);
+	private open: NonNullable<MountOptions['open']> = (
+		path, flags, cb
+	) => this.runSynced(path, cb, 'open', async () => {
+		const { d, fd } = this.fds.makeNumberedFor(path);
+		try {
+			const { create, exclusive } = creationParamsFrom(flags);
+			if ((flags & masks.O_RDWR) || (flags & masks.O_WRONLY)) {
+				if (!d.isInWritableFS()) {
+					throw fuse.EROFS;
 				}
-				cb(0, fd);
-			} catch (err) {
-				this.fds.dropNumbered(fd);
-				throw err;
+				if (create && exclusive) {
+					await d.createFile(fd);
+				}
+			} else {
+				await d.checkFilePresence(true);
 			}
-		});
+			cb(0, fd);
+		} catch (err) {
+			this.fds.dropNumbered(fd);
+			throw err;
+		}
+	});
 
-	private release: NonNullable<MountOptions['release']> = (path, fd, cb) =>
-		this.runSynced(path, cb, 'release', async () => {
-			const d = this.fds.dropNumbered(fd);
-			if (d) {
-				d.flush(fd);
-			}
-			cb(0);
-		});
+	private release: NonNullable<MountOptions['release']> = (
+		path, fd, cb
+	) => this.runSynced(path, cb, 'release', async () => {
+		const d = this.fds.dropNumbered(fd);
+		if (d) {
+			d.flush(fd);
+		}
+		cb(0);
+	});
 
-	private flush: NonNullable<MountOptions['flush']> = (path, fd, cb) =>
-		this.runSynced(path, cb, 'flush', async () => {
-			const d = this.fds.getNumbered(fd);
-			if (d) {
-				await d.flush(fd);
-			}
-			cb(0);
-		});
+	private flush: NonNullable<MountOptions['flush']> = (
+		path, fd, cb
+	) => this.runSynced(path, cb, 'flush', async () => {
+		const d = this.fds.getNumbered(fd);
+		if (d) {
+			await d.flush(fd);
+		}
+		cb(0);
+	});
 
 	private read: NonNullable<MountOptions['read']> = async (
 		path, fd, buffer, length, position, cb
@@ -289,60 +306,66 @@ export class FSMount {
 		}
 	};
 
-	private create: NonNullable<MountOptions['create']> = (path, mode, cb) =>
-		this.runSynced(path, cb, 'create', async () => {
-			const { d, fd } = this.fds.makeNumberedFor(path);
-			try {
-				if (!d.isInWritableFS()) {
-					throw fuse.EROFS;
-				}
-				await d.createFile();
-				(cb as CreateCallback)(0, fd);
-			} catch (err) {
-				this.fds.dropNumbered(fd);
-				throw err;
+	private create: NonNullable<MountOptions['create']> = (
+		path, mode, cb
+	) => this.runSynced(path, cb, 'create', async () => {
+		const { d, fd } = this.fds.makeNumberedFor(path);
+		try {
+			if (!d.isInWritableFS()) {
+				throw fuse.EROFS;
 			}
-		});
+			await d.createFile();
+			(cb as CreateCallback)(0, fd);
+		} catch (err) {
+			this.fds.dropNumbered(fd);
+			throw err;
+		}
+	});
 
-	private unlink: NonNullable<MountOptions['unlink']> = (path, cb) =>
-		this.runSynced(path, cb, 'unlink', async () => {
-			const d = this.getWritableUnnumbered(path);
-			await d.deleteFile();
-			cb(0);
-		});
+	private unlink: NonNullable<MountOptions['unlink']> = (
+		path, cb
+	) => this.runSynced(path, cb, 'unlink', async () => {
+		const d = this.getWritableUnnumbered(path);
+		await d.deleteFile();
+		cb(0);
+	});
 
-	private rename: NonNullable<MountOptions['rename']> = (srcPath, destPath, cb) =>
-		this.runSynced(srcPath, cb, 'rename', async () => {
-			const src = this.fds.getOrMakeUnnumberedFor(srcPath);
-			const dst = this.getWritableUnnumbered(destPath);
-			if (!src.isOnSameFSWith(dst)) {
-				cb(fuse.EXDEV);
-				return;
-			}
-			await src.moveTo(dst);
-			cb(0);
-		});
+	private rename: NonNullable<MountOptions['rename']> = (
+		srcPath, destPath, cb
+	) => this.runSynced(srcPath, cb, 'rename', async () => {
+		const src = this.fds.getOrMakeUnnumberedFor(srcPath);
+		const dst = this.getWritableUnnumbered(destPath);
+		if (!src.isOnSameFSWith(dst)) {
+			cb(fuse.EXDEV);
+			return;
+		}
+		await src.moveTo(dst);
+		cb(0);
+	});
 
-	private mkdir: NonNullable<MountOptions['mkdir']> = (path, mode, cb) =>
-		this.runSynced(path, cb, 'mkdir', async () => {
-			const d = this.getWritableUnnumbered(path);
-			await d.makeFolder();
-			cb(0);
-		});
+	private mkdir: NonNullable<MountOptions['mkdir']> = (
+		path, mode, cb
+	) => this.runSynced(path, cb, 'mkdir', async () => {
+		const d = this.getWritableUnnumbered(path);
+		await d.makeFolder();
+		cb(0);
+	});
 
-	private rmdir: NonNullable<MountOptions['rmdir']> = (path, cb) =>
-		this.runSynced(path, cb, 'rmdir', async () => {
-			const d = this.getWritableUnnumbered(path);
-			await d.deleteFolder();
-			cb(0);
-		});
+	private rmdir: NonNullable<MountOptions['rmdir']> = (
+		path, cb
+	) => this.runSynced(path, cb, 'rmdir', async () => {
+		const d = this.getWritableUnnumbered(path);
+		await d.deleteFolder();
+		cb(0);
+	});
 
-	private truncate: NonNullable<MountOptions['truncate']> = (path, size, cb) =>
-		this.runSynced(path, cb, 'truncate', async () => {
-			const d = this.getWritableUnnumbered(path);
-			await d.fileTruncate(size);
-			cb(0);
-		});
+	private truncate: NonNullable<MountOptions['truncate']> = (
+		path, size, cb
+	) => this.runSynced(path, cb, 'truncate', async () => {
+		const d = this.getWritableUnnumbered(path);
+		await d.fileTruncate(size);
+		cb(0);
+	});
 
 	private ftruncate: NonNullable<MountOptions['ftruncate']> = (
 		path, fd, size, cb

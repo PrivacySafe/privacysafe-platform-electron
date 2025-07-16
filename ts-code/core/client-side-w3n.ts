@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2024 3NSoft Inc.
+ Copyright (C) 2020 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -22,6 +22,7 @@ import { makeSystemCaller, promiseSystemCaller } from '../system/ipc-client-side
 import { makeShellCaller, promiseShellCaller } from '../shell/ipc-client-side';
 import { makeRpcCaller, promiseRpcCaller } from '../rpc/ipc-client-side';
 import { makeMediaDevices, promiseMediaDevices } from '../media-devices/ipc-client-side';
+import { makeUICaller } from '../ui/ipc-client-side';
 
 type W3N = web3n.system.W3N;
 
@@ -43,6 +44,7 @@ export function makeClientSideW3N(clientSide: ClientSide): W3N {
 		{
 			closeSelf: jsonFuncCallSwallowingErrs,
 			myVersion: jsonFuncCall,
+			ui: makeUICaller,
 			system: makeSystemCaller,
 			testStand: makeTestStandCaller,
 			shell: makeShellCaller,
@@ -63,6 +65,7 @@ export async function promiseClientSideW3N(
 		{
 			closeSelf: jsonFuncCallSwallowingErrs,
 			myVersion: jsonFuncCall,
+			ui: makeUICaller,
 			system: promiseSystemCaller,
 			testStand: promiseTestStandCaller,
 			shell: promiseShellCaller,

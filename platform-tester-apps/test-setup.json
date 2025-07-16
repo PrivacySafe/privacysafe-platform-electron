@@ -1,7 +1,8 @@
 {
 	"apps": {
 		"tests.3nweb.computer": {
-			"dir": "tests.3nweb.computer"
+			"dir": "tests.3nweb.computer",
+			"launchComponent": "/main-tester.html"
 		},
 		"start-by-cmd.3nweb.computer": {
 			"dir": "start-by-cmd.3nweb.computer",

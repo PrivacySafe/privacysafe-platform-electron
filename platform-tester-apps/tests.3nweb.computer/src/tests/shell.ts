@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022, 2024 3NSoft Inc.
+ Copyright (C) 2022, 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -40,6 +40,8 @@ describe(`shell.startAppWithParams`, () => {
 	const timeout = 15000;
 	const testCommTimeout = timeout - 1000;
 
+	const cmdProcComponent = '/started-by-command.html';
+
 	it(`app manifest requests the cap, and it is expected`, async () => {
 		expect(typeof w3n.shell).toBe('object');
 		expect(typeof w3n.shell!.startAppWithParams).toBe('function');
@@ -47,7 +49,7 @@ describe(`shell.startAppWithParams`, () => {
 
 	it(`passes commands to this app's components`, async () => {
 		const fstCmdEchoPromise = getOneMsgFromProcess<CmdEcho>(
-			undefined, undefined, '/started-by-command.html', testCommTimeout
+			undefined, undefined, cmdProcComponent, testCommTimeout
 		);
 		const c1 = 'command-1';
 		const cmdArgs = [
@@ -69,7 +71,7 @@ describe(`shell.startAppWithParams`, () => {
 		}
 
 		const sndCmdEchoPromise = getOneMsgFromProcess<CmdEcho>(
-			undefined, undefined, '/started-by-command.html', testCommTimeout
+			undefined, undefined, cmdProcComponent, testCommTimeout
 		);
 		const c2 = 'command-2';
 		await w3n.shell!.startAppWithParams!(null, c2, ...cmdArgs);

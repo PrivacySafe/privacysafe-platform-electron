@@ -27,7 +27,8 @@ export interface TestSignal<T> {
 
 async function sendTestSignal<T>(userNum: number, msg: T): Promise<void> {
 	await w3n.testStand.sendMsgToOtherLocalTestProcess(
-		userNum, undefined, undefined, msg);
+		userNum, undefined, undefined, msg
+	);
 }
 
 export interface EchoMsgSignal extends TestSignal<'message-echo'> {

@@ -16,7 +16,7 @@
 */
 
 import { Component, Service } from "./index";
-import { getAllGUIComponents, getComponentForCommand, getComponentForService, getDefaultLauncher, getWebGUIComponent, isCallerAllowed, isMultiInstanceComponent, makeRPCException, makeShellCmdException, servicesImplementedBy, getComponentsForSystemStartup, getExposedFSResource, makeAppFSResourceException, getComponent } from "../lib-common/manifest-utils";
+import { getAllGUIComponents, getComponentForCommand, getComponentForService, getDefaultLauncher, getWebGUIComponent, isCallerAllowed, isMultiInstanceComponent, makeRPCException, makeShellCmdException, servicesImplementedBy, getComponentsForSystemStartup, getExposedFSResource, makeAppFSResourceException, getComponent, getLaunchersForUser, MAIN_GUI_ENTRYPOINT } from "../lib-common/manifest-utils";
 import { NamedProcs } from "../lib-common/processes/named-procs";
 import { WrapAppCAPsAndSetup } from "../test-stand";
 import { DevAppInstanceFromUrl, GUIComponent, TitleGenerator } from "./gui-component";
@@ -28,6 +28,7 @@ import { makeAppInitExc } from "../system/system-places";
 import { DenoComponent } from "./deno-component";
 import { PostponedValuesFixedKeysMap } from "../lib-common/postponed-values-map";
 import { wrapWithTimeout } from "../lib-common/processes/timeouts";
+import { getSytemFormFactor } from "../ui";
 
 
 type ReadonlyFS = web3n.files.ReadonlyFS;
@@ -184,6 +185,20 @@ export class App {
 	async launchWebGUI(entrypoint: string, devTools: boolean): Promise<void> {
 		const component = getWebGUIComponent(this.manifest, entrypoint);
 		await this.launchComponent(entrypoint!, component, devTools);
+	}
+
+	async launchFormFactorAppropriateWebGUI(devTools: boolean): Promise<void> {
+		const uiFF = getSytemFormFactor();
+		const launchers = getLaunchersForUser(this.manifest, uiFF);
+		if (launchers) {
+			const { component, startCmd } = launchers[0];
+			if (component) {
+				return await this.launchWebGUI(component, devTools);
+			} else if (startCmd) {
+				return await this.handleCmdFromUser(startCmd, devTools);
+			}
+		}
+		await this.launchWebGUI(MAIN_GUI_ENTRYPOINT, devTools);
 	}
 
 	private async launchComponent(

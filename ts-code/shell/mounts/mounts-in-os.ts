@@ -123,7 +123,7 @@ export class MountsInOS {
 			assert(!!item.isFolder);
 			fs = item.item as FS;
 		} else {
-			throw new Error(`Don't mount to OS storage of ${store}`);
+			throw new Error(`Mounting storage type ${store} into OS isn't supported`);
 		}
 
 		const fsMount = await FSMount.mountSingleFS(mntPath, fs);
