@@ -12,6 +12,7 @@
 		"/main-tester.html": {
 			"startedBy": "user",
 			"runtime": "web-gui",
+			"formFactor": "desktop",
 			"capsRequested": {
 				"appRPC": [
 					"allowed_but_unknown",
@@ -55,7 +56,8 @@
 							"start-by-cmd.3nweb.computer": "sample-config",
 							"unknown.example.local": "some-resource"
 						}
-					}
+					},
+					"openDashboard": true
 				},
 				"connectivity": "check",
 				"system": {
@@ -69,9 +71,70 @@
 				"rememberWindowLocation": true
 			}
 		},
+		
+		"/main-tester-phone.html": {
+			"startedBy": "user",
+			"runtime": "web-gui",
+			"formFactor": "phone",
+			"capsRequested": {
+				"appRPC": [
+					"allowed_but_unknown",
+					"OneShotDialog", "LongDialog",
+					"ServiceInDeno", "LongServiceInDeno"
+				],
+				"keyrings": "all",
+				"mail": {
+					"receivingFrom": "all",
+					"sendingTo": "all",
+					"config": "all"
+				},
+				"storage": {
+					"appFS": [
+						{
+							"domain": "tests.3nweb.computer",
+							"storage": "synced-n-local"
+						}, {
+							"domain": "sub-app-1.tests.3nweb.computer",
+							"storage": "synced-n-local"
+						}, {
+							"domain": "sub-app-2.tests.3nweb.computer",
+							"storage": "synced-n-local"
+						}
+					],
+					"userFS": "all",
+					"sysFS": "all"
+				},
+				"mailerid": true,
+				"logToPlatform": true,
+				"shell": {
+					"userNotifications": true,
+					"startAppCmds": {
+						"thisApp": [ "command-1", "command-2" ],
+						"otherApps": {
+							"start-by-cmd.3nweb.computer": [ "app-cmd-1", "app-cmd-2" ]
+						}
+					},
+					"fsResource": {
+						"otherApps": {
+							"start-by-cmd.3nweb.computer": "sample-config",
+							"unknown.example.local": "some-resource"
+						}
+					},
+					"openDashboard": true
+				},
+				"connectivity": "check",
+				"system": {
+					"apps": "all",
+					"platform": "all",
+					"monitor": "all",
+					"logout": true
+				}
+			}
+		},
 
 		"/one-shot-dialog.html": {
 			"runtime": "web-gui",
+			"formFactor": "desktop",
 			"services": {
 				"OneShotDialog": {
 					"thisAppComponents": "*"
@@ -93,8 +156,27 @@
 			}
 		},
 
+		"/one-shot-dialog-phone.html": {
+			"runtime": "web-gui",
+			"formFactor": "phone",
+			"services": {
+				"OneShotDialog": {
+					"thisAppComponents": "*"
+				}
+			},
+			"childOfGUICaller": true,
+			"forOneConnectionOnly": true,
+			"capsRequested": {
+				"mailerid": true,
+				"storage": {
+					"appFS": "default"
+				}
+			}
+		},
+
 		"/long-dialog.html": {
 			"runtime": "web-gui",
+			"formFactor": "desktop",
 			"services": {
 				"LongDialog": {
 					"thisAppComponents": "*"
@@ -111,6 +193,23 @@
 				"useContentSize": true,
 				"width": 400,
 				"height": 300
+			}
+		},
+
+		"/long-dialog-phone.html": {
+			"runtime": "web-gui",
+			"formFactor": "phone",
+			"services": {
+				"LongDialog": {
+					"thisAppComponents": "*"
+				}
+			},
+			"childOfGUICaller": true,
+			"capsRequested": {
+				"mailerid": true,
+				"storage": {
+					"appFS": "default"
+				}
 			}
 		},
 
@@ -156,11 +255,26 @@
 				}
 			},
 			"runtime": "web-gui",
+			"formFactor": "desktop",
 			"windowOpts": {
 				"useContentSize": true,
 				"width": 400,
 				"height": 300
 			}
+		},
+
+		"/started-by-command-phone.html": {
+			"startCmds": {
+				"command-1": {
+					"otherApps": "*",
+					"thisAppComponents": "*"
+				},
+				"command-2": {
+					"thisAppComponents": "*"
+				}
+			},
+			"runtime": "web-gui",
+			"formFactor": "phone"
 		}
 
 	}

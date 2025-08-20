@@ -100,7 +100,7 @@ describe('ASMail', () => {
 	itCond('lists incoming messages in the inbox', async () => {
 		const msgs = await w3n.mail!.inbox.listMsgs();
 		expect(Array.isArray(msgs)).toBe(true);
-	}, undefined, s);
+	}, 10000, s);
 
 	loadSpecs(
 		s,

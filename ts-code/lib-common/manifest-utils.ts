@@ -21,8 +21,8 @@ type AppManifest = web3n.caps.AppManifest;
 type GeneralAppManifest = web3n.caps.GeneralAppManifest;
 type SimpleGUIAppManifest = web3n.caps.SimpleGUIAppManifest;
 type GUIComponentDef = web3n.caps.GUIComponent;
-type SrvDef = web3n.caps.ServiceComponent;
-type GUISrvDef = web3n.caps.GUIServiceComponent;
+type ServiceComponent = web3n.caps.ServiceComponent;
+type GUIServiceComponent = web3n.caps.GUIServiceComponent;
 type AppComponent = web3n.caps.AppComponent;
 type AllowedCallers = web3n.caps.AllowedCallers;
 type LauncherDef = web3n.caps.Launcher;
@@ -33,6 +33,7 @@ type FSResourceDescriptor = web3n.caps.FSResourceDescriptor;
 type FSResourceException = web3n.shell.FSResourceException;
 type ResourcesRequest = web3n.caps.ResourcesRequest;
 type UserInterfaceFormFactor = web3n.caps.UserInterfaceFormFactor;
+type FormFactorSetting = web3n.caps.FormFactorSetting;
 
 
 export interface AppManifestException extends web3n.RuntimeException {
@@ -135,30 +136,48 @@ function makeComponentForSimpleGUIApp(
 /**
  * Collects app's launchers that can be started directly by user.
  * @param m app's manifest
- * @param formFactor an optional form factor filter
+ * @param formFactor a form factor filter
  * @returns an array of launcher, or undefined if there's none defined
  */
 export function getLaunchersForUser(
-	m: AppManifest, formFactor?: UserInterfaceFormFactor
+	m: AppManifest, formFactor: UserInterfaceFormFactor
 ): LauncherDef[]|undefined {
 	const manifestLauncher = (m as GeneralAppManifest).launchers;
 	if (Array.isArray(manifestLauncher)) {
 		let lst = (manifestLauncher
 		.filter(l => !(l as DynamicLaunchers).appStorage) as LauncherDef[])
-		.filter(l => (l.component || l.startCmd));
-		if (formFactor) {
-			lst = lst
-			.filter(l => (
-				!l.formFactor ||
-				(Array.isArray(l.formFactor) ?
-					l.formFactor.includes(formFactor) :
-					(l.formFactor === formFactor)
-				)
-			));
-		}
+		.filter(l => (l.component || l.startCmd))
+		.filter(l => isApplicableToFormFactor(l, formFactor));
 		return ((lst && (lst.length > 0)) ? lst : undefined);
 	} else {
 		return [ getDefaultLauncher(m) ];
+	}
+}
+
+function isApplicableToFormFactor(
+	def: FormFactorSetting, currentFormFactor: UserInterfaceFormFactor
+): boolean {
+	if (!def.formFactor) {
+		return true;
+	} else if (Array.isArray(def.formFactor)) {
+		return !!def.formFactor.find(ff => isCompatibleFormFactor(ff, currentFormFactor));
+	} else {
+		return isCompatibleFormFactor(def.formFactor, currentFormFactor);
+	}
+}
+
+function isCompatibleFormFactor(
+	ff: UserInterfaceFormFactor, neededFF: UserInterfaceFormFactor
+): boolean {
+	if (ff === neededFF) {
+		return true;
+	}
+	switch (ff) {
+		case 'phone+screen':
+		case 'tablet+screen':
+			return (neededFF === 'desktop');
+		default:
+			return false;
 	}
 }
 
@@ -211,7 +230,7 @@ function makeLauncherForGeneralAppManifest(m: GeneralAppManifest): LauncherDef {
 }
 
 export function getComponentForCommand(
-	m: AppManifest, cmd: string
+	m: AppManifest, cmd: string, currentFormFactor: UserInterfaceFormFactor
 ): { entrypoint: string; component: GUIComponentDef }|undefined {
 	if (!(m as GeneralAppManifest).components) {
 		return;
@@ -219,8 +238,8 @@ export function getComponentForCommand(
 	for (const [entrypoint, def] of Object.entries(
 		(m as GeneralAppManifest).components
 	)) {
-		if ((def as GUIComponentDef).startCmds
-		&& (def as GUIComponentDef).startCmds![cmd]) {
+		const cmdDef = (def as GUIComponentDef).startCmds?.[cmd];
+		if (cmdDef && isApplicableToFormFactor(def as GUIComponentDef, currentFormFactor)) {
 			return { entrypoint, component: def as GUIComponentDef };
 		}
 	}
@@ -228,19 +247,15 @@ export function getComponentForCommand(
 }
 
 export function getComponentForService(
-	m: AppManifest, service: string
-): { entrypoint: string; component: SrvDef }|undefined {
+	m: AppManifest, service: string, currentFormFactor: UserInterfaceFormFactor
+): { entrypoint: string; component: ServiceComponent }|undefined {
 	if (!(m as GeneralAppManifest).components) {
 		return;
 	}
-	for (const [entrypoint, def] of Object.entries(
-		(m as GeneralAppManifest).components)
-	) {
-		if (!(def as SrvDef).services) {
-			continue;
-		}
-		if ((def as SrvDef).services[service]) {
-			return { entrypoint, component: def as SrvDef };
+	for (const [entrypoint, def] of Object.entries((m as GeneralAppManifest).components)) {
+		const srvDef = (def as ServiceComponent).services?.[service];
+		if (srvDef && isApplicableToFormFactor(def as GUIServiceComponent, currentFormFactor)) {
+			return { entrypoint, component: def as ServiceComponent };
 		}
 	}
 	return;	// explicit undefined return
@@ -248,7 +263,7 @@ export function getComponentForService(
 
 export function getAllGUIComponents(
 	m: AppManifest
-): { entrypoint: string; component: GUIComponentDef|GUISrvDef; }[] {
+): { entrypoint: string; component: GUIComponentDef|GUIServiceComponent; }[] {
 	if (isSimpleGUIAppManifest(m)) {
 		return [ {
 			entrypoint: MAIN_GUI_ENTRYPOINT,
@@ -260,7 +275,7 @@ export function getAllGUIComponents(
 		(m as GeneralAppManifest).components
 	)) {
 		if (c.runtime === 'web-gui') {
-			lst.push({ entrypoint, component: c as GUIComponentDef|GUISrvDef });
+			lst.push({ entrypoint, component: c as GUIComponentDef|GUIServiceComponent });
 		}
 	}
 	return lst;
@@ -295,7 +310,7 @@ export function isCallerAllowed(
 export function isMultiInstanceComponent(c: AppComponent): boolean {
 	if ((c as GUIComponentDef).multiInstances) {
 		return true;
-	} else if ((c as SrvDef).forOneConnectionOnly) {
+	} else if ((c as ServiceComponent).forOneConnectionOnly) {
 		return true;
 	} else {
 		return false;
@@ -309,8 +324,8 @@ export function servicesImplementedBy(
 		return;
 	}
 	const c = (m as GeneralAppManifest).components[entrypoint];
-	if ((c as SrvDef).services) {
-		const services = Object.keys((c as SrvDef).services);
+	if ((c as ServiceComponent).services) {
+		const services = Object.keys((c as ServiceComponent).services);
 		return ((services.length === 0) ? undefined : services);
 	} else {
 		return;

@@ -8,7 +8,7 @@
 	"icon": "./assets/logo.png",
 
 	"components": {
-		
+
 		"/index.html": {
 			"startCmds": {
 				"app-cmd-1": {
@@ -19,11 +19,33 @@
 				}
 			},
 			"runtime": "web-gui",
+			"formFactor": "desktop",
 			"windowOpts": {
 				"useContentSize": true,
 				"width": 600,
 				"height": 400
 			},
+			"capsRequested": {
+				"storage": {
+					"appFS": [{
+						"domain": "start-by-cmd.3nweb.computer",
+						"storage": "local"
+					}]
+				}
+			}
+		},
+
+		"/index-phone.html": {
+			"startCmds": {
+				"app-cmd-1": {
+					"otherApps": "*"
+				},
+				"app-cmd-2": {
+					"otherApps": "*"
+				}
+			},
+			"runtime": "web-gui",
+			"formFactor": "phone",
 			"capsRequested": {
 				"storage": {
 					"appFS": [{

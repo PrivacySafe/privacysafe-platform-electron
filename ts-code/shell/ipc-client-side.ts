@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2024 3NSoft Inc.
+ Copyright (C) 2020 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -77,9 +77,7 @@ function makeShellFollowingListing(
 		shell.userNotifications = makeUserNotifications(caller, notifPath);
 	}
 	if (shellCAPs.includes('getStartedCmd')) {
-		shell.getStartedCmd = shellCall(
-			caller, objPath, 'getStartedCmd'
-		);
+		shell.getStartedCmd = shellCall(caller, objPath, 'getStartedCmd');
 	}
 	if (shellCAPs.includes('watchStartCmds')) {
 		shell.watchStartCmds = jsonCall.makeObservableFuncCaller(
@@ -95,8 +93,11 @@ function makeShellFollowingListing(
 		const fnPath = objPath.concat('getFSResource');
 		shell.getFSResource = makeGetFSResource(caller, fnPath);
 	}
+	if (shellCAPs.includes('openDashboard')) {
+		const fnPath = objPath.concat('openDashboard');
+		shell.openDashboard = shellCall(caller, objPath, 'openDashboard');
+	}
 	return shell;
-
 }
 
 

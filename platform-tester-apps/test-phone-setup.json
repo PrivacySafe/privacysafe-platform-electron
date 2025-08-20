@@ -1,0 +1,26 @@
+{
+	"apps": {
+		"tests.3nweb.computer": {
+			"dir": "tests.3nweb.computer",
+			"formFactor": "phone",
+			"launchComponent": "/main-tester-phone.html"
+		},
+		"start-by-cmd.3nweb.computer": {
+			"dir": "start-by-cmd.3nweb.computer",
+			"skipAutoLaunch": true
+		}
+	},
+	"startupApp": {
+		"domain": "startup.3nweb.computer",
+		"dir": "startup.3nweb.computer"
+	},
+	"users": [
+		{
+			"idTemplate": "platform tester %d @3nweb.com",
+			"testStartup": true
+		},
+		{
+			"idTemplate": "platform tester %d @3nweb.com"
+		}
+	]
+}

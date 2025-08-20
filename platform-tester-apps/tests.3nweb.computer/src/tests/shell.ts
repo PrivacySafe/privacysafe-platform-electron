@@ -40,7 +40,21 @@ describe(`shell.startAppWithParams`, () => {
 	const timeout = 15000;
 	const testCommTimeout = timeout - 1000;
 
-	const cmdProcComponent = '/started-by-command.html';
+	let cmdProcComponent: string;
+
+	const otherApp = 'start-by-cmd.3nweb.computer';
+	let otherAppCmdProcComponent: string;
+
+	beforeAll(async () => {
+		const uiFF = await w3n.ui.uiFormFactor();
+		if (uiFF === 'phone') {
+			cmdProcComponent = '/started-by-command-phone.html';
+			otherAppCmdProcComponent = '/index-phone.html'
+		} else {
+			cmdProcComponent = '/started-by-command.html';
+			otherAppCmdProcComponent = '/index.html'
+		}
+	})
 
 	it(`app manifest requests the cap, and it is expected`, async () => {
 		expect(typeof w3n.shell).toBe('object');
@@ -88,11 +102,9 @@ describe(`shell.startAppWithParams`, () => {
 
 	}, timeout);
 
-	const otherApp = 'start-by-cmd.3nweb.computer';
-
 	it(`passes commands to other app`, async () => {
 		const fstCmdEchoPromise = getOneMsgFromProcess<CmdEcho>(
-			undefined, otherApp, '/index.html', testCommTimeout
+			undefined, otherApp, otherAppCmdProcComponent, testCommTimeout
 		);
 		const c1 = 'app-cmd-1';
 		const cmdArgs = [
@@ -114,7 +126,7 @@ describe(`shell.startAppWithParams`, () => {
 		}
 
 		const sndCmdEchoPromise = getOneMsgFromProcess<CmdEcho>(
-			undefined, otherApp, '/index.html', testCommTimeout
+			undefined, otherApp, otherAppCmdProcComponent, testCommTimeout
 		);
 		const c2 = 'app-cmd-2';
 		await w3n.shell!.startAppWithParams!(otherApp, c2, ...cmdArgs);

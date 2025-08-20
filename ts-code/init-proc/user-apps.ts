@@ -103,6 +103,7 @@ export class UserApps {
 		this.core = makeDriver(
 			conf, makeSystemCapFns,
 			this.startAppWithCmd.bind(this),
+			this.openAppLauncher.bind(this),
 			this.logout.bind(this),
 			this.getServiceToHandleCall.bind(this),
 			this.getAppFSResourceFor.bind(this)

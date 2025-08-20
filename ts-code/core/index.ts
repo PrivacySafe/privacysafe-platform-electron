@@ -44,15 +44,16 @@ type CmdParams = web3n.shell.commands.CmdParams;
 type W3N = web3n.system.W3N;
 type SitesW3N = web3n.caps.sites.W3N;
 type GUIComponentDef = web3n.caps.GUIComponent;
+type OpenDashboard = web3n.shell.OpenDashboard;
 
 export function makeCoreDriver(
 	conf: CoreConf, makeSystemCapFns: () => SysUtils,
-	startAppWithCmd: StartAppWithCmd, 
+	startAppWithCmd: StartAppWithCmd, openDashboard: OpenDashboard,
 	logout: Logout, getService: GetServiceToHandleNewCall,
 	getAppFSResourceFor: GetAppFSResourceFor
 ): CoreDriver {
 	return new CoreDriver(
-		conf, makeSystemCapFns, startAppWithCmd, logout, getService,
+		conf, makeSystemCapFns, startAppWithCmd, openDashboard, logout, getService,
 		getAppFSResourceFor
 	);
 }
@@ -70,6 +71,7 @@ export class CoreDriver {
 		conf: CoreConf,
 		private readonly makeSystemCapFns: () => SysUtils,
 		private readonly startAppWithCmd: StartAppWithCmd,
+		private readonly openDashboard: OpenDashboard,
 		private readonly logout: Logout,
 		getService: GetServiceToHandleNewCall,
 		private readonly getAppFSResourceFor: GetAppFSResourceFor
@@ -183,7 +185,8 @@ export class CoreDriver {
 			(componentDef as GUIComponentDef).startCmds, startCmd,
 			this.getAppFSResourceFor,
 			this.userNotifications,
-			this.startAppWithCmd
+			this.startAppWithCmd,
+			this.openDashboard
 		);
 		const rpc = makeRpcCAP(
 			this.rpcClientSide, appDomain, componentDef, capsReq

@@ -64,7 +64,7 @@ then
 		build_n_copy_app ${app}.3nweb.computer || exit $?
 	done
 
-	cp -f $src_dir/test-setup.json $src_dir/run-tests-on.sh $build_dir/ || exit $?
+	cp -f $src_dir/test-setup.json $src_dir/test-phone-setup.json $src_dir/run-tests-on.sh $build_dir/ || exit $?
 	
 else
 	echo "Proper work argument is not given"

@@ -29,11 +29,12 @@ type DeliveryProgress = web3n.asmail.DeliveryProgress;
 type OutgoingMessage = web3n.asmail.OutgoingMessage;
 
 const it: SpecIt = {
-	expectation: 'send message to existing address and get it'
+	expectation: 'send message to existing address and get it',
+	timeout: 15000
 };
 it.func = async function(s) {
 	const recipient = s.secondUser;
-	const msgEchoPromise = listenForOneMsgEchoFromSecondUser();
+	const msgEchoPromise = listenForOneMsgEchoFromSecondUser(10000);
 
 	const txtBody = 'Some text\nBlah-blah-blah';
 	const htmlBody = `Some html. Note that core isn't looking/checking this`;

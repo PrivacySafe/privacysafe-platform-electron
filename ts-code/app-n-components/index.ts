@@ -109,14 +109,14 @@ export class LiveApps {
 			const getAppStorage = this.getAppStorage(appId);
 			if (devAppParams) {
 				const {
-					params: { dir, manifest, url }, capsWrapper
+					params: { dir, manifest, url, formFactor }, capsWrapper
 				} = devAppParams;
 				const appRoot = await DeviceFS.makeReadonly(dir);
 				app = new App(
 					manifest, appRoot, this.makeAppCAPs, getAppStorage,
 					this.guiConnectors, this.sockConnectors,
 					this.guiPlacement, this.titleMaker,
-					devTools, url, capsWrapper,
+					devTools, url, formFactor, capsWrapper,
 					() => this.removeFromAppsById(app!)
 				);
 			} else {
@@ -133,7 +133,7 @@ export class LiveApps {
 					manifest, appRoot, this.makeAppCAPs, getAppStorage,
 					this.guiConnectors, this.sockConnectors,
 					this.guiPlacement, this.titleMaker,
-					devTools, undefined, undefined,
+					devTools, undefined, undefined, undefined,
 					() => this.removeFromAppsById(app!)
 				);
 			}
@@ -175,7 +175,10 @@ export class LiveApps {
 		await Promise.all(Array.from(this.appsById.values())
 		.map(app => app.stopAndClose().catch(
 			err => logError(err, `Error on app closing`)
-		)));
+		)))
+		.finally(() => {
+			this.canAddApps = true;
+		});
 	}
 
 	async closeAppsAfterUpdate(idsOfAppsToClose: string[]): Promise<void> {

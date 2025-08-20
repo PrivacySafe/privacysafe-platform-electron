@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022, 2024 3NSoft Inc.
+ Copyright (C) 2022, 2024 - 2025 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -17,7 +17,7 @@
 
 import { join } from 'path';
 import { assert } from './lib-common/assert';
-import { platform } from 'os';
+import { homedir, platform } from 'os';
 
 const asar = 'app.asar';
 const asarUnpacked = 'app.asar.unpacked';
@@ -88,8 +88,12 @@ export const PLATFORM_NAME = getConfStringConst('platform-name');
 
 export const DATA_DIR_NAME = (() => {
 	let dirName = getConfStringConst('data-dir-name');
-	if ((platform() === 'win32') && dirName.startsWith('.')) {
-		dirName = dirName.substring(1);
+	if ((platform() === 'win32') || homedir().endsWith('.AppImage.home')) {
+		// on windows stylistic is without hidding dot;
+		// note that usb shared with windows has to have this name as well
+		if (dirName.startsWith('.')) {
+			dirName = dirName.substring(1);
+		}
 	}
 	assert((dirName !== '.') && (dirName !== '..'));
 	return dirName;

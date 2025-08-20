@@ -138,8 +138,8 @@ async function sendMsg(userId: string, msg: OutgoingMessage): Promise<void> {
 		}));
 }
 
-export function listenForOneMsgEchoFromSecondUser(): Promise<EchoMsgSignal> {
-	return getOneMsgFromProcess(2, undefined, undefined);
+export function listenForOneMsgEchoFromSecondUser(timeout?: number): Promise<EchoMsgSignal> {
+	return getOneMsgFromProcess(2, undefined, undefined, timeout);
 }
 
 export async function askSecondUserToSendMsg(

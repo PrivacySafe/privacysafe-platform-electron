@@ -243,7 +243,6 @@ export class TestStand {
 		return appDomain => {
 			const params = this.devApps.get(appDomain);
 			if (!params) { return; }
-			const formFactorOverride = params.formFactor;
 			return {
 				params,
 				capsWrapper: (
@@ -259,8 +258,8 @@ export class TestStand {
 					for (const cap in w3n) {
 						if ((cap === 'rpc') && rpcLogger) {
 							w3nWithStand[cap] = rpcLogger.wrapRPC(w3n[cap]!);
-						} else if ((cap === 'ui') && formFactorOverride) {
-							w3nWithStand[cap] = makeTestStandUICap(formFactorOverride);
+						} else if ((cap === 'ui') && params.formFactor) {
+							w3nWithStand[cap] = makeTestStandUICap(params.formFactor);
 						} else {
 							w3nWithStand[cap] = w3n[cap];
 						}

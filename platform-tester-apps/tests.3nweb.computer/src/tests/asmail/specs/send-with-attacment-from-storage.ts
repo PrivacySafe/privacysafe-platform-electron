@@ -41,11 +41,12 @@ export const specs: SpecDescribe = {
 };
 
 let it: SpecIt = {
-	expectation: 'sending and getting message with attachments from synced fs'
+	expectation: 'sending and getting message with attachments from synced fs',
+	timeout: 15000
 };
 it.func = async function(s) {
 	await writeFilesTreeContent(folderContent, s.testFolder);
-	const msgEchoPromise = listenForOneMsgEchoFromSecondUser();
+	const msgEchoPromise = listenForOneMsgEchoFromSecondUser(10000);
 
 	const txtBody = 'Some text\nBlah-blah-blah';
 
@@ -129,14 +130,15 @@ async function doRoundTripSendingToEstablishInvites(): Promise<void> {
 it = {
 	expectation: 'sending and getting message with MBs attachment',
 	// XXX round trip doesn't work, yet
-	disableIn: 'big-msg-allowance'
+	disableIn: 'big-msg-allowance',
+	timeout: 45*1000
 };
 it.func = async function(s) {
 
 	await doRoundTripSendingToEstablishInvites();
 
 	const recipient = s.secondUser;
-	const msgEchoPromise = listenForOneMsgEchoFromSecondUser();
+	const msgEchoPromise = listenForOneMsgEchoFromSecondUser(30000);
 
 	const fileName = 'big file';
 	const fileLen = 3000000;
@@ -190,5 +192,4 @@ it.func = async function(s) {
 	expect(attachmentsLst[fileName]).toBe(fileLen);
 
 };
-it.timeout = 45*1000;
 specs.its.push(it);

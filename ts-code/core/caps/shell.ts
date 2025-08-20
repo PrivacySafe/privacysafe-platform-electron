@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2024 3NSoft Inc.
+ Copyright (C) 2020 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -34,7 +34,8 @@ export function makeShellCAPs(
 	startCmd: CmdParams|undefined,
 	getAppFSResourceFor: GetAppFSResourceFor,
 	userNotificationsImpl: CoreDriver['userNotifications'],
-	startAppWithCmd: CoreDriver['startAppWithCmd']
+	startAppWithCmd: CoreDriver['startAppWithCmd'],
+	openDashboardFn: CoreDriver['openDashboard']
 ): {
 	cap: NonNullable<W3N['shell']>; setApp: AppSetter; close: () => void;
 }|undefined {
@@ -68,6 +69,12 @@ export function makeShellCAPs(
 		);
 		if (getFSResource) {
 			cap.getFSResource = getFSResource.cap;
+		}
+		const openDashboard = makeDashboardOpenerCAP(
+			capsReq.shell.openDashboard, openDashboardFn
+		);
+		if (openDashboard) {
+			cap.openDashboard = openDashboard.cap;
 		}
 	}
 	if (cmdHandlerDef) {
@@ -156,6 +163,18 @@ function makeCmdHandlerCAP(
 		}
 	};
 }
+
+function makeDashboardOpenerCAP(
+	capsReq: web3n.caps.ShellCAPsSetting['openDashboard'],
+	openDashboard: () => Promise<void>
+): {
+	cap: web3n.shell.ShellCAPs['openDashboard'];
+}|undefined {
+	if (capsReq === true) {
+		return { cap: openDashboard };
+	}
+}
+
 
 
 Object.freeze(exports);

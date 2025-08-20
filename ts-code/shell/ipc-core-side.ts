@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2024 3NSoft Inc.
+ Copyright (C) 2020 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -51,6 +51,9 @@ export function exposeShellCAPs(
 		wrap.getFSResource = exposeGetFSResourceCAP(
 			cap.getFSResource, expServices
 		);
+	}
+	if (cap.openDashboard) {
+		wrap.openDashboard = jsonSrv.wrapReqReplySrvMethod(cap, 'openDashboard');
 	}
 	return wrap;
 }

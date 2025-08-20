@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2015 - 2018, 2020 - 2022, 2024 3NSoft Inc.
+ Copyright (C) 2015 - 2018, 2020 - 2022, 2024 - 2025 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -36,14 +36,14 @@ export const appDir = (() => {
 	}
 	// or generate default, based on platform version
 	if (process.platform === 'win32') {
-		const parentFolder = (process.env.PORTABLE_EXECUTABLE_DIR ?
-			process.env.PORTABLE_EXECUTABLE_DIR :
-			process.env.LOCALAPPDATA
+		if (process.env.PORTABLE_EXECUTABLE_DIR) {
+			return join(process.env.PORTABLE_EXECUTABLE_DIR, `${DATA_DIR_NAME}.AppImage.home`, DATA_DIR_NAME);
+		}
+		const parentFolder = (
+			process.env.LOCALAPPDATA ??
+			homedir()
 		);
-		return (parentFolder ?
-			join(parentFolder, DATA_DIR_NAME) :
-			join(homedir(), DATA_DIR_NAME)
-		);
+		return join(parentFolder, DATA_DIR_NAME);
 	} else {
 		return toAbsolute(join(homedir(), DATA_DIR_NAME));
 	}

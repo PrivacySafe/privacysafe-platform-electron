@@ -43,6 +43,7 @@ type GUISrvDef = web3n.caps.GUIServiceComponent;
 type FileException = web3n.files.FileException;
 type GetFSResource = web3n.shell.GetFSResource;
 type OpenConnectionInfo = web3n.system.monitor.OpenConnectionInfo;
+type FormFactor = web3n.ui.FormFactor;
 
 export type GetAppStorage = (type: 'local'|'synced') => Promise<WritableFS>;
 
@@ -73,6 +74,7 @@ export class App {
 		private readonly titleMaker: TitleGenerator,
 		devTools: boolean,
 		private readonly devRootUrl: string|undefined,
+		private readonly formFactor: FormFactor|undefined,
 		private readonly devCAPsWrapper: WrapAppCAPsAndSetup|undefined,
 		private readonly removeThisFromLiveApps: () => void
 	) {
@@ -105,10 +107,14 @@ export class App {
 		);
 	}
 
+	private get uiFF(): FormFactor {
+		return this.formFactor ?? getSytemFormFactor();
+	}
+
 	private componentForCmd(cmd: string): {
 		component: GUIComponentDef; entrypoint: string;
 	} {
-		const c = getComponentForCommand(this.manifest, cmd);
+		const c = getComponentForCommand(this.manifest, cmd, this.uiFF);
 		if (c) {
 			return c;
 		} else {
@@ -188,8 +194,7 @@ export class App {
 	}
 
 	async launchFormFactorAppropriateWebGUI(devTools: boolean): Promise<void> {
-		const uiFF = getSytemFormFactor();
-		const launchers = getLaunchersForUser(this.manifest, uiFF);
+		const launchers = getLaunchersForUser(this.manifest, this.uiFF);
 		if (launchers) {
 			const { component, startCmd } = launchers[0];
 			if (component) {
@@ -327,7 +332,7 @@ export class App {
 		caller: Component, service: string
 	): Promise<Service> {
 		const appDomain = this.manifest.appDomain;
-		const c = getComponentForService(this.manifest, service);
+		const c = getComponentForService(this.manifest, service, this.uiFF);
 		if (!c) {
 			throw makeRPCException(appDomain, service, { serviceNotFound: true });
 		}
