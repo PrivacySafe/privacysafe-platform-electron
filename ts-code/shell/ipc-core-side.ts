@@ -19,6 +19,7 @@ import { ExposedObj, CoreSideServices, serviceSideJSONWrap as jsonSrv } from 'co
 import { exposeFileDialogsCAP } from "../shell/file-dialogs/file-dialogs-cap-ipc";
 import { exposeUserNotificationsCAP } from "../shell/user-notifications/user-notifications-cap-ipc";
 import { exposeGetFSResourceCAP } from './fs-resource/fs-resource-caps-ipc';
+import { exposeClipboardCAP } from './clipboard/clipboard-cap-ipc';
 
 type ShellCAPs = web3n.shell.ShellCAPs;
 
@@ -34,17 +35,9 @@ export function exposeShellCAPs(
 			cap.userNotifications
 		);
 	}
-	if (cap.getStartedCmd) {
-		wrap.getStartedCmd = jsonSrv.wrapReqReplySrvMethod(cap, 'getStartedCmd');
-	}
 	if (cap.watchStartCmds) {
 		wrap.watchStartCmds = jsonSrv.wrapObservingFunc(
 			cap, obs => cap.watchStartCmds!(obs)
-		);
-	}
-	if (cap.startAppWithParams) {
-		wrap.startAppWithParams = jsonSrv.wrapReqReplySrvMethod(
-			cap, 'startAppWithParams'
 		);
 	}
 	if (cap.getFSResource) {
@@ -52,9 +45,25 @@ export function exposeShellCAPs(
 			cap.getFSResource, expServices
 		);
 	}
-	if (cap.openDashboard) {
-		wrap.openDashboard = jsonSrv.wrapReqReplySrvMethod(cap, 'openDashboard');
+	if (cap.clipboard) {
+		wrap.clipboard = exposeClipboardCAP(cap.clipboard);
 	}
+	([
+		'getStartedCmd', 'startAppWithParams', 'openDashboard', 'openURL'
+	] as (keyof ShellCAPs)[]).forEach(method => {
+		if (cap[method]) {
+			wrap[method] = jsonSrv.wrapReqReplySrvMethod(cap, method);
+		}
+	});
+	([
+		'openFile', 'openFolder'
+	] as (keyof ShellCAPs)[]).forEach(method => {
+		if (cap[method]) {
+			wrap[method] = jsonSrv.wrapReqReplySrvMethod(cap, method, {
+				findReferencedObj: expServices.getOriginalObj.bind(expServices)
+			});
+		}
+	});
 	return wrap;
 }
 

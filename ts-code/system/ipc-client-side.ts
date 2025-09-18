@@ -22,7 +22,7 @@ type Apps = web3n.system.apps.Apps;
 type AppsDownloader = web3n.system.apps.AppsDownloader;
 type DownloadProgress = web3n.system.apps.DownloadProgress;
 type AppsInstaller = web3n.system.apps.AppsInstaller;
-type BundleUnpackProgress = web3n.system.apps.BundleUnpackProgress;
+type AppUnpackProgress = web3n.system.apps.AppUnpackProgress;
 type Platform = web3n.system.platform.Platform;
 type PlatformUpdateEvents = web3n.system.platform.PlatformUpdateEvents;
 type AppsOpener = web3n.system.apps.AppsOpener;
@@ -138,20 +138,22 @@ function makeAppsInstallerCaller(
 	return {
 		listBundledApps: callAppsInstaller(caller, objPath, 'listBundledApps'),
 		addPackFromBundledApps: (() => {
-			const fn = jsonCall.makeObservableFuncCaller<BundleUnpackProgress>(
+			const fn = jsonCall.makeObservableFuncCaller<AppUnpackProgress>(
 				caller, objPath.concat('addPackFromBundledApps')
 			);
 			return (id, obs) => fn(obs, id);
 		})(),
 		addAppPackFromFolder: (() => {
-			const fn = jsonCall.makeObservableFuncCaller<BundleUnpackProgress>(
-				caller, objPath.concat('addAppPackFromFolder')
+			const fn = jsonCall.makeObservableFuncCaller<AppUnpackProgress>(
+				caller, objPath.concat('addAppPackFromFolder'),
+				{ findRefOf: f => caller.srvRefOf(f) }
 			);
 			return (appPackFS, obs) => fn(obs, appPackFS);
 		})(),
 		addAppPackFromZipFile: (() => {
-			const fn = jsonCall.makeObservableFuncCaller<BundleUnpackProgress>(
-				caller, objPath.concat('addAppPackFromZipFile')
+			const fn = jsonCall.makeObservableFuncCaller<AppUnpackProgress>(
+				caller, objPath.concat('addAppPackFromZipFile'),
+				{ findRefOf: f => caller.srvRefOf(f) }
 			);
 			return (appPackFile, obs) => fn(obs, appPackFile);
 		})(),

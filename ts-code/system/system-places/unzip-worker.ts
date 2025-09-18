@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 3NSoft Inc.
+ Copyright (C) 2021, 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -16,14 +16,22 @@
 */
 
 import { workerData, parentPort } from 'worker_threads';
+import { toBuffer } from '../../lib-common/buffer-utils';
 
 if (!parentPort) {
 	throw new Error(`This module can be called as worker's main only`);
 }
 
-const zipFilePath = workerData;
-if (typeof zipFilePath !== 'string') {
-	throw new Error(`Zip file path is missing`);
+interface WorkerData {
+	deviceFilePath?: string;
+	bufferWithBytes?: Buffer;
+}
+
+let { deviceFilePath, bufferWithBytes } = workerData as WorkerData;
+if (bufferWithBytes) {
+	bufferWithBytes = toBuffer(bufferWithBytes);
+} else if (typeof deviceFilePath !== 'string') {
+	throw new Error(`Neither zip file path, nor nor buffer with zip content are given`);
 }
 
 interface Zip {
@@ -73,7 +81,7 @@ let zip: Zip|undefined = undefined;
 let entries: Map<string, ZipEntry>;
 
 function setZip(): void {
-	zip = (new AdmZip(zipFilePath)) as Zip;
+	zip = (new AdmZip(deviceFilePath ? deviceFilePath : bufferWithBytes)) as Zip;
 	const lst = zip.getEntries();
 	entries = new Map();
 	for (const e of lst) {

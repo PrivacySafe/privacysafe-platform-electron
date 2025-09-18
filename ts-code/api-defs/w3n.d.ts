@@ -18,6 +18,7 @@
 /// <reference path="../../node_modules/core-3nweb-client-lib/build/api-defs/web3n.d.ts" />
 /// <reference path="./shell.d.ts" />
 /// <reference path="./shell-dialogs.d.ts" />
+/// <reference path="./shell-clipboard.d.ts" />
 /// <reference path="./shell-notifications.d.ts" />
 /// <reference path="./shell-commands.d.ts" />
 /// <reference path="./connectivity.d.ts" />

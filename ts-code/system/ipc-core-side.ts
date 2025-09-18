@@ -55,13 +55,13 @@ export function exposeAppsCAP(
 		wrap.downloader = exposeAppsDownloaderCAP(cap.downloader);
 	}
 	if (cap.installer) {
-		wrap.installer = exposeAppsInstallerCAP(cap.installer);
+		wrap.installer = exposeAppsInstallerCAP(cap.installer, expServices);
 	}
 	return wrap;
 }
 
 function exposeAppsInstallerCAP(
-	cap: AppsInstaller
+	cap: AppsInstaller, expServices: CoreSideServices
 ): ExposedObj<AppsInstaller> {
 	return {
 		listBundledApps: jsonSrv.wrapReqReplySrvMethod(cap, 'listBundledApps'),
@@ -69,10 +69,12 @@ function exposeAppsInstallerCAP(
 			(obs, id) => cap.addPackFromBundledApps(id, obs)
 		),
 		addAppPackFromFolder: jsonSrv.wrapObservingFunc(
-			(obs, appPackFS) => cap.addAppPackFromFolder(appPackFS, obs)
+			(obs, appPackFS) => cap.addAppPackFromFolder(appPackFS, obs),
+			{ findReferencedObj: ref => expServices.getOriginalObj(ref) }
 		),
 		addAppPackFromZipFile: jsonSrv.wrapObservingFunc(
-			(obs, appPackFile) => cap.addAppPackFromZipFile(appPackFile, obs)
+			(obs, appPackFile) => cap.addAppPackFromZipFile(appPackFile, obs),
+			{ findReferencedObj: ref => expServices.getOriginalObj(ref) }
 		),
 		listAllAppsPacks: jsonSrv.wrapReqReplySrvMethod(cap, 'listAllAppsPacks'),
 		listAppPacks: jsonSrv.wrapReqReplySrvMethod(cap, 'listAppPacks'),

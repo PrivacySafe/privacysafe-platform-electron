@@ -26,7 +26,7 @@ import { FileException, readdir, stat, readFile } from '../../lib-common/async-f
 import { makeRuntimeException } from '../../lib-common/exceptions/runtime';
 import { checkAppManifest, hasStartupLaunchersDefined } from '../../lib-common/manifest-utils';
 import { toRxObserver } from '../../lib-common/utils-for-observables';
-import { readManifestFromZip, unzipAppVersion, APP_ROOT_FOLDER, MANIFEST_FILE, readFileBytesFromZip } from './unpack-zipped-app';
+import { readManifestFromZip, unzipAppVersionFromFileOnDevice, APP_ROOT_FOLDER, MANIFEST_FILE, readFileBytesFromZip, unzipAppVersionFromFile } from './unpack-zipped-app';
 import { appAndManifestOnDev, appManifestOnDev } from '../../app-n-components/utils';
 
 type Observer<T> = web3n.Observer<T>;
@@ -35,7 +35,7 @@ type ReadonlyFile = web3n.files.ReadonlyFile;
 type WritableFS = web3n.files.WritableFS;
 type FSCollection = web3n.files.FSCollection;
 type StorageType = web3n.storage.StorageType;
-type BundleUnpackProgress = web3n.system.apps.BundleUnpackProgress;
+type AppUnpackProgress = web3n.system.apps.AppUnpackProgress;
 type AppInitException = web3n.system.apps.AppInitException;
 type AppEvent = web3n.system.apps.AppEvent;
 type SystemParamsForInstalledApp = web3n.system.apps.SystemParamsForInstalledApp;
@@ -183,7 +183,7 @@ export class SystemPlaces {
 	}
 
 	addPackBundledApps(
-		appDomain: string, observer: Observer<BundleUnpackProgress>
+		appDomain: string, observer: Observer<AppUnpackProgress>
 	): () => void {
 		const sub = from(this.getPackagesFS())
 		.pipe(
@@ -195,7 +195,7 @@ export class SystemPlaces {
 	}
 
 	addAppPackFromFolder(
-		appPackFS: ReadonlyFS, observer: Observer<BundleUnpackProgress>
+		appPackFS: ReadonlyFS, observer: Observer<AppUnpackProgress>
 	): () => void {
 
 		// XXX
@@ -204,12 +204,15 @@ export class SystemPlaces {
 	}
 
 	addAppPackFromZipFile(
-		appPackFile: ReadonlyFile, observer: Observer<BundleUnpackProgress>
+		appPackFile: ReadonlyFile, observer: Observer<AppUnpackProgress>
 	): () => void {
-
-		// XXX
-
-		throw `In platform, SystemPlaces.addAppPackFromFolder() isn't implemented, yet`;
+		const sub = from(this.getPackagesFS())
+		.pipe(
+			mergeMap(packsFS => unpackAppFromFile(appPackFile, packsFS)),
+			mergeMap(unpackProc => unpackProc)
+		)
+		.subscribe(toRxObserver(observer));
+		return () => sub.unsubscribe();
 	}
 
 	async installApp(
@@ -425,12 +428,12 @@ export async function appAndManifestFrom(
 
 async function unpackBundledApp(
 	appDomain: string, packsFS: WritableFS
-): Promise<Observable<BundleUnpackProgress>> {
+): Promise<Observable<AppUnpackProgress>> {
 	const zipPath = join(BUNDLED_APP_PACKS_FOLDER, bundleZipName(appDomain));
 	await checkPresenceOfBundledPackage(appDomain, zipPath);
-	const unzipObs = new Subject<BundleUnpackProgress>();
+	const unzipObs = new Subject<AppUnpackProgress>();
 	const forUnpack = await packsFS.writableSubRoot(PARTIAL_PACKS_DIR);
-	unzipAppVersion(
+	unzipAppVersionFromFileOnDevice(
 		zipPath, forUnpack, p => unzipObs.next(p)
 	).then(async ({ unpackedFolder, version }) => {
 		await packsFS.move(
@@ -652,6 +655,26 @@ async function getAppDirInPacks(
 }
 
 function noop() {}
+
+async function unpackAppFromFile(
+	file: ReadonlyFile, packsFS: WritableFS
+): Promise<Observable<AppUnpackProgress>> {
+	const unzipObs = new Subject<AppUnpackProgress>();
+	const forUnpack = await packsFS.writableSubRoot(PARTIAL_PACKS_DIR);
+	unzipAppVersionFromFile(
+		file, forUnpack, p => unzipObs.next(p)
+	).then(async ({ unpackedFolder, version, appDomain }) => {
+		await packsFS.move(
+			`${PARTIAL_PACKS_DIR}/${unpackedFolder}`,
+			completePackAppVersionFolder(appDomain, version)
+		);
+		unzipObs.complete();
+	})
+	.catch(exc => unzipObs.error(exc))
+	.then(() => forUnpack.close());
+	return unzipObs.asObservable();
+}
+
 
 
 Object.freeze(exports);

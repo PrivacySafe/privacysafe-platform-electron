@@ -21,6 +21,8 @@ import { GUIComponent } from "../../app-n-components/gui-component";
 import { GetAppFSResourceFor, getFSResourceCAP } from "../../shell/fs-resource";
 import { AppSetter, CAPsSetupFns, makeCAPsSetAppAndCloseFns } from "./index";
 import { CoreDriver } from "../index";
+import { makeClipboardCAP } from "../../shell/clipboard/clipboard";
+import { makeOpenFileCAP, makeOpenFolderCAP, makeOpenURLCAP } from "../../shell/openers";
 
 type W3N = web3n.caps.W3N;
 type GUIComponentDef = web3n.caps.GUIComponent;
@@ -75,6 +77,22 @@ export function makeShellCAPs(
 		);
 		if (openDashboard) {
 			cap.openDashboard = openDashboard.cap;
+		}
+		const clipboard = makeClipboardCAP(capsReq.shell.clipboard);
+		if (clipboard) {
+			cap.clipboard = clipboard.cap;
+		}
+		const openFolder = makeOpenFolderCAP(capsReq.shell.openFolder);
+		if (openFolder) {
+			cap.openFolder = openFolder.cap;
+		}
+		const openFile = makeOpenFileCAP(capsReq.shell.openFile);
+		if (openFile) {
+			cap.openFile = openFile.cap;
+		}
+		const openURL = makeOpenURLCAP(capsReq.shell.openURL);
+		if (openURL) {
+			cap.openURL = openURL.cap;
 		}
 	}
 	if (cmdHandlerDef) {
@@ -168,7 +186,7 @@ function makeDashboardOpenerCAP(
 	capsReq: web3n.caps.ShellCAPsSetting['openDashboard'],
 	openDashboard: () => Promise<void>
 ): {
-	cap: web3n.shell.ShellCAPs['openDashboard'];
+	cap: NonNullable<web3n.shell.ShellCAPs['openDashboard']>;
 }|undefined {
 	if (capsReq === true) {
 		return { cap: openDashboard };

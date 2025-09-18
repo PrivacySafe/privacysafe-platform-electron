@@ -26,6 +26,7 @@ mac:
   category: public.app-category.productivity
   icon: ./packing/icons/mac/logo.icns
   artifactName: PrivacySafe-${arch}.${ext}
+  notarize: true
 
 directories:
   app: ./build/app
@@ -59,6 +60,8 @@ asarUnpack:
   - system\system-places\unzip-worker.js
   - node_modules/adm-zip/**/*
   - node_modules\adm-zip\**\*
+  - lib-common/buffer-utils.js
+  - lib-common\buffer-utils.js
 
   # bundled apps are also read by unzipper
   - bundled-apps/**/*

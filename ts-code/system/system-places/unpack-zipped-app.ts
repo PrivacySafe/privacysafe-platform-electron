@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 3NSoft Inc.
+ Copyright (C) 2021, 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,10 +15,9 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { utf8 } from '../../lib-common/buffer-utils';
+import { toBuffer, utf8 } from '../../lib-common/buffer-utils';
 import { makeRuntimeException } from '../../lib-common/exceptions/runtime';
 import { Worker } from 'worker_threads';
-import { assert } from '../../lib-common/assert';
 import { defer, Deferred } from '../../lib-common/processes/deferred';
 import { errWithCause } from '../../lib-common/exceptions/error';
 import { ListRequest, ReadRequest, ReplyMsg, ZipEntryInfo } from './unzip-worker';
@@ -26,7 +25,8 @@ import { join } from 'path';
 import { toAsarUnpacked } from '../../bundle-confs';
 
 type WritableFS = web3n.files.WritableFS;
-type BundleUnpackProgress = web3n.system.apps.BundleUnpackProgress;
+type ReadonlyFile = web3n.files.ReadonlyFile;
+type AppUnpackProgress = web3n.system.apps.AppUnpackProgress;
 type AppManifest = web3n.caps.AppManifest;
 
 export interface AppZipException extends web3n.RuntimeException {
@@ -45,19 +45,35 @@ export const APP_ROOT_FOLDER = 'app';
 export const SITE_ROOT_FOLDER = 'site';
 export const MANIFEST_FILE = 'manifest.json';
 
-export async function unzipAppVersion(
-	zipFile: string, packsFS: WritableFS,
-	progress: (p: BundleUnpackProgress) => void
-): Promise<{ unpackedFolder: string; version: string; }> {
-	const zip = await ZipReaderInWorker.forLocalFile(zipFile);
+export async function unzipAppVersionFromFileOnDevice(
+	pathToFileOnDevice: string, packsFS: WritableFS,
+	progress: (p: AppUnpackProgress) => void
+): Promise<{ unpackedFolder: string; version: string; appDomain: string; }> {
+	return unzipAppVersionFrom(pathToFileOnDevice, undefined, packsFS, progress);
+}
+
+export async function unzipAppVersionFromFile(
+	file: ReadonlyFile, packsFS: WritableFS,
+	progress: (p: AppUnpackProgress) => void
+): Promise<{ unpackedFolder: string; version: string; appDomain: string; }> {
+	return unzipAppVersionFrom(undefined, file, packsFS, progress);
+}
+
+async function unzipAppVersionFrom(
+	pathToFileOnDevice: string|undefined, file: ReadonlyFile|undefined, packsFS: WritableFS,
+	progress: (p: AppUnpackProgress) => void
+): Promise<{ unpackedFolder: string; version: string; appDomain: string; }> {
+	const zip = await (pathToFileOnDevice ?
+		ZipReaderInWorker.forFileOnDevice(pathToFileOnDevice) : ZipReaderInWorker.forFile(file!)
+	);
 	try {
 		// manifest (no hash check at this moment)
 		const mBytes = await zip.readFile(MANIFEST_FILE)
 		.catch(err => {
-			throw makeAppZipExc(zipFile, `No manifest file in zip archive`, err);
+			throw makeAppZipExc(zip.fileName, `No manifest file in zip archive`, err);
 		});
 		const manifest = JSON.parse(utf8.open(mBytes)) as AppManifest;
-		const { appDomain, version } = domainAndVersionFrom(manifest, zipFile);
+		const { appDomain, version } = domainAndVersionFrom(manifest, zip.fileName);
 		const unpackedFolder = `${appDomain}-${version}-unzip`;
 
 		const unpackFS = await packsFS.writableSubRoot(unpackedFolder);
@@ -68,7 +84,7 @@ export async function unzipAppVersion(
 			const filesInApp = (await zip.list()).filter(e => (
 				!e.isDirectory && e.entryName.startsWith(`${APP_ROOT_FOLDER}/`)));
 			if (filesInApp.length === 0) {
-				throw makeAppZipExc(zipFile, `No files in app folder in zip archive`);
+				throw makeAppZipExc(zip.fileName, `No files in app folder in zip archive`);
 			}
 			const numOfFiles = filesInApp.length + 1;
 			let numOfProcessed = 1;
@@ -84,7 +100,7 @@ export async function unzipAppVersion(
 				progress({ numOfFiles, numOfProcessed });
 			}
 
-			return { unpackedFolder, version };
+			return { unpackedFolder, version, appDomain };
 		} catch (err) {
 			await packsFS.deleteFolder(unpackedFolder, true).catch(() => {});
 			throw err;
@@ -108,6 +124,11 @@ function domainAndVersionFrom(
 	return { appDomain, version };
 }
 
+interface WorkerData {
+	deviceFilePath?: string;
+	bufferWithBytes?: Buffer;
+}
+
 // There is a bug with electrons 12, 13, that doesn't let worker_thread read
 // file from asar pack.
 // Therefore, when this runs from asar pack, we should switch to unpacked
@@ -115,85 +136,91 @@ function domainAndVersionFrom(
 // Of course, asarUnpack should be used in electron-builder.
 const workerPath = toAsarUnpacked(join(__dirname, 'unzip-worker.js'));
 
-
 class ZipReaderInWorker {
 
-	private worker: Worker|undefined = undefined;
 	private readonly readQueue: [string, Deferred<Uint8Array>][] = [];
 	private currentRead: [string, Deferred<Uint8Array>]|undefined = undefined;
 	private lstCall: Deferred<ZipEntryInfo[]>|undefined = undefined;
 
 	private constructor(
-		private readonly zipFilePath: string
+		public readonly fileName: string,
+		private readonly worker: Worker
 	) {
 		Object.seal(this);
 	}
 
-	static async forLocalFile(zipFilePath: string): Promise<ZipReaderInWorker> {
-		const zip = new ZipReaderInWorker(zipFilePath);
-		await zip.makeWorker();
+	static async forFileOnDevice(deviceFilePath: string): Promise<ZipReaderInWorker> {
+		const workerData: WorkerData = { deviceFilePath };
+		const worker = new Worker(workerPath, { workerData });
+		const zip = new ZipReaderInWorker(deviceFilePath, worker);
+		await zip.setupAndStartWorker();
 		return zip;
 	}
 
-	private async makeWorker(): Promise<Worker> {
-		assert(!this.worker);
+	static async forFile(file: ReadonlyFile): Promise<ZipReaderInWorker> {
+		const zipBytes = await file.readBytes();
+		const workerData: WorkerData = { bufferWithBytes: toBuffer(zipBytes!) };
+		const worker = new Worker(workerPath, { workerData });
+		const zip = new ZipReaderInWorker(file.name, worker);
+		await zip.setupAndStartWorker();
+		return zip;
+	}
 
-		const worker = new Worker(workerPath, {
-			workerData: this.zipFilePath
-		});
-		this.worker = worker;
-
-		this.worker.on('message', (reply: ReplyMsg) => {
-			if (reply.op === 'read-file') {
-				if (this.currentRead) {
-					if (reply.err) {
-						this.currentRead[1].reject(makeAppZipExc(
-							this.zipFilePath,
-							`Error while unzipping ${this.currentRead[0]}`));
-					} else {
-						this.currentRead[1].resolve(reply.bytes);
-					}
-					this.currentRead = undefined;
-				}
-				this.startNextRead();
-			} else if (reply.op === 'list') {
-				if (this.lstCall) {
-					if (reply.err) {
-						this.lstCall.reject(makeAppZipExc(
-							this.zipFilePath, `Error while listing zip`));
-					} else {
-						this.lstCall.resolve(reply.lst);
-					}
-					this.lstCall = undefined;
-				}
-			} else {
-				this.completeDeferred(makeAppZipExc(
-					this.zipFilePath, `Zip worker reply is unknown`));
-				worker.terminate();
-			}
-		});
-		this.worker.on('error', err => {
-			this.completeDeferred(err);
-			worker.terminate();
-		});
+	private async setupAndStartWorker(): Promise<void> {
+		this.worker.on('message', this.onMessageFromWorker.bind(this));
+		this.worker.on('error', this.onErrorInWorker.bind(this));
 		this.worker.on('exit', err => this.completeDeferred(err));
-
 		const workerReady = new Promise<void>((resolve, reject) => {
 			const errOnStart = (err: any) => reject(errWithCause(err,
 				`Failed to start zip reader worker`));
 			const earlyExit = (exitCode: number) => reject(new Error(
 				`Thread with zip worker exited early with code ${exitCode}`));
-			worker.on('error', errOnStart);
-			worker.on('exit', earlyExit);
-			worker.once('online', () => {
+			this.worker.on('error', errOnStart);
+			this.worker.on('exit', earlyExit);
+			this.worker.once('online', () => {
 				resolve();
-				worker.removeListener('error', errOnStart);
-				worker.removeListener('exit', earlyExit);
+				this.worker.removeListener('error', errOnStart);
+				this.worker.removeListener('exit', earlyExit);
 			});
 		});
-
 		await workerReady;
-		return worker;
+	}
+
+	private onMessageFromWorker(reply: ReplyMsg): void {
+		if (reply.op === 'read-file') {
+			if (this.currentRead) {
+				if (reply.err) {
+					this.currentRead[1].reject(makeAppZipExc(
+						this.fileName, `Error while unzipping ${this.currentRead[0]}`, reply.err
+					));
+				} else {
+					this.currentRead[1].resolve(reply.bytes);
+				}
+				this.currentRead = undefined;
+			}
+			this.startNextRead();
+		} else if (reply.op === 'list') {
+			if (this.lstCall) {
+				if (reply.err) {
+					this.lstCall.reject(makeAppZipExc(
+						this.fileName, `Error while listing zip`, reply.err
+					));
+				} else {
+					this.lstCall.resolve(reply.lst);
+				}
+				this.lstCall = undefined;
+			}
+		} else {
+			this.completeDeferred(makeAppZipExc(
+				this.fileName, `Zip worker reply is unknown`
+			));
+			this.worker?.terminate();
+		}
+	}
+
+	private onErrorInWorker(err: any) {
+		this.completeDeferred(err);
+		this.worker?.terminate();
 	}
 
 	private completeDeferred(err: any): void {
@@ -215,8 +242,9 @@ class ZipReaderInWorker {
 
 	close(): void {
 		this.completeDeferred(makeAppZipExc(
-			this.zipFilePath, `Zip worker was closed`));
-		this.worker!.terminate();
+			this.fileName, `Zip worker was closed`
+		));
+		this.worker?.terminate();
 	}
 
 	async list(): Promise<ZipEntryInfo[]> {
@@ -255,7 +283,7 @@ Object.freeze(ZipReaderInWorker);
 export async function readManifestFromZip(
 	zipFile: string
 ): Promise<AppManifest|undefined> {
-	const zip = await ZipReaderInWorker.forLocalFile(zipFile);
+	const zip = await ZipReaderInWorker.forFileOnDevice(zipFile);
 	try {
 		// manifest (no hash check at this moment)
 		const bytes = await zip.readFile(MANIFEST_FILE);
@@ -270,7 +298,7 @@ export async function readManifestFromZip(
 export async function readFileBytesFromZip(
 	zipFile: string, pathInZip: string
 ): Promise<Uint8Array|undefined> {
-	const zip = await ZipReaderInWorker.forLocalFile(zipFile);
+	const zip = await ZipReaderInWorker.forFileOnDevice(zipFile);
 	try {
 		return await zip.readFile(pathInZip);
 	} catch (err) {

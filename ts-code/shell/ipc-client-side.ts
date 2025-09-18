@@ -19,6 +19,7 @@ import { Caller, callerSideJSONWrap as jsonCall } from 'core-3nweb-client-lib/bu
 import { makeFileDialogs } from "../shell/file-dialogs/file-dialogs-cap-ipc";
 import { makeUserNotifications } from '../shell/user-notifications/user-notifications-cap-ipc';
 import { makeGetFSResource } from './fs-resource/fs-resource-caps-ipc';
+import { makeClipboard } from './clipboard/clipboard-cap-ipc';
 
 type ShellCAPs = web3n.shell.ShellCAPs;
 
@@ -32,8 +33,13 @@ export function makeShellCaller(caller: Caller, objPath: string[]): ShellCAPs {
 		const dialogsPath = objPath.concat('fileDialogs');
 		dialogFns = caller.listObj(dialogsPath) as (keyof NonNullable<ShellCAPs['fileDialogs']>)[];
 	}
+	let clipboardFns: (keyof NonNullable<ShellCAPs['clipboard']>)[] | undefined = undefined;
+	if (shellCAPs.includes('clipboard')) {
+		const clipboardPath = objPath.concat('clipboard');
+		clipboardFns = caller.listObj(clipboardPath) as (keyof NonNullable<ShellCAPs['clipboard']>)[];
+	}
 	return makeShellFollowingListing(
-		shellCAPs, dialogFns, caller, objPath
+		shellCAPs, dialogFns, clipboardFns, caller, objPath
 	);
 }
 
@@ -51,20 +57,22 @@ export async function promiseShellCaller(
 			await caller.listObjAsync(dialogsPath)
 		) as (keyof NonNullable<ShellCAPs['fileDialogs']>)[];
 	}
+	let clipboardFns: (keyof NonNullable<ShellCAPs['clipboard']>)[] | undefined = undefined;
+	if (shellCAPs.includes('clipboard')) {
+		const clipboardPath = objPath.concat('clipboard');
+		clipboardFns = (
+			await caller.listObjAsync(clipboardPath)
+		) as (keyof NonNullable<ShellCAPs['clipboard']>)[];
+	}
 	return makeShellFollowingListing(
-		shellCAPs, dialogFns, caller, objPath
+		shellCAPs, dialogFns, clipboardFns, caller, objPath
 	);
-}
-
-function shellCall<M extends keyof ShellCAPs>(
-	caller: Caller, objPath: string[], method: M
-): ShellCAPs[M] {
-	return jsonCall.makeReqRepObjCaller<ShellCAPs, M>(caller, objPath, method);
 }
 
 function makeShellFollowingListing(
 	shellCAPs: (keyof ShellCAPs)[],
 	dialogFns: (keyof NonNullable<ShellCAPs['fileDialogs']>)[] | undefined,
+	clipboardFns: (keyof NonNullable<ShellCAPs['clipboard']>)[] | undefined,
 	caller: Caller, objPath: string[]
 ): ShellCAPs {
 	const shell: ShellCAPs = {};
@@ -76,27 +84,31 @@ function makeShellFollowingListing(
 		const notifPath = objPath.concat('userNotifications');
 		shell.userNotifications = makeUserNotifications(caller, notifPath);
 	}
-	if (shellCAPs.includes('getStartedCmd')) {
-		shell.getStartedCmd = shellCall(caller, objPath, 'getStartedCmd');
-	}
 	if (shellCAPs.includes('watchStartCmds')) {
 		shell.watchStartCmds = jsonCall.makeObservableFuncCaller(
 			caller, objPath.concat('watchStartCmds')
-		);
-	}
-	if (shellCAPs.includes('startAppWithParams')) {
-		shell.startAppWithParams = shellCall(
-			caller, objPath, 'startAppWithParams'
 		);
 	}
 	if (shellCAPs.includes('getFSResource')) {
 		const fnPath = objPath.concat('getFSResource');
 		shell.getFSResource = makeGetFSResource(caller, fnPath);
 	}
-	if (shellCAPs.includes('openDashboard')) {
-		const fnPath = objPath.concat('openDashboard');
-		shell.openDashboard = shellCall(caller, objPath, 'openDashboard');
+	if (shellCAPs.includes('clipboard')) {
+		const clipboardPath = objPath.concat('clipboard');
+		shell.clipboard = makeClipboard(caller, clipboardPath, clipboardFns!);
 	}
+	([
+		'getStartedCmd', 'startAppWithParams', 'openDashboard', 'openURL'
+	] as (keyof ShellCAPs)[]).forEach(field => {
+		shell[field] = jsonCall.makeReqRepObjCaller<ShellCAPs, keyof ShellCAPs>(caller, objPath, field) as any;
+	});
+	([
+		'openFile', 'openFolder'
+	] as (keyof ShellCAPs)[]).forEach(field => {
+		shell[field] = jsonCall.makeReqRepObjCaller<ShellCAPs, keyof ShellCAPs>(caller, objPath, field, {
+			findRefOf: caller.srvRefOf.bind(caller)
+		}) as any;
+	});
 	return shell;
 }
 
