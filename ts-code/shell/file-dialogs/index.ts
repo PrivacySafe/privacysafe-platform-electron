@@ -22,16 +22,12 @@ import { DeviceFS } from 'core-3nweb-client-lib';
 import { FileException } from '../../lib-common/exceptions/file';
 import { GUIComponent } from '../../app-n-components/gui-component';
 import { AppSetter } from '../../core/caps';
+import { assert } from '../../lib-common/assert';
 
-export interface DialogOpeners {
-	openFileDialog: web3n.shell.files.OpenFileDialog;
-	openFolderDialog: web3n.shell.files.OpenFolderDialog;
-	saveFileDialog: web3n.shell.files.SaveFileDialog;
-	saveFolderDialog: web3n.shell.files.SaveFolderDialog;
-}
+type Dialogs = web3n.shell.files.Dialogs;
 
 export function makeAllFileDialogOpeners(): {
-	openers: DialogOpeners; setApp: AppSetter; close(): void;
+	openers: Dialogs; setApp: AppSetter; close(): void;
 } {
 	return (new DevFileOpener()).wrap();
 }
@@ -75,8 +71,7 @@ class DevFileOpener {
 		title: string, buttonLabel: string, multiSelections: boolean,
 		filters?: FileTypeFilter[]
 	): Promise<ReadonlyFile[]|undefined> {
-		const res = await this.openningDialog(
-			'file', title, buttonLabel, multiSelections, filters);
+		const res = await this.openningDialog('file', title, buttonLabel, multiSelections, filters);
 		if (res.canceled || (res.filePaths.length === 0)) { return; }
 		const files: ReadonlyFile[] = [];
 		for (const path of res.filePaths) {
@@ -89,8 +84,7 @@ class DevFileOpener {
 		title: string, buttonLabel: string, multiSelections: boolean,
 		filters?: FileTypeFilter[]
 	): Promise<WritableFS[]|undefined> {
-		const res = await this.openningDialog(
-			'fs', title, buttonLabel, multiSelections, filters);
+		const res = await this.openningDialog('fs', title, buttonLabel, multiSelections, filters);
 		if (res.canceled || (res.filePaths.length === 0)) { return; }
 		const folders: WritableFS[] = [];
 		for (const path of res.filePaths) {
@@ -103,10 +97,10 @@ class DevFileOpener {
 		type: 'file'|'fs', title: string, buttonLabel: string,
 		multiSelections: boolean, filters?: FileTypeFilter[]
 	): Promise<Electron.OpenDialogReturnValue> {
-		if (!this.win || this.win.isDestroyed()) { throw new Error(
-			`Parent window is either not set, or is already gone`); }
-		const properties: any[] = ((type === 'fs') ?
-			[ 'openDirectory' ] : [ 'openFile' ]);
+		if (!this.win || this.win.isDestroyed()) {
+			throw new Error(`Parent window is either not set, or is already gone`);
+		}
+		const properties: any[] = ((type === 'fs') ? [ 'openDirectory' ] : [ 'openFile' ]);
 		if (multiSelections) {
 			properties.push('multiSelections');
 		}
@@ -121,8 +115,7 @@ class DevFileOpener {
 		title: string, buttonLabel: string, defaultPath: string,
 		filters?: FileTypeFilter[]
 	): Promise<WritableFile|undefined> {
-		const res = await this.savingDialog(
-			title, buttonLabel, defaultPath, filters);
+		const res = await this.savingDialog(title, buttonLabel, defaultPath, filters);
 		if (res.canceled || !res.filePath) { return; }
 		const path = res.filePath;
 		const exists = !!(await fsStat(path).catch((exc: FileException) => {
@@ -136,8 +129,7 @@ class DevFileOpener {
 		title: string, buttonLabel: string, defaultPath: string,
 		filters?: FileTypeFilter[]
 	): Promise<WritableFS|undefined> {
-		const res = await this.savingDialog(
-			title, buttonLabel, defaultPath, filters);
+		const res = await this.savingDialog(title, buttonLabel, defaultPath, filters);
 		if (res.canceled || !res.filePath) { return; }
 		const path = res.filePath;
 		const exists = !!(await fsStat(path).catch((exc: FileException) => {
@@ -151,12 +143,13 @@ class DevFileOpener {
 		title: string, buttonLabel: string, defaultPath: string,
 		filters?: FileTypeFilter[]
 	): Promise<Electron.SaveDialogReturnValue> {
-		if (!this.win || this.win.isDestroyed()) { throw new Error(
-			`Parent window is either not set, or is already gone`); }
+		if (!this.win || this.win.isDestroyed()) {
+			throw new Error(`Parent window is either not set, or is already gone`); }
 		this.win.focus();
 		return dialog.showSaveDialog(
 			this.win,
-			{ title, buttonLabel, defaultPath, filters });
+			{ title, buttonLabel, defaultPath, filters }
+		);
 	}
 
 	getDevFS(

@@ -20,6 +20,7 @@ declare namespace web3n.shell {
 
 	interface ShellCAPs {
 		fileDialogs?: files.Dialogs;
+		deviceFiles?: files.DeviceFiles;
 		userNotifications?: notifications.UserNotifications;
 		startAppWithParams?: commands.StartAppWithParams;
 		getStartedCmd?: commands.GetStartedCmd;

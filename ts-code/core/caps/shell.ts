@@ -23,6 +23,7 @@ import { AppSetter, CAPsSetupFns, makeCAPsSetAppAndCloseFns } from "./index";
 import { CoreDriver } from "../index";
 import { makeClipboardCAP } from "../../shell/clipboard/clipboard";
 import { makeOpenFileCAP, makeOpenFolderCAP, makeOpenURLCAP } from "../../shell/openers";
+import { makeDeviceFiles } from "../../shell/device-files";
 
 type W3N = web3n.caps.W3N;
 type GUIComponentDef = web3n.caps.GUIComponent;
@@ -49,6 +50,10 @@ export function makeShellCAPs(
 		if (fileDialogs) {
 			cap.fileDialogs = fileDialogs.cap;
 			capsSetupFns.push(fileDialogs);
+		}
+		const deviceFiles = deviceFilesShellCAP(capsReq.shell.deviceFiles);
+		if (deviceFiles) {
+			cap.deviceFiles = deviceFiles.cap;
 		}
 		const userNotifications = makeUserNotificationsShellCAP(
 			appDomain, component, capsReq.shell.userNotifications,
@@ -153,6 +158,19 @@ function fileDialogShellCAP(
 				openFileDialog: openers.openFileDialog,
 				openFolderDialog: openers.openFolderDialog,
 			},
+		};
+	}
+}
+
+function deviceFilesShellCAP(
+	deviceFilesCAPsReq: web3n.caps.ShellCAPsSetting['deviceFiles']
+): {
+	cap: web3n.shell.files.DeviceFiles;
+}|undefined {
+	if (!deviceFilesCAPsReq) { return; }
+	if (deviceFilesCAPsReq === 'all') {
+		return {
+			cap: makeDeviceFiles()
 		};
 	}
 }

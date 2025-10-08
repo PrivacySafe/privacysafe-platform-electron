@@ -6,5 +6,6 @@ export interface InitIPC {
 		handler: (msg: Envelope) => void
 	) => (() => void);
 	sendMsgToCore: (msg: Envelope) => void;
+	standardFileToPath?: (stdFile: File) => string;
 }
 

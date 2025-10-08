@@ -20,6 +20,7 @@ import { makeFileDialogs } from "../shell/file-dialogs/file-dialogs-cap-ipc";
 import { makeUserNotifications } from '../shell/user-notifications/user-notifications-cap-ipc';
 import { makeGetFSResource } from './fs-resource/fs-resource-caps-ipc';
 import { makeClipboard } from './clipboard/clipboard-cap-ipc';
+import { makeDeviceFiles } from './device-files/device-files-cap-ipc';
 
 type ShellCAPs = web3n.shell.ShellCAPs;
 
@@ -96,6 +97,10 @@ function makeShellFollowingListing(
 	if (shellCAPs.includes('clipboard')) {
 		const clipboardPath = objPath.concat('clipboard');
 		shell.clipboard = makeClipboard(caller, clipboardPath, clipboardFns!);
+	}
+	if (shellCAPs.includes('deviceFiles')) {
+		const deviceFilesPath = objPath.concat('deviceFiles');
+		shell.deviceFiles = makeDeviceFiles(caller, deviceFilesPath);
 	}
 	([
 		'getStartedCmd', 'startAppWithParams', 'openDashboard', 'openURL'

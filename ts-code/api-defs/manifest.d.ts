@@ -262,6 +262,7 @@ declare namespace web3n.caps {
 
 	interface ShellCAPsSetting {
 		fileDialog?: FileDialogsCAPSettings;
+		deviceFiles?: DeviceFilesCAPSettings;
 		mountFS?: DeviceMountFSCAPSetting;
 		userNotifications?: true;
 		openDashboard?: true;
@@ -274,6 +275,8 @@ declare namespace web3n.caps {
 	}
 
 	type FileDialogsCAPSettings = 'all' | 'readonly';
+
+	type DeviceFilesCAPSettings = 'all';
 
 	type DeviceMountFSCAPSetting = 'all';
 

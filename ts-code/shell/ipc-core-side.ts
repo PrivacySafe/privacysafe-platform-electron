@@ -20,6 +20,7 @@ import { exposeFileDialogsCAP } from "../shell/file-dialogs/file-dialogs-cap-ipc
 import { exposeUserNotificationsCAP } from "../shell/user-notifications/user-notifications-cap-ipc";
 import { exposeGetFSResourceCAP } from './fs-resource/fs-resource-caps-ipc';
 import { exposeClipboardCAP } from './clipboard/clipboard-cap-ipc';
+import { exposeDeviceFilesCAP } from './device-files/device-files-cap-ipc';
 
 type ShellCAPs = web3n.shell.ShellCAPs;
 
@@ -48,6 +49,9 @@ export function exposeShellCAPs(
 	if (cap.clipboard) {
 		wrap.clipboard = exposeClipboardCAP(cap.clipboard);
 	}
+	if (cap.deviceFiles) {
+		wrap.deviceFiles = exposeDeviceFilesCAP(cap.deviceFiles, expServices);
+	}
 	([
 		'getStartedCmd', 'startAppWithParams', 'openDashboard', 'openURL'
 	] as (keyof ShellCAPs)[]).forEach(method => {
@@ -55,13 +59,12 @@ export function exposeShellCAPs(
 			wrap[method] = jsonSrv.wrapReqReplySrvMethod(cap, method);
 		}
 	});
+	const findReferencedObj = expServices.getOriginalObj.bind(expServices);
 	([
 		'openFile', 'openFolder'
 	] as (keyof ShellCAPs)[]).forEach(method => {
 		if (cap[method]) {
-			wrap[method] = jsonSrv.wrapReqReplySrvMethod(cap, method, {
-				findReferencedObj: expServices.getOriginalObj.bind(expServices)
-			});
+			wrap[method] = jsonSrv.wrapReqReplySrvMethod(cap, method, { findReferencedObj });
 		}
 	});
 	return wrap;

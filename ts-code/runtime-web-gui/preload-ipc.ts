@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2024 3NSoft Inc.
+ Copyright (C) 2024 - 2025 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { IpcRendererEvent, contextBridge, ipcRenderer } from 'electron';
+import { IpcRendererEvent, contextBridge, ipcRenderer, webUtils } from 'electron';
 import { IPC_CLIENT_SIDE, IPC_CORE_SIDE, IPC_SYNCED_W3N_LIST } from '../ipc-with-core/electron-ipc';
 import { Envelope } from 'core-3nweb-client-lib/build/ipc';
 import { InitIPC } from './ipc-type';
@@ -27,11 +27,10 @@ function assembleInitIPC(): InitIPC {
 		return undefined as any;
 	}
 	funcCalled = true;
-	return {
+	const ipc: InitIPC = {
 		listObjOnServiceSide: path => {
 			return ipcRenderer.sendSync(IPC_SYNCED_W3N_LIST, path);
 		},
-
 		setHandlerOfMsgsFromCore: handler => {
 			const ipcHandler = (
 				_event: IpcRendererEvent, msg: Envelope
@@ -44,11 +43,23 @@ function assembleInitIPC(): InitIPC {
 			);
 			return detachListener;
 		},
-
 		sendMsgToCore: msg => {
 			ipcRenderer.send(IPC_CORE_SIDE, msg);
 		}
 	};
+	addWebUtilFrShellDeviceFilesCAP(ipc);
+	return ipc;
+}
+
+function addWebUtilFrShellDeviceFilesCAP(ipc: InitIPC): void {
+	try {
+		const shellCAPs = ipc.listObjOnServiceSide(['w3n', 'shell']);
+		if (shellCAPs.includes('deviceFiles')) {
+			ipc.standardFileToPath = stdFile => {
+				return webUtils.getPathForFile(stdFile);
+			}
+		}
+	} catch (err) {}
 }
 
 contextBridge.exposeInMainWorld('make.w3n.ipc', assembleInitIPC);

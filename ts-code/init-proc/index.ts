@@ -19,7 +19,7 @@ import { TitleGenerator } from '../app-n-components/gui-component';
 import { CoreConf } from 'core-3nweb-client-lib';
 import { makeCoreDriver } from '../core';
 import { ElectronIPCConnectors, SocketIPCConnectors } from '../core/w3n-connectors';
-import { app, dialog } from 'electron';
+import { app, dialog, powerMonitor } from 'electron';
 import { logError } from '../confs';
 import { setTimeout } from 'timers';
 import { DevToolsAppAllowance } from '../process-args';
@@ -72,6 +72,14 @@ export class InitProc {
 
 	async boot(): Promise<void> {
 		try {
+			powerMonitor.on('resume', () => Promise.allSettled(
+				Array.from(this.userApps.values())
+				.map(apps => apps.onDeviceSystemResume().catch(logError))
+			));
+			powerMonitor.on('suspend', () => Promise.allSettled(
+				Array.from(this.userApps.values())
+				.map(apps => apps.onDeviceSystemSuspend().catch(logError))
+			));
 			this.deskUI.start();
 			if (this.testStand) {
 				await this.testStand.bootAndStartDevApps(
@@ -289,6 +297,17 @@ export class InitProc {
 		} else {
 			return false;
 		}
+	}
+
+	handleAppUrlCallFromOS(argv: string[]): void {
+		// XXX
+		dialog.showMessageBox({
+			type: 'info',
+			title: PLATFORM_NAME,
+			message: `${PLATFORM_NAME} received a call to handle url from following argv: "${argv.join(' ')}"`
+		}).catch(err => {
+			console.error(err);
+		});
 	}
 
 	private async wipeFromThisDevice(): Promise<void> {

@@ -231,6 +231,14 @@ export class CoreDriver {
 		return { cap, setApp };
 	}
 
+	async onDeviceSystemSuspend(): Promise<void> {
+		await this.core.onDeviceSystemSuspend();
+	}
+
+	async onDeviceSystemResume(): Promise<void> {
+		await this.core.onDeviceSystemResume();
+	}
+
 }
 Object.freeze(CoreDriver.prototype);
 Object.freeze(CoreDriver);

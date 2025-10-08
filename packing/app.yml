@@ -27,6 +27,7 @@ mac:
   icon: ./packing/icons/mac/logo.icns
   artifactName: PrivacySafe-${arch}.${ext}
   notarize: true
+  entitlements: ./packing/entitlements.mac.plist
 
 directories:
   app: ./build/app

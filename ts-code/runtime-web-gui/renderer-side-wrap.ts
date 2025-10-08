@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2022, 2024 3NSoft Inc.
+ Copyright (C) 2020 - 2022, 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -60,7 +60,24 @@ export function makeStartupW3N(ipc: InitIPC): StartupW3N {
 
 export function makeW3N(ipc: InitIPC): W3N {
 	const clientSide = makeClientSideConnector(ipc);
-	return makeClientSideW3N(clientSide);
+	const w3n = makeClientSideW3N(clientSide);
+	if (w3n.shell?.deviceFiles) {
+		const { standardFileToPath } = ipc;
+		const { standardFileToDeviceFile, standardFileToDeviceFolder } = w3n.shell.deviceFiles;
+		if (standardFileToDeviceFile) {
+			w3n.shell.deviceFiles.standardFileToDeviceFile = async f => {
+				const path = standardFileToPath!(f);
+				return await standardFileToDeviceFile(path as any);
+			};
+		}
+		if (standardFileToDeviceFolder) {
+			w3n.shell.deviceFiles.standardFileToDeviceFolder = async f => {
+				const path = standardFileToPath!(f);
+				return await standardFileToDeviceFolder(path as any);
+			}
+		}
+	}
+	return w3n;
 }
 
 

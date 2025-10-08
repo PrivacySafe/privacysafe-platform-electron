@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2024 3NSoft Inc.
+ Copyright (C) 2016 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -20,11 +20,11 @@
  */
 
 import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli, SOCKS5_PROXY } from './process-args';
-import { app, dialog } from 'electron';
+import { app, dialog, powerMonitor } from 'electron';
 import { InitProc } from './init-proc';
 import { registerAllProtocolShemas } from "./electron/protocols";
 import { fromEvent, lastValueFrom } from 'rxjs';
-import { appDir, logError, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './confs';
+import { appDir, logError, logWarning, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './confs';
 import { take } from 'rxjs/operators';
 import { makeCoreDriver } from './core';
 import { clearDefaultWindowMenu } from './window-utils/window-menu';
@@ -32,6 +32,7 @@ import { mkdirSync } from 'fs';
 import { sleep } from './lib-common/processes/sleep';
 import { EventEmitter } from 'events';
 import { processOfUtilityArgsIfGiven } from './main-for-util-invocations';
+import { appUrlSchema, ensureAppUrlProtocolIsSetInOS } from './electron/app-url-protocol';
 
 const utilityInvocation = processOfUtilityArgsIfGiven();
 if (utilityInvocation) {
@@ -81,6 +82,10 @@ if (utilityInvocation) {
 		lastValueFrom(fromEvent(app, 'ready').pipe(take(1)))
 		.then(async () => {
 
+			powerMonitor.on('shutdown', () => init.exit());
+
+			ensureAppUrlProtocolIsSetInOS();
+
 			recordUnhandledRejectionsInProcess();
 
 			// Prevent closing when all windows are closed by setting listener
@@ -93,14 +98,19 @@ if (utilityInvocation) {
 				if (!SKIP_APP_ERR_DIALOG_FLAG) {
 					dialog.showErrorBox(
 						`Restart 3NWeb application`,
-						`Error occured on 3NWeb core's initialization. Please restart application.`);
+						`Error occured on 3NWeb core's initialization. Please restart application.`
+					);
 				}
 				await init.exit(1);
 				return;
 			}
 
-			process.on('SIGINT', () => init.exit(0));
-			process.on('SIGTERM', () => init.exit(0));
+			process.on('SIGINT', () => init.exit());
+			process.on('SIGTERM', () => init.exit());
+
+			if (process.argv.find(arg => arg.startsWith(appUrlSchema))) {
+				init.handleAppUrlCallFromOS(process.argv);
+			}
 
 		});
 
@@ -119,6 +129,11 @@ if (utilityInvocation) {
 			const isFstInstance = app.requestSingleInstanceLock();
 			if (isFstInstance) {
 				app.on('second-instance', async (event, argv, workDir) => {
+					if (argv.find(arg => arg.startsWith(appUrlSchema))) {
+						init.handleAppUrlCallFromOS(argv);
+						return;
+					}
+
 					const cmdToken = cmdTokenFromCli(argv);
 					const cmdRan = (cmdToken && init.runCmd(cmdToken));
 					if (!cmdRan) {

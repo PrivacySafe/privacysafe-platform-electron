@@ -355,6 +355,14 @@ export class UserApps {
 		};
 	}
 
+	async onDeviceSystemSuspend(): Promise<void> {
+		await this.core.onDeviceSystemSuspend();
+	}
+
+	async onDeviceSystemResume(): Promise<void> {
+		await this.core.onDeviceSystemResume();
+	}
+
 }
 Object.freeze(UserApps.prototype);
 Object.freeze(UserApps);
