@@ -42,7 +42,7 @@ describe(`shell.startAppWithParams`, () => {
 
 	let cmdProcComponent: string;
 
-	const otherApp = 'start-by-cmd.3nweb.computer';
+	const otherApp = 'start-by-cmd.3nweb.app';
 	let otherAppCmdProcComponent: string;
 
 	beforeAll(async () => {

@@ -57,6 +57,12 @@ export class DeskTray {
 		}
 	}
 
+	resetImage(): void {
+		if (!this.tray.isDestroyed()) {
+			this.tray.setImage(getTrayIconImage());
+		}
+	}
+
 	updateMenu(userApps: Map<string, Map<string, UserAppInfo>>): void {
 		if (this.closed) { return; }
 		let menuItems: Electron.MenuItemConstructorOptions[];

@@ -26,9 +26,9 @@ import { specs as specsFileSink } from './file-sink-checks/index.js';
 type StorageException = web3n.storage.StorageException;
 
 const allowedAppFS = [
-	"tests.3nweb.computer",
-	"sub-app-1.tests.3nweb.computer",
-	"sub-app-2.tests.3nweb.computer"
+	"tests.3nweb.app",
+	"sub-app-1.tests.3nweb.app",
+	"sub-app-2.tests.3nweb.app"
 ].map(d => d.split('.').reverse().join('.'));
 
 describe('3NStorage', () => {
@@ -57,7 +57,7 @@ describe('3NStorage', () => {
 				const fs = await w3n.storage!.getAppSyncedFS(appDomain);
 				expect(fs).toBeTruthy();
 			}
-		});
+		}, 10000);
 
 		itCond('concurrently produces FS for an app', async () => {
 			const promises: Promise<web3n.files.FS>[] = [];

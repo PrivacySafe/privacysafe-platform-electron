@@ -15,8 +15,11 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { platform } from "os";
 import { GUIComponent } from "../app-n-components/gui-component";
 import { AppSetter } from "../core/caps";
+import { hasScreenCapturePermission, openSystemPreferences } from "mac-screen-capture-permissions";
+import { logWarning } from "../confs";
 
 type MediaDevices = web3n.media.MediaDevices;
 
@@ -33,4 +36,29 @@ export function makeProxyToSelectDisplayMediaHandler(): {
 			guiApp = app;
 		}
 	};
+}
+
+export async function isAudioCaptureAvailable(): Promise<boolean> {
+	return (platform() === 'win32');
+}
+
+export async function ensureDeviceAllowsScreenCapture(): Promise<boolean> {
+	if (platform() !== 'darwin') {
+		return true;
+	}
+	let hasPermission = hasScreenCapturePermission();
+	if (!hasPermission) {
+		debugLogOnMac(`1st call to hasScreenCapturePermission() returned ${hasPermission}, now opening system preferences`);
+		await openSystemPreferences();
+		hasPermission = hasScreenCapturePermission();
+		debugLogOnMac(`2nd call to hasScreenCapturePermission() returned ${hasPermission}`);
+	}
+	return hasPermission;
+}
+
+// DEBUG logging function
+function debugLogOnMac(msg: string): void {
+	logWarning(`DEBUG LOG: ${msg}`).catch(() => {});
+	console.log(`DEBUG LOG: ${msg}
+	`);
 }

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2024 3NSoft Inc.
+ Copyright (C) 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { makeProxyToSelectDisplayMediaHandler } from "../../media-devices";
+import { makeProxyToSelectDisplayMediaHandler, isAudioCaptureAvailable, ensureDeviceAllowsScreenCapture } from "../../media-devices";
 import { AppSetter, CAPsSetupFns, makeCAPsSetAppAndCloseFns } from "./index";
 
 type W3N = web3n.caps.W3N;
@@ -30,11 +30,14 @@ export function makeMediaDevicesCAP(
 	if (!mediaDevReq) {
 		return;
 	}
-	const cap: MediaDevices = {};
 	const capsSetupFns: CAPsSetupFns[] = [];
 	const setSelectDisplayMediaForCaptureHandler = makeSelectorOfDesktopMedia(
 		mediaDevReq
 	);
+	const cap: MediaDevices = {
+		isAudioCaptureAvailable,
+		ensureDeviceAllowsScreenCapture
+	};
 	if (setSelectDisplayMediaForCaptureHandler) {
 		cap.setSelectDisplayMediaForCaptureHandler = setSelectDisplayMediaForCaptureHandler.cap;
 		capsSetupFns.push(setSelectDisplayMediaForCaptureHandler);

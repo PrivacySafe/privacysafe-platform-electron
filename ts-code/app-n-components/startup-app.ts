@@ -27,6 +27,7 @@ import { errWithCause } from "../lib-common/exceptions/error";
 import { WrapStartupCAPs } from "../test-stand";
 import { DeviceFS } from "core-3nweb-client-lib";
 import { getSytemFormFactor } from "../ui";
+import { SignupParamsViaURL } from "../electron/app-url-protocol";
 
 
 type AppManifest = web3n.caps.AppManifest;
@@ -53,7 +54,8 @@ export class StartupApp {
 
 	static instantiate(
 		usersToFilterOut: string[], devTools: boolean,
-		startCore: CoreDriver['start'], connectIPC: ConnectIPC
+		startCore: CoreDriver['start'], connectIPC: ConnectIPC,
+		signupParams: SignupParamsViaURL|undefined
 	): {
 		startupApp: StartupApp;
 		startProc: Promise<void>;
@@ -72,7 +74,8 @@ export class StartupApp {
 			manifest, caps, connectIPC,
 			(entrypoint, winOpts, icon) => GUIComponent.makeStartup(
 				STARTUP_APP_DOMAIN, appRoot, entrypoint, winOpts, icon, devTools
-			)
+			),
+			(signupParams ? btoa(JSON.stringify(signupParams)) : undefined)
 		));
 		StartupApp.startProc = startProc;
 		return { startupApp, startProc, coreInit };
@@ -103,7 +106,7 @@ export class StartupApp {
 				)
 			);
 			return startupApp.startRegularOrDevelopmentGUI(
-				manifest, caps, connectIPC, instantiate
+				manifest, caps, connectIPC, instantiate, undefined
 			);
 		});
 		StartupApp.startProc = startProc;
@@ -112,7 +115,8 @@ export class StartupApp {
 
 	private async startRegularOrDevelopmentGUI(
 		manifest: AppManifest, caps: StartupW3N,
-		connectIPC: ConnectIPC, instantiate: InstantiateGUI
+		connectIPC: ConnectIPC, instantiate: InstantiateGUI,
+		signupParams: string|undefined
 	): Promise<void> {
 		try {
 			const uiFF = getSytemFormFactor();
@@ -122,7 +126,7 @@ export class StartupApp {
 			const winOpts = applyingStartupWindowPlacement(component.windowOpts);
 			this.gui = await instantiate(entrypoint, winOpts, component.icon);
 			connectIPC(caps, this.gui.window.webContents);
-			await this.gui.start();
+			await this.gui.start(signupParams);
 		} catch (err) {
 			throw errWithCause(err, `Cannot open startup app`);
 		} finally {

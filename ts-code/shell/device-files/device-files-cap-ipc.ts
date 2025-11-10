@@ -33,7 +33,8 @@ export function exposeDeviceFilesCAP(
 		}),
 		standardFileToDeviceFolder: jsonSrv.wrapReqReplySrvMethod(cap, 'standardFileToDeviceFolder', {
 			packReply: f => fsPbType.pack(exposeFSService(f, expServices))
-		})
+		}),
+		statStandardItem: jsonSrv.wrapReqReplySrvMethod(cap, 'statStandardItem')
 	};
 	return exposed;
 }
@@ -51,6 +52,9 @@ export function makeDeviceFiles(
 			caller, objPath, 'standardFileToDeviceFolder', {
 				unpackReply: env => makeFSCaller(caller, fsPbType.unpack(env))
 			}
+		),
+		statStandardItem: jsonCall.makeReqRepObjCaller<DeviceFiles, 'statStandardItem'>(
+			caller, objPath, 'statStandardItem'
 		)
 	};
 	return devFiles;

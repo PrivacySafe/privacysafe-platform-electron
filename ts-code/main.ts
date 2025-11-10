@@ -19,12 +19,12 @@
  * This script starts electron framework and sets up main process.
  */
 
-import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli, SOCKS5_PROXY } from './process-args';
+import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli, SOCKS5_PROXY, urlFromArgs } from './process-args';
 import { app, dialog, powerMonitor } from 'electron';
 import { InitProc } from './init-proc';
 import { registerAllProtocolShemas } from "./electron/protocols";
 import { fromEvent, lastValueFrom } from 'rxjs';
-import { appDir, logError, logWarning, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './confs';
+import { appDir, logError, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './confs';
 import { take } from 'rxjs/operators';
 import { makeCoreDriver } from './core';
 import { clearDefaultWindowMenu } from './window-utils/window-menu';
@@ -32,7 +32,7 @@ import { mkdirSync } from 'fs';
 import { sleep } from './lib-common/processes/sleep';
 import { EventEmitter } from 'events';
 import { processOfUtilityArgsIfGiven } from './main-for-util-invocations';
-import { appUrlSchema, ensureAppUrlProtocolIsSetInOS } from './electron/app-url-protocol';
+import { appUrlSchema, web3nUrlSchema, ensure3NWebProtocolsAreSetInOS } from './electron/app-url-protocol';
 
 const utilityInvocation = processOfUtilityArgsIfGiven();
 if (utilityInvocation) {
@@ -47,6 +47,8 @@ if (utilityInvocation) {
 	);
 
 } else {
+
+	const { appCallViaURL, signupParams } = urlFromArgs(process.argv);
 
 	EventEmitter.defaultMaxListeners = 100;
 
@@ -84,7 +86,7 @@ if (utilityInvocation) {
 
 			powerMonitor.on('shutdown', () => init.exit());
 
-			ensureAppUrlProtocolIsSetInOS();
+			ensure3NWebProtocolsAreSetInOS();
 
 			recordUnhandledRejectionsInProcess();
 
@@ -92,7 +94,7 @@ if (utilityInvocation) {
 			app.on('window-all-closed', () => {});
 
 			try {
-				await init.boot();
+				await init.boot(signupParams);
 			} catch (err) {
 				await logError(err);
 				if (!SKIP_APP_ERR_DIALOG_FLAG) {
@@ -108,8 +110,8 @@ if (utilityInvocation) {
 			process.on('SIGINT', () => init.exit());
 			process.on('SIGTERM', () => init.exit());
 
-			if (process.argv.find(arg => arg.startsWith(appUrlSchema))) {
-				init.handleAppUrlCallFromOS(process.argv);
+			if (appCallViaURL) {
+				init.handleAppUrlCallFromOS(appCallViaURL);
 			}
 
 		});
@@ -129,9 +131,14 @@ if (utilityInvocation) {
 			const isFstInstance = app.requestSingleInstanceLock();
 			if (isFstInstance) {
 				app.on('second-instance', async (event, argv, workDir) => {
-					if (argv.find(arg => arg.startsWith(appUrlSchema))) {
-						init.handleAppUrlCallFromOS(argv);
+
+					const { appCallViaURL, signupParams } = urlFromArgs(process.argv);
+					if (appCallViaURL) {
+						init.handleAppUrlCallFromOS(appCallViaURL);
 						return;
+					}
+					if (signupParams) {
+						init.handleSignupURL(signupParams)
 					}
 
 					const cmdToken = cmdTokenFromCli(argv);

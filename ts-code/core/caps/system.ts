@@ -21,6 +21,8 @@ type Logout = web3n.system.Logout;
 type Apps = web3n.system.apps.Apps;
 type Platform = web3n.system.platform.Platform;
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
+type UserLogin = web3n.system.UserLoginSettings;
+type AutoStartup = web3n.system.AutoStartupSettings;
 type RequestedCAPs = web3n.system.RequestedCAPs;
 
 export function makeSystemCAP(
@@ -35,12 +37,16 @@ export function makeSystemCAP(
 	const platform = makePlatformCAP(systemCapFns.platform!, sysReq);
 	const monitor = makeSystemMonitorCAP(systemCapFns.monitor!, sysReq);
 	const logout = makeLogoutCAP(logoutFn, sysReq);
-	if (apps || platform || monitor || logout) {
+	const userLogin = makeSystemUserLoginCAP(systemCapFns.userLogin!, sysReq);
+	const autoStartup = makeAutoStartupCAP(systemCapFns.autoStartup!, sysReq);
+	if (apps || platform || monitor || logout || userLogin) {
 		return {
 			apps,
 			platform,
 			monitor,
-			logout
+			logout,
+			userLogin,
+			autoStartup
 		};
 	}
 }
@@ -86,6 +92,22 @@ function makeLogoutCAP(
 ): SysUtils['logout'] {
 	if (sysReq.logout === true) {
 		return logout;
+	}
+}
+
+function makeSystemUserLoginCAP(
+	sysMonCapFns: UserLogin, sysReq: NonNullable<RequestedCAPs['system']>
+): SysUtils['userLogin'] {
+	if (sysReq.monitor === 'all') {
+		return sysMonCapFns;
+	}
+}
+
+function makeAutoStartupCAP(
+	sysAutoStartupCapFns: AutoStartup, sysReq: NonNullable<RequestedCAPs['system']>
+): SysUtils['autoStartup'] {
+	if (sysReq.monitor === 'all') {
+		return sysAutoStartupCapFns;
 	}
 }
 

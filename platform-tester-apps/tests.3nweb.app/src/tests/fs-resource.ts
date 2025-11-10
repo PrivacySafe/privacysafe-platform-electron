@@ -37,7 +37,7 @@ describe(`shell.getFSResource`, () => {
 
 	it(`returns fs item`, async () => {
 		const confFile = await w3n.shell!.getFSResource!(
-			'start-by-cmd.3nweb.computer', 'sample-config'
+			'start-by-cmd.3nweb.app', 'sample-config'
 		) as web3n.files.ReadonlyFile;
 		const conf = await confFile.readJSON<any>();
 		expect(conf.numValue).toBe(42);

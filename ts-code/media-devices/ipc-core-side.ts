@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2024 3NSoft Inc.
+ Copyright (C) 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedObj, CoreSideServices, CallerToClient } from 'core-3nweb-client-lib/build/ipc';
+import { ExposedObj, CoreSideServices, CallerToClient, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
 import { setSelectDisplayMediaForCaptureHandler } from './handler-caps-ipc';
 
 type MediaDevices = web3n.media.MediaDevices;
@@ -24,7 +24,10 @@ export function exposeMediaDevicesCAP(
 	cap: MediaDevices, _expServices: CoreSideServices,
 	callerToClient: CallerToClient
 ): ExposedObj<MediaDevices> {
-	const wrap: ExposedObj<MediaDevices> = {};
+	const wrap: ExposedObj<MediaDevices> = {
+		isAudioCaptureAvailable: jsonSrv.wrapReqReplySrvMethod(cap, 'isAudioCaptureAvailable'),
+		ensureDeviceAllowsScreenCapture: jsonSrv.wrapReqReplySrvMethod(cap, 'ensureDeviceAllowsScreenCapture')
+	};
 	if (cap.setSelectDisplayMediaForCaptureHandler) {
 		wrap.setSelectDisplayMediaForCaptureHandler = setSelectDisplayMediaForCaptureHandler.expose(
 			cap.setSelectDisplayMediaForCaptureHandler,

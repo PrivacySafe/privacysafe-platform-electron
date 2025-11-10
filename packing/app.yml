@@ -28,6 +28,7 @@ mac:
   artifactName: PrivacySafe-${arch}.${ext}
   notarize: true
   entitlements: ./packing/entitlements.mac.plist
+  entitlementsInherit: ./packing/entitlements.mac.inherit.plist
 
 directories:
   app: ./build/app
@@ -87,3 +88,6 @@ asarUnpack:
 
   # bundle configuration
   - configuration.json
+
+  # native modules (mac)
+  - node_modules/mac-screen-capture-permissions/build/Release/*.node

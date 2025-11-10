@@ -21,6 +21,7 @@ import { toBuffer } from "../lib-common/buffer-utils";
 import { makeStartupTestStandCaller } from "../test-stand/test-stand-cap-ipc";
 import { makeClientSideW3N } from "../core/client-side-w3n";
 import { InitIPC } from "./ipc-type";
+import { makeRuntimeException } from "../lib-common/exceptions/runtime";
 
 type StartupW3N = web3n.startup.W3N;
 type W3N = web3n.caps.W3N;
@@ -63,19 +64,35 @@ export function makeW3N(ipc: InitIPC): W3N {
 	const w3n = makeClientSideW3N(clientSide);
 	if (w3n.shell?.deviceFiles) {
 		const { standardFileToPath } = ipc;
-		const { standardFileToDeviceFile, standardFileToDeviceFolder } = w3n.shell.deviceFiles;
+		function getPathIfNotMemoryBasedFile(f: File): string {
+			const path = standardFileToPath!(f);
+			if (path.length === 0) {
+				throw {
+					runtimeException: true,
+					type: 'file',
+					isInMemoryFile: true,
+					file: f
+				};
+			}
+			return path;
+		}
+		const { standardFileToDeviceFile, standardFileToDeviceFolder, statStandardItem } = w3n.shell.deviceFiles;
 		if (standardFileToDeviceFile) {
 			w3n.shell.deviceFiles.standardFileToDeviceFile = async f => {
-				const path = standardFileToPath!(f);
+				const path = getPathIfNotMemoryBasedFile(f);
 				return await standardFileToDeviceFile(path as any);
 			};
 		}
 		if (standardFileToDeviceFolder) {
 			w3n.shell.deviceFiles.standardFileToDeviceFolder = async f => {
-				const path = standardFileToPath!(f);
+				const path = getPathIfNotMemoryBasedFile(f);
 				return await standardFileToDeviceFolder(path as any);
-			}
+			};
 		}
+		w3n.shell.deviceFiles.statStandardItem = async f => {
+			const path = getPathIfNotMemoryBasedFile(f);
+			return await statStandardItem(path as any);
+		};
 	}
 	return w3n;
 }

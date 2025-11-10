@@ -1,6 +1,6 @@
 {
-	"launcher-app": "launcher.3nweb.computer",
-	"startup-app": "startup.3nweb.computer",
+	"launcher-app": "launcher.3nweb.app",
+	"startup-app": "startup.3nweb.app",
 	"signup-url": "https://3nweb.net/signup/",
 	"platform-name": "3NWeb",
 	"bundled-apps": [],

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2024 3NSoft Inc.
+ Copyright (C) 2016 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -33,6 +33,10 @@ import { assert } from '../lib-common/assert';
 import { PLATFORM_NAME } from '../bundle-confs';
 import { rm } from 'fs/promises';
 import { sleep } from '../lib-common/processes/sleep';
+import { dirname } from 'path';
+import { lookForAutologinUsers, UserKey } from './autologin';
+import { shouldSkipDashboard } from './auto-startup';
+import { AppCallViaURL, SignupParamsViaURL } from '../electron/app-url-protocol';
 
 type TestStandConfig = web3n.testing.config.TestStandConfig;
 type DevAppParams = web3n.testing.config.DevAppParams;
@@ -47,6 +51,7 @@ export class InitProc {
 	private readonly guiConnectors = new ElectronIPCConnectors();
 	private readonly sockConnectors = new SocketIPCConnectors();
 	private readonly platform = new PlatformDownloader();
+	// private readonly userLogin = new UserLogin();
 	private readonly deskUI = new DesktopUI(
 		this.onCmdEvents.bind(this),
 		this.appInfoForUI.bind(this)
@@ -70,7 +75,7 @@ export class InitProc {
 		Object.seal(this);
 	}
 
-	async boot(): Promise<void> {
+	async boot(signupParams?: SignupParamsViaURL): Promise<void> {
 		try {
 			powerMonitor.on('resume', () => Promise.allSettled(
 				Array.from(this.userApps.values())
@@ -87,15 +92,45 @@ export class InitProc {
 					this.startDevStartupApp.bind(this)
 				);
 			} else {
-				// start at least one user
-				await this.startUser();
+				const usersToAutoStart = await lookForAutologinUsers();
+				if (usersToAutoStart) {
+					const skipDashboard = shouldSkipDashboard();
+					let startupErred = false;
+					for (const userKey of usersToAutoStart) {
+						try {
+							await this.startUserWithKey(userKey, !skipDashboard);
+						} catch (err) {
+							console.error(err);
+							startupErred = true;
+						}
+					}
+					if ((startupErred && (this.openedUsers().length === 0))
+					|| signupParams) {
+						await this.startUser(signupParams);
+					}
+				} else {
+					// start at least one user
+					await this.startUser(signupParams);
+				}
 			}
 		} catch (err) {
 			await logError(err, `Error occured in starting user during boot`);
 		}
 	}
 
-	private startUser(): Promise<void> {
+	private async startUserWithKey({ userId, key }: UserKey, openLauncher: boolean): Promise<void> {
+		const apps = new UserApps(
+			this.makeDriver, this.conf, this.guiConnectors, this.sockConnectors,
+			this.makeTitleGenerator, undefined, undefined,
+			this.devToolsAllowance, () => this.platformCAP
+		);
+		await apps.startCoreDirectlyFor(userId, key);
+		this.userApps.set(toCanonicalAddress(apps.userId), apps);
+		this.watchUserAppsEvents(apps);
+		this.loadUserSystem(apps, openLauncher);
+	}
+
+	private startUser(signupParams?: SignupParamsViaURL): Promise<void> {
 		if (this.startingUser) {
 			this.startingUser.focusWindow();
 		} else {
@@ -104,8 +139,8 @@ export class InitProc {
 				this.makeTitleGenerator, undefined, undefined,
 				this.devToolsAllowance, () => this.platformCAP
 			);
-			const excIds = this.openedUsers(true);
-			const proc = apps.openStartupApp(excIds)
+			const userIdsToFilterOut = this.openedUsers(true);
+			const proc = apps.openStartupApp(userIdsToFilterOut, signupParams)
 			.then(async ({ init }) => {
 				const newCoreInitialized = await init;
 				if (newCoreInitialized) {
@@ -150,11 +185,11 @@ export class InitProc {
 		});
 	}
 
-	private async loadUserSystem(apps: UserApps): Promise<void> {
+	private async loadUserSystem(apps: UserApps, openLauncher = true): Promise<void> {
 		this.updateOpenWindows();
 		await Promise.all([
 			// trigger user system startup
-			apps.doUserSystemStartup(),
+			apps.doUserSystemStartup(openLauncher),
 			// update desktop elements on addition of another user
 			apps.listInstalled()
 			.then(appsLst => this.deskUI.addUser(apps.userId, appsLst))
@@ -299,15 +334,19 @@ export class InitProc {
 		}
 	}
 
-	handleAppUrlCallFromOS(argv: string[]): void {
+	handleAppUrlCallFromOS(appCallViaURL: AppCallViaURL): void {
 		// XXX
 		dialog.showMessageBox({
 			type: 'info',
 			title: PLATFORM_NAME,
-			message: `${PLATFORM_NAME} received a call to handle url from following argv: "${argv.join(' ')}"`
+			message: `${PLATFORM_NAME} received a call to handle url "${appCallViaURL}"`
 		}).catch(err => {
 			console.error(err);
 		});
+	}
+
+	handleSignupURL(signupParams: SignupParamsViaURL): void {
+		this.startUser(signupParams).catch(logError);
 	}
 
 	private async wipeFromThisDevice(): Promise<void> {
@@ -325,6 +364,7 @@ export class InitProc {
 		if (btnInd === 0) {
 			await this.closeAllUserAppsAndUI();
 			await sleep(2000);
+			process.chdir(dirname(this.conf.dataDir));
 			await rm(this.conf.dataDir, { recursive: true, force: true });
 			// XXX add attempt to remove binaries
 			// if (removePlatform) {

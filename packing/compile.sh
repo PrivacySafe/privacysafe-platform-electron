@@ -61,7 +61,7 @@ then
 
 	for app in startup tests start-by-cmd
 	do
-		build_n_copy_app ${app}.3nweb.computer || exit $?
+		build_n_copy_app ${app}.3nweb.app || exit $?
 	done
 
 	cp -f $src_dir/test-setup.json $src_dir/test-phone-setup.json $src_dir/run-tests-on.sh $build_dir/ || exit $?

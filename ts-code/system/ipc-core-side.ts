@@ -24,6 +24,8 @@ type AppsInstaller = web3n.system.apps.AppsInstaller;
 type Platform = web3n.system.platform.Platform;
 type AppsOpener = web3n.system.apps.AppsOpener;
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
+type UserLoginSettings = web3n.system.UserLoginSettings;
+type AutoStartupSettings = web3n.system.AutoStartupSettings;
 
 export function exposeSystemCAP(
 	cap: SysUtils, expServices: CoreSideServices
@@ -37,6 +39,12 @@ export function exposeSystemCAP(
 	}
 	if (cap.monitor) {
 		wrap.monitor = exposeSystemMonitorCAP(cap.monitor);
+	}
+	if (cap.userLogin) {
+		wrap.userLogin = exposeUserLoginCAP(cap.userLogin);
+	}
+	if (cap.autoStartup) {
+		wrap.autoStartup = exposeAutoStartupCAP(cap.autoStartup);
 	}
 	if (cap.logout) {
 		wrap.logout = jsonSrv.wrapReqReplyFunc(cap.logout);
@@ -151,6 +159,32 @@ function exposeSystemMonitorCAP(
 		listConnectionsToAppServices: jsonSrv.wrapReqReplySrvMethod(
 			cap, 'listConnectionsToAppServices'
 		)
+	};
+}
+
+function exposeUserLoginCAP(cap: UserLoginSettings): ExposedObj<UserLoginSettings> {
+	return {
+		isAutoLoginSet: jsonSrv.wrapReqReplySrvMethod(cap, 'isAutoLoginSet'),
+		removeAutoLogin: jsonSrv.wrapReqReplySrvMethod(cap, 'removeAutoLogin'),
+		setAutoLogin: jsonSrv.wrapObservingFunc<number>((obs, pass) => {
+			cap.setAutoLogin(pass, p => obs.next?.(p))
+			.then(
+				() => obs.complete?.(),
+				err => obs.error?.(err)
+			);
+			return noop;
+		}),
+		isAutoLoginAvailable: jsonSrv.wrapReqReplySrvMethod(cap, 'isAutoLoginAvailable'),
+	};
+}
+
+function noop() {}
+
+function exposeAutoStartupCAP(cap: AutoStartupSettings): ExposedObj<AutoStartupSettings> {
+	return {
+		isAutoStartupAvailable: jsonSrv.wrapReqReplySrvMethod(cap, 'isAutoStartupAvailable'),
+		isAutoStartupSet: jsonSrv.wrapReqReplySrvMethod(cap, 'isAutoStartupSet'),
+		setAutoStartup: jsonSrv.wrapReqReplySrvMethod(cap, 'setAutoStartup'),
 	};
 }
 

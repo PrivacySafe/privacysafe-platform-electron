@@ -61,7 +61,7 @@ export class App {
 	private readonly startProcs = new NamedProcs();
 	private canStartComponents = true;
 
-	private readonly devTools: boolean;
+	private devTools: boolean;
 
 	constructor(
 		private readonly manifest: AppManifest,
@@ -170,7 +170,7 @@ export class App {
 		}
 	}
 
-	async handleCmdFromUser(cmd: CmdParams, devTools: boolean): Promise<void> {
+	async handleCmdFromUser(cmd: CmdParams): Promise<void> {
 		const { entrypoint, component } = this.componentForCmd(cmd.cmd);
 		await this.whenNoStartProc(entrypoint);
 		const existing = this.instances.get(entrypoint) as GUIComponent;
@@ -183,14 +183,17 @@ export class App {
 		await this.syncStartProc(
 			entrypoint,
 			this.makeAndStartGUIComponentInstance(
-				entrypoint, component, cmd, undefined, devTools
+				entrypoint, component, cmd, undefined, this.devTools
 			)
 		);
 	}
 
 	async launchWebGUI(entrypoint: string, devTools: boolean): Promise<void> {
 		const component = getWebGUIComponent(this.manifest, entrypoint);
-		await this.launchComponent(entrypoint!, component, devTools);
+		if (devTools) {
+			this.devTools = true;
+		}
+		await this.launchComponent(entrypoint!, component);
 	}
 
 	async launchFormFactorAppropriateWebGUI(devTools: boolean): Promise<void> {
@@ -200,14 +203,14 @@ export class App {
 			if (component) {
 				return await this.launchWebGUI(component, devTools);
 			} else if (startCmd) {
-				return await this.handleCmdFromUser(startCmd, devTools);
+				return await this.handleCmdFromUser(startCmd);
 			}
 		}
 		await this.launchWebGUI(MAIN_GUI_ENTRYPOINT, devTools);
 	}
 
 	private async launchComponent(
-		entrypoint: string, component: AppComponent, devTools?: boolean
+		entrypoint: string, component: AppComponent
 	): Promise<void> {
 		await this.whenNoStartProc(entrypoint);
 		const existing = this.instances.get(entrypoint);
@@ -220,7 +223,7 @@ export class App {
 				entrypoint,
 				this.makeAndStartGUIComponentInstance(
 					entrypoint, component as GUIComponentDef, undefined, undefined,
-					devTools
+					this.devTools
 				)
 			);
 		} else if (component.runtime === 'deno') {
@@ -238,7 +241,7 @@ export class App {
 			return;
 		}
 		for (const { entrypoint, component } of toStart) {
-			await this.launchComponent(entrypoint!, component, this.devTools)
+			await this.launchComponent(entrypoint!, component);
 		}
 	}
 

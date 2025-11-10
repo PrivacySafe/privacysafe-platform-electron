@@ -20,6 +20,7 @@ import { isAbsolute, join } from "path";
 import { assert } from "./lib-common/assert";
 import { parseArgv, ArgDef, cliUsageToString, CliUsageSection } from "./lib-common/parse-argv";
 import { PLATFORM_NAME } from "./bundle-confs";
+import { AppCallViaURL, appUrlSchema, parse3NWebURL, parseAppURL, SignupParamsViaURL, web3nUrlSchema } from "./electron/app-url-protocol";
 
 type TestStandConfig = web3n.testing.config.TestStandConfig;
 type FormFactor = web3n.ui.FormFactor;
@@ -121,6 +122,12 @@ const platformArgDefs: ArgDef[] = [
 		description: `Allows to run as a second instance, ignoring single instance lock. Multiple instances messes up user experience, but it can be useful in tests and development.`
 	},
 	{
+		name: 'check-signup-url',
+		type: String,
+		typeLabel: '{underline <signup url>}',
+		description: `Checks signup service, and presence of services on related domain(s).`
+	},
+	{
 		name: 'test-stand',
 		type: testStandConfigType,
 		typeLabel: '{underline <conf file>}',
@@ -135,6 +142,11 @@ const platformArgDefs: ArgDef[] = [
 		name: 'skip-app-error-dialog',
 		type: Boolean,
 		description: `Outputs startup error into console instead of showing GUI dialog box that awaits for a human to click. This skipping is useful in automated testing and development.`
+	},
+	{
+		name: 'skip-dashboard-on-autologin',
+		type: Boolean,
+		description: `Skip opening of dashboard(s) when users are automatically logged in.`
 	},
 	{
 		name: 'platform-cmd',
@@ -159,12 +171,6 @@ const platformArgDefs: ArgDef[] = [
 		type: Boolean,
 		description: `Displays platform and bundle versions information`
 	},
-	// {
-	// 	name: 'single-user',
-	// 	alias: 's',
-	// 	type: Boolean,
-	// 	description: ``
-	// },
 ];
 
 const usage: CliUsageSection[] = [
@@ -187,8 +193,9 @@ const parsedCliArgs = parseArgv<any>(
 );
 
 export const UTIL_INVOCATION_ARGS = {
-	help: parsedCliArgs['help'],
-	version: parsedCliArgs['version']
+	help: parsedCliArgs['help'] as boolean|undefined,
+	version: parsedCliArgs['version'] as boolean|undefined,
+	"check-signup": parsedCliArgs['check-signup-url'] as string|undefined
 };
 
 export const HTTP_LOG_TO_CONSOLE_FLAG = !!parsedCliArgs['console-log-http'];
@@ -205,6 +212,8 @@ export const PLATFORM_CALL_CMD = parsedCliArgs['platform-cmd'] as string|undefin
 
 export const SKIP_APP_ERR_DIALOG_FLAG = !!parsedCliArgs['skip-app-error-dialog'];
 
+export const SKIP_DASH_AT_AUTOLOGIN_FLAG = !!parsedCliArgs['skip-dashboard-on-autologin'];
+
 export const CUSTOM_DENO_RUNTIME = parsedCliArgs['runtime-deno'] as string|undefined;
 
 export const SOCKS5_PROXY = parsedCliArgs['socks5-proxy'] as string|undefined;
@@ -212,6 +221,27 @@ export const SOCKS5_PROXY = parsedCliArgs['socks5-proxy'] as string|undefined;
 export const CUSTOM_SIGNUP_URL =  parsedCliArgs['signup-url'] as string|undefined;
 
 const DEV_TOOL_FLAG = !!parsedCliArgs['devtools'];
+
+export function urlFromArgs(argv: string[]): {
+	appCallViaURL?: AppCallViaURL;
+	signupParams?: SignupParamsViaURL;
+} {
+	const appUrlArg = argv.find(arg => arg.startsWith(`${appUrlSchema}://`));
+	if (appUrlArg) {
+		return {
+			appCallViaURL: parseAppURL(appUrlArg)
+		};
+	}
+
+	const web3nUrl = argv.find(arg => arg.startsWith(`${web3nUrlSchema}://`));
+	if (web3nUrl) {
+		return {
+			signupParams: parse3NWebURL(web3nUrl)
+		};
+	}
+
+	return {};
+}
 
 
 if (!TEST_STAND_CONF

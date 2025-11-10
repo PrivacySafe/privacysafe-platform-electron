@@ -15,6 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { platform } from "os";
 import { logError } from "../confs";
 import { MULTI_INSTANCE_FLAG } from "../process-args";
 import { DeskTray } from "./desktop-tray";
@@ -78,7 +79,10 @@ export class DesktopUI {
 	private setupTray(): void {
 		this.tray = new DeskTray();
 		this.tray.event$.subscribe(this.onCmdEvent);
-		this.tray?.updateMenu(this.users);
+		this.tray.updateMenu(this.users);
+		if (platform() === 'linux') {
+			setInterval(() => this.tray?.resetImage(), 1000).unref();
+		}
 	}
 
 	private async setupMainMenu(): Promise<void> {

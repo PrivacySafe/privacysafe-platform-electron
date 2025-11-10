@@ -175,29 +175,5 @@ function makeDownloadExc(
 	);
 }
 
-// function runElectronBuilderUpdate(
-// 	newBundleVersion: string, observer: Observer<PlatformDownloadProgress>
-// ): () => void {
-// 	let unsub: (() => void)|undefined = undefined;
-// 	makeUpdater(newBundleVersion).then(async updater => {
-// 		if (updater) {
-// 			unsub = updater.checkForUpdateAndApply(observer);
-// 		} else if (observer && observer.error) {
-// 			observer.error(new Error(
-// 				`Failed to create an updater. Packing info is ${
-// 					JSON.stringify(findPackInfo())
-// 				}`
-// 			));
-// 		}
-// 	});
-// 	return () => {
-// 		if (unsub) {
-// 			unsub();
-// 		} else {
-// 			observer = undefined as any;
-// 		}
-// 	}; 
-// }
-
 
 Object.freeze(exports);

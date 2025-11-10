@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2025 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,17 +15,16 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ExposedFn, Caller, ExposedObj } from 'core-3nweb-client-lib/build/ipc';
-import { strValType, toVal } from '../ipc-with-core/protobuf-msg';
+import { Caller, ExposedObj, callerSideJSONWrap as jsonCall, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
 
 type Connectivity = web3n.connectivity.Connectivity;
-type OnlineAssesment = web3n.connectivity.OnlineAssesment;
 
 export function exposeConnectivityCAP(
 	cap: Connectivity
 ): ExposedObj<Connectivity> {
 	return {
-		isOnline: isOnline.wrapService(cap.isOnline)
+		isOnline: jsonSrv.wrapReqReplySrvMethod(cap, 'isOnline'),
+		watch: jsonSrv.wrapObservingFunc(cap.watch)
 	};
 }
 
@@ -33,33 +32,10 @@ export function makeConnectivity(
 	caller: Caller, objPath: string[]
 ): Connectivity {
 	return {
-		isOnline: isOnline.makeCaller(caller, objPath)
+		isOnline: jsonCall.makeReqRepObjCaller<Connectivity, 'isOnline'>(caller, objPath, 'isOnline'),
+		watch: jsonCall.makeObservableFuncCaller(caller, objPath.concat('watch'))
 	};
 }
-
-
-namespace isOnline {
-
-	export function wrapService(
-		fn: Connectivity['isOnline']
-	): ExposedFn {
-		return () => {
-			const promise = fn()
-			.then(checkRes => strValType.pack(toVal(checkRes)));
-			return { promise };
-		};
-	}
-
-	export function makeCaller(
-		caller: Caller, objPath: string[]
-	): Connectivity['isOnline'] {
-		const ipcPath = objPath.concat('isOnline');
-		return () => caller.startPromiseCall(ipcPath, undefined)
-		.then(buf => strValType.unpack(buf).value as OnlineAssesment);
-	}
-
-}
-Object.freeze(isOnline);
 
 
 Object.freeze(exports);

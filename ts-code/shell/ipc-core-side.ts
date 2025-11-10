@@ -33,7 +33,7 @@ export function exposeShellCAPs(
 	}
 	if (cap.userNotifications) {
 		wrap.userNotifications = exposeUserNotificationsCAP(
-			cap.userNotifications
+			cap.userNotifications, expServices
 		);
 	}
 	if (cap.watchStartCmds) {

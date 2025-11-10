@@ -1,7 +1,7 @@
 {
 	"name": "App that opens by command",
 	
-	"appDomain": "start-by-cmd.3nweb.computer",
+	"appDomain": "start-by-cmd.3nweb.app",
 
 	"version": "0.1.0",
 
@@ -28,7 +28,7 @@
 			"capsRequested": {
 				"storage": {
 					"appFS": [{
-						"domain": "start-by-cmd.3nweb.computer",
+						"domain": "start-by-cmd.3nweb.app",
 						"storage": "local"
 					}]
 				}
@@ -49,7 +49,7 @@
 			"capsRequested": {
 				"storage": {
 					"appFS": [{
-						"domain": "start-by-cmd.3nweb.computer",
+						"domain": "start-by-cmd.3nweb.app",
 						"storage": "local"
 					}]
 				}
@@ -61,7 +61,7 @@
 	"exposedFSResources": {
 		"sample-config": {
 			"allow": {
-				"otherApps": [ "tests.3nweb.computer" ]
+				"otherApps": [ "tests.3nweb.app" ]
 			},
 			"appStorage": "local",
 			"path": "config/useful/to/others.json",

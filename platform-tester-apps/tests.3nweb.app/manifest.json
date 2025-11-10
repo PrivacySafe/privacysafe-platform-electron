@@ -1,7 +1,7 @@
 {
 	"name": "3NWeb platform tester",
 	
-	"appDomain": "tests.3nweb.computer",
+	"appDomain": "tests.3nweb.app",
 
 	"version": "1.2.3",
 
@@ -28,13 +28,13 @@
 				"storage": {
 					"appFS": [
 						{
-							"domain": "tests.3nweb.computer",
+							"domain": "tests.3nweb.app",
 							"storage": "synced-n-local"
 						}, {
-							"domain": "sub-app-1.tests.3nweb.computer",
+							"domain": "sub-app-1.tests.3nweb.app",
 							"storage": "synced-n-local"
 						}, {
-							"domain": "sub-app-2.tests.3nweb.computer",
+							"domain": "sub-app-2.tests.3nweb.app",
 							"storage": "synced-n-local"
 						}
 					],
@@ -48,12 +48,12 @@
 					"startAppCmds": {
 						"thisApp": [ "command-1", "command-2" ],
 						"otherApps": {
-							"start-by-cmd.3nweb.computer": [ "app-cmd-1", "app-cmd-2" ]
+							"start-by-cmd.3nweb.app": [ "app-cmd-1", "app-cmd-2" ]
 						}
 					},
 					"fsResource": {
 						"otherApps": {
-							"start-by-cmd.3nweb.computer": "sample-config",
+							"start-by-cmd.3nweb.app": "sample-config",
 							"unknown.example.local": "some-resource"
 						}
 					},
@@ -91,13 +91,13 @@
 				"storage": {
 					"appFS": [
 						{
-							"domain": "tests.3nweb.computer",
+							"domain": "tests.3nweb.app",
 							"storage": "synced-n-local"
 						}, {
-							"domain": "sub-app-1.tests.3nweb.computer",
+							"domain": "sub-app-1.tests.3nweb.app",
 							"storage": "synced-n-local"
 						}, {
-							"domain": "sub-app-2.tests.3nweb.computer",
+							"domain": "sub-app-2.tests.3nweb.app",
 							"storage": "synced-n-local"
 						}
 					],
@@ -111,12 +111,12 @@
 					"startAppCmds": {
 						"thisApp": [ "command-1", "command-2" ],
 						"otherApps": {
-							"start-by-cmd.3nweb.computer": [ "app-cmd-1", "app-cmd-2" ]
+							"start-by-cmd.3nweb.app": [ "app-cmd-1", "app-cmd-2" ]
 						}
 					},
 					"fsResource": {
 						"otherApps": {
-							"start-by-cmd.3nweb.computer": "sample-config",
+							"start-by-cmd.3nweb.app": "sample-config",
 							"unknown.example.local": "some-resource"
 						}
 					},

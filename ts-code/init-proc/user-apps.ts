@@ -38,6 +38,9 @@ import { defer } from '../lib-common/processes/deferred';
 import { GetAppStorage } from '../app-n-components/app';
 import { dialog } from 'electron';
 import { stringifyErr } from '../lib-common/exceptions/error';
+import { UserLogin } from '../system/user-login';
+import { makeAutoStartupCAP } from './auto-startup';
+import { SignupParamsViaURL } from '../electron/app-url-protocol';
 
 type DevAppParams = web3n.testing.config.DevAppParams;
 
@@ -55,6 +58,7 @@ type UserAppsEvents = 'start-closing' | {
 type SysUtils = web3n.system.SysUtils;
 type Apps = web3n.system.apps.Apps;
 type Platform = web3n.system.platform.Platform;
+type UserLoginSettings = web3n.system.UserLoginSettings;
 type CmdParams = web3n.shell.commands.CmdParams;
 
 const platformComponentName = {
@@ -98,7 +102,8 @@ export class UserApps {
 			this.executeCommand.bind(this),
 			this.triggerAllStartupLaunchers.bind(this),
 			this.apps.closeAppsAfterUpdate.bind(this.apps),
-			getPlatform()
+			getPlatform(),
+			this.getUserLoginSettings()
 		);
 		this.core = makeDriver(
 			conf, makeSystemCapFns,
@@ -157,14 +162,19 @@ export class UserApps {
 		return this.core.start();
 	}
 
+	startCoreDirectlyFor(userId: string, storageKey: Uint8Array): Promise<void> {
+		return this.core.startCoreDirectlyFor(userId, storageKey);
+	}
+
 	openStartupApp(
-		usersToFilterOut: string[]
+		usersToFilterOut: string[], signupParams: SignupParamsViaURL|undefined
 	): Promise<{ init: Promise<boolean>; }> {
 		return this.openRegularOrDevelopmentStartupApp(
 			() => StartupApp.instantiate(
 				usersToFilterOut, this.devToolsAllowance(STARTUP_APP_DOMAIN),
 				() => this.core.start(),
-				this.guiConnectors.connectStartupW3N.bind(this.guiConnectors)
+				this.guiConnectors.connectStartupW3N.bind(this.guiConnectors),
+				signupParams
 			)
 		);
 	}
@@ -233,7 +243,7 @@ export class UserApps {
 	): Promise<void> {
 		devTools = devTools || this.devToolsAllowance(appDomain);
 		const app = await this.apps.get(appDomain, devTools);
-		await app.handleCmdFromUser(cmd, devTools);
+		await app.handleCmdFromUser(cmd);
 	}
 
 	async openAppInProperFormFactor(appDomain: string): Promise<void> {
@@ -251,9 +261,11 @@ export class UserApps {
 		await this.openAppInProperFormFactor(LAUNCHER_APP_DOMAIN);
 	}
 
-	async doUserSystemStartup(): Promise<void> {
+	async doUserSystemStartup(openLauncher: boolean): Promise<void> {
 		this.triggerAllStartupLaunchers();
-		await this.openAppLauncher();
+		if (openLauncher) {
+			await this.openAppLauncher();
+		}
 	}
 
 	private async triggerAllStartupLaunchers(): Promise<void> {
@@ -363,6 +375,14 @@ export class UserApps {
 		await this.core.onDeviceSystemResume();
 	}
 
+	private getUserLoginSettings(): UserLoginSettings {
+		const userLogin = new UserLogin(
+			this.core.getUserId(),
+			(pass, progressCB) => this.core.getRootKey(this.userId, pass, progressCB)
+		);
+		return userLogin.wrapCAP();
+	}
+
 }
 Object.freeze(UserApps.prototype);
 Object.freeze(UserApps);
@@ -379,7 +399,7 @@ function systemCAPsFrom(
 	executeCommand: UserApps['executeCommand'],
 	triggerAllStartupLaunchers: () => Promise<void>,
 	closeAppsAfterUpdate: LiveApps['closeAppsAfterUpdate'],
-	platform: Platform
+	platform: Platform, userLogin: UserLoginSettings
 ): SysUtils {
 	const apps: Apps = {
 		opener: {
@@ -431,7 +451,8 @@ function systemCAPsFrom(
 		}
 	};
 	const monitor = liveApps.makeMonitor();
-	return { apps, platform, monitor };
+	const autoStartup = makeAutoStartupCAP();
+	return { apps, platform, monitor, userLogin, autoStartup };
 }
 
 

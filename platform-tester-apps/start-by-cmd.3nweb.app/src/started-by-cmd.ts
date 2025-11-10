@@ -17,7 +17,7 @@
 
 import { addMsgToPage } from './test-page-utils.js';
 
-const mainTestApp = 'tests.3nweb.computer';
+const mainTestApp = 'tests.3nweb.app';
 const mainTestAppComponent = '/main-tester.html';
 
 const fstCmd = await w3n.shell!.getStartedCmd!();

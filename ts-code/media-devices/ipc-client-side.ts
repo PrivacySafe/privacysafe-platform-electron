@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2024 3NSoft Inc.
+ Copyright (C) 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Caller, ClientSideServices } from 'core-3nweb-client-lib/build/ipc';
+import { Caller, ClientSideServices, callerSideJSONWrap as jsonCall } from 'core-3nweb-client-lib/build/ipc';
 import { setSelectDisplayMediaForCaptureHandler } from './handler-caps-ipc';
 
 type MediaDevices = web3n.media.MediaDevices;
@@ -26,7 +26,7 @@ export function makeMediaDevices(
 	if (!caller.listObj) {
 		throw new Error(`Caller here expects to have method 'listObj'`);
 	}
-	const media: MediaDevices = {};
+	const media = mediaDevicesNonOptinalPart(caller, mediaDevPath);
 	const lstMediaDeviceCAP = caller.listObj(
 		mediaDevPath
 	) as (keyof MediaDevices)[];
@@ -42,7 +42,7 @@ export async function promiseMediaDevices(
 	if (!caller.listObjAsync) {
 		throw new Error(`Caller here expects to have method 'listObjAsync'`);
 	}
-	const media: MediaDevices = {};
+	const media = mediaDevicesNonOptinalPart(caller, mediaDevPath);
 	const lstMediaDeviceCAP = (
 		await caller.listObjAsync(mediaDevPath)
 	) as (keyof MediaDevices)[];
@@ -50,6 +50,18 @@ export async function promiseMediaDevices(
 		caller, expServices, media, mediaDevPath, lstMediaDeviceCAP
 	);
 	return media;
+}
+
+function mediaDevicesNonOptinalPart(caller: Caller, objPath: string[]): MediaDevices {
+	return {
+		isAudioCaptureAvailable: jsonCall.makeReqRepObjCaller<MediaDevices, 'isAudioCaptureAvailable'>(
+			caller, objPath, 'isAudioCaptureAvailable'
+		),
+		ensureDeviceAllowsScreenCapture:
+		jsonCall.makeReqRepObjCaller<MediaDevices, 'ensureDeviceAllowsScreenCapture'>(
+			caller, objPath, 'ensureDeviceAllowsScreenCapture'
+		)
+	};
 }
 
 function addHandlerSetters(

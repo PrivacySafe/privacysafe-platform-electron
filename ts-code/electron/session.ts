@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2017, 2019, 2021 - 2022, 2024 3NSoft Inc.
+ Copyright (C) 2017, 2019, 2021 - 2022, 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,10 +15,12 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { desktopCapturer, session, Session, MediaAccessPermissionRequest, DisplayMediaRequestHandlerHandlerRequest, DesktopCapturerSource, SourcesOptions, NativeImage } from 'electron';
+import { desktopCapturer, session, Session, MediaAccessPermissionRequest, DisplayMediaRequestHandlerHandlerRequest, DesktopCapturerSource, SourcesOptions, NativeImage, systemPreferences } from 'electron';
 import { setAppProtocolIn, protoSchemas, W3NSetupType } from "./protocols";
-import { logWarning } from '../confs';
+import { logWarning, logError } from '../confs';
 import { devToolsExtFilter } from '../init-proc/devtools';
+import { platform } from 'os';
+import { ensureDeviceAllowsScreenCapture } from '../media-devices';
 
 type ReadonlyFS = web3n.files.ReadonlyFS;
 type RequestedCAPs = web3n.caps.RequestedCAPs;
@@ -33,11 +35,11 @@ export type HandlersGetter = <T extends keyof SessionHandlers>(
 	type: T
 ) => SessionHandlers[T]|undefined;
 
-export function makeSessionForApp(
+export async function makeSessionForApp(
 	appDomain: string, appFilesRoot: ReadonlyFS, w3nSetup: W3NSetupType,
 	capsReq: RequestedCAPs|undefined, devTools: boolean,
 	getHandler: HandlersGetter|undefined
-): Session {
+): Promise<Session> {
 	if (!appDomain) { throw new Error(`Bad app domain given: ${appDomain}`); }
 	const appSes = generateSession(devTools);
 
@@ -57,39 +59,87 @@ export function makeSessionForApp(
 		}
 	});
 
-	setPermissionsInSession(appSes, capsReq, getHandler);
+	await setPermissionsInSession(appSes, capsReq, getHandler);
 
 	return appSes;
 }
 
-function setPermissionsInSession(
-	session: Session, capsReq: RequestedCAPs|undefined,
-	getHandler: HandlersGetter|undefined
-): void {
+async function setPermissionsInSession(
+	session: Session, capsReq: RequestedCAPs|undefined, getHandler: HandlersGetter|undefined
+): Promise<void> {
+
+	// DEBUG logging function
+	function debugLog(msg: string): void {
+		if (platform() === 'darwin') {
+			logWarning(`DEBUG LOG: ${msg}`).catch(noop);
+		}
+		console.log(`DEBUG LOG: ${msg}
+		`);
+	}
+	if (capsReq?.mediaDevices && (platform() === 'darwin')) {
+		const microphone = systemPreferences.getMediaAccessStatus('microphone');
+		const camera = systemPreferences.getMediaAccessStatus('camera');
+		const screen = systemPreferences.getMediaAccessStatus('screen');
+		debugLog(`Calls to systemPreferences.getMediaAccessStatus(mediaType) return: ${JSON.stringify(
+			{ camera, microphone, screen }, null, 2
+		)}`);
+		if (microphone !== 'granted') {
+			const granted = await systemPreferences.askForMediaAccess('microphone');
+			debugLog(`microphone -> systemPreferences.askForMediaAccess() ${granted ? 'was' : "wasn't"} granted`);
+		}
+		if (camera !== 'granted') {
+			const granted = await systemPreferences.askForMediaAccess('camera');
+			debugLog(`camera -> systemPreferences.askForMediaAccess() ${granted ? 'was' : "wasn't"} granted`);
+		}
+		if (screen !== 'granted') {
+			try {
+				const granted = await ensureDeviceAllowsScreenCapture();
+				debugLog(`screen -> ensureDeviceAllowsScreenCapture() ${granted ? 'was' : "wasn't"} granted`);
+			} catch (err) {
+				logError(err, `Error thrown attempting to allow scren share`).catch(noop);
+			}
+		}
+	}
 
 	session.setPermissionCheckHandler((_wContent, permission) => {
 		switch (permission) {
 			case 'background-sync' as any:
 				return true;
+			case 'clipboard-read':
+				return clipboardReadPermissionFrom(capsReq);
+			case 'clipboard-sanitized-write':
+				return clipboardWritePermissionFrom(capsReq);
 			case 'fullscreen':
 				return true;
 			case 'media':
-				return userMediaPermission(capsReq);
+				return userMediaPermissionFrom(capsReq);
+			case 'openExternal':
+				return openExternalUrlPermissionFrom(capsReq);
 			case 'speaker-selection' as any:
-				return speakerSelectionPermission(capsReq);
+				return speakerSelectionPermissionFrom(capsReq);
 			default:
+				debugLog(`session's permissionCheckHandler returns false for permission ${permission}`);
 				return false;
 		}
 	});
 	session.setPermissionRequestHandler((_wContent, permission, cb, details) => {
 		switch (permission) {
+			case 'clipboard-read':
+				return cb(clipboardReadPermissionFrom(capsReq));
+			case 'clipboard-sanitized-write':
+				return cb(clipboardWritePermissionFrom(capsReq));
+			case 'display-capture':
+				return cb(displayCapturePermissionFrom(capsReq));
 			case 'fullscreen':
 				return cb(true);
 			case 'media':
-				return cb(mediaPermissionRequest(capsReq, details));
+				return cb(mediaPermissionFrom(capsReq, details));
+			case 'openExternal':
+				return cb(openExternalUrlPermissionFrom(capsReq));
 			case 'speaker-selection':
-				return cb(speakerSelectionPermission(capsReq));
+				return cb(speakerSelectionPermissionFrom(capsReq));
 			default:
+				debugLog(`session's permissionRequestHandler does cb(false) for permission ${permission}`);
 				return cb(false);
 		}
 	});
@@ -97,11 +147,13 @@ function setPermissionsInSession(
 	session.setDisplayMediaRequestHandler(async (req, cb) => {
 		const types = allowedDisplayMediaTypes(req, capsReq);
 		if (!types) {
+			debugLog(`session's displayMediaRequestHandler has no allowed types`);
 			cb(null as any);
 			return;
 		}
 		const selectMediaToCapture = getHandler?.('selectMediaForCapture');
 		if (!selectMediaToCapture) {
+			debugLog(`session's displayMediaRequestHandler has no selectMediaToCapture handler`);
 			cb(null as any);
 			return;
 		}
@@ -114,23 +166,29 @@ function setPermissionsInSession(
 		const selectedId = await selectMediaToCapture(choices);
 		const selected = deskSrcs.find(src => (src.id === selectedId))!;
 		if (selected) {
-			cb({
-				video: (req.videoRequested ? selected : undefined),
-				audio: (req.audioRequested ? 'loopbackWithMute' : undefined)
-			});
+			if (platform() === 'win32') {
+				cb({
+					video: (req.videoRequested ? selected : undefined),
+					audio: (req.audioRequested ? 'loopback' : undefined)
+				});
+			} else {
+				cb({
+					video: (req.videoRequested ? selected : undefined)
+				});
+			}
 		} else {
 			cb(null as any);
 		}
 	});
 
 	session.setDevicePermissionHandler(details => {
-		console.log(`device permission request:`, details);
+		debugLog(`session's devicePermissionHandler returns false for ${JSON.stringify(details, null, 2)}`);
 		return false;
 	});
 
 }
 
-function userMediaPermission(capsReq: RequestedCAPs|undefined): boolean {
+function userMediaPermissionFrom(capsReq: RequestedCAPs|undefined): boolean {
 	if (capsReq?.mediaDevices) {
 		const { cameras, microphones, speakers } = capsReq.mediaDevices;
 		return !!(cameras && microphones && speakers);
@@ -160,7 +218,7 @@ function allowedDisplayMediaTypes(
 	}
 }
 
-function mediaPermissionRequest(
+function mediaPermissionFrom(
 	capsReq: RequestedCAPs|undefined, req: MediaAccessPermissionRequest
 ): boolean {
 	if (capsReq?.mediaDevices && req.mediaTypes) {
@@ -194,7 +252,7 @@ function mediaPermissionRequest(
 	}
 }
 
-function speakerSelectionPermission(capsReq: RequestedCAPs|undefined): boolean {
+function speakerSelectionPermissionFrom(capsReq: RequestedCAPs|undefined): boolean {
 	return !!capsReq?.mediaDevices?.speakers;
 }
 
@@ -213,13 +271,13 @@ function generateSession(devTools: boolean): Session {
 
 function toDisplaySourceInfo(srcs: DesktopCapturerSource[]): DisplaySourceInfo {
 	const screens: DisplaySourceInfo['screens'] = srcs
-	.filter(({ id }) => id.startsWith('screen:'))
+	.filter(({ id, thumbnail }) => (id.startsWith('screen:') && !!thumbnail))
 	.map(({ id, name, display_id, thumbnail }) => ({
 		id, name, display_id,
 		thumbnail: optImageToPNG(thumbnail)!,
 	}));
 	const windows: NonNullable<DisplaySourceInfo['windows']> = srcs
-	.filter(({ id }) => id.startsWith('window:'))
+	.filter(({ id, thumbnail }) => (id.startsWith('window:') && !!thumbnail))
 	.map(({ id, name, thumbnail, appIcon }) => ({
 		id, name,
 		thumbnail: optImageToPNG(thumbnail)!,
@@ -234,6 +292,25 @@ function toDisplaySourceInfo(srcs: DesktopCapturerSource[]): DisplaySourceInfo {
 function optImageToPNG(img: NativeImage|undefined): Uint8Array|undefined {
 	const bytes = img?.toPNG();
 	return ((bytes && (bytes.length > 0)) ? bytes : undefined);
+}
+
+function displayCapturePermissionFrom(capsReq: RequestedCAPs|undefined): boolean {
+	const allowance = capsReq?.mediaDevices;
+	return (!!allowance && (!!allowance.screens || !!allowance.windows));
+}
+
+function clipboardReadPermissionFrom(capsReq: RequestedCAPs|undefined): boolean {
+	const allowed = capsReq?.shell?.clipboard;
+	return (!!allowed && ((allowed === 'all') || (allowed === 'readonly')));
+}
+
+function clipboardWritePermissionFrom(capsReq: RequestedCAPs|undefined): boolean {
+	const allowed = capsReq?.shell?.clipboard;
+	return (!!allowed && ((allowed === 'all') || (allowed === 'writeonly')));
+}
+
+function openExternalUrlPermissionFrom(capsReq: RequestedCAPs|undefined): boolean {
+	return !!capsReq?.shell?.openURL;
 }
 
 export function makeSessionFor3NComms(): Session {
@@ -269,6 +346,8 @@ export function makeSessionForDevAppFromUrl(
 
 	return appSes;
 }
+
+function noop() {}
 
 
 Object.freeze(exports);

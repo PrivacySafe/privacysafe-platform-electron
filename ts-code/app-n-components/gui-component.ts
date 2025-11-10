@@ -149,7 +149,7 @@ export class GUIComponent implements Component {
 		devTools: boolean, generateTitle: TitleGenerator,
 		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<GUIComponent> {
-		const session = makeSessionForApp(
+		const session = await makeSessionForApp(
 			domain, appRoot, 'regular', capsReq, devTools,
 			handlerType => app.getHandlerInSession(handlerType)
 		);
@@ -176,7 +176,7 @@ export class GUIComponent implements Component {
 		winOpts: WindowOptions|undefined, icon: string|undefined,
 		devTools: boolean
 	): Promise<GUIComponent> {
-		const session = makeSessionForApp(
+		const session = await makeSessionForApp(
 			domain, appRoot, 'startup', undefined, devTools, undefined
 		);
 		const opts = prepareWindowOpts(
@@ -199,11 +199,18 @@ export class GUIComponent implements Component {
 		}
 	}
 
-	async start(): Promise<void> {
+	async start(urlHash?: string): Promise<void> {
+		if (urlHash) {
+			if (!urlHash.startsWith('#')) {
+				urlHash = `#${urlHash}`;
+			}
+		} else {
+			urlHash = '';
+		}
 		const path = (this.entrypoint.startsWith('/') ?
 			this.entrypoint : `/${this.entrypoint}`
 		);
-		const url = `${protoSchemas.W3N_APP.scheme}://${this.domain}${path}`;
+		const url = `${protoSchemas.W3N_APP.scheme}://${this.domain}${path}${urlHash}`;
 		await this.window.loadURL(url);
 	}
 

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2024 3NSoft Inc.
+ Copyright (C) 2020 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,16 +15,17 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { makeConnectivity } from "../../connectivity";
+import { Connectivity } from "../../connectivity";
 
 type W3N = web3n.caps.W3N;
 type RequestedCAPs = web3n.caps.RequestedCAPs;
 
 export function connectivityCAP(
-	connectivityCAPsReq: RequestedCAPs['connectivity']
-): W3N['connectivity'] {
+	connectivityCAPsReq: RequestedCAPs['connectivity'],
+	{ makeCAP }: Connectivity
+): { cap: W3N['connectivity']; }|undefined {
 	if (connectivityCAPsReq === 'check') {
-		return makeConnectivity();
+		return makeCAP();
 	}
 }
 

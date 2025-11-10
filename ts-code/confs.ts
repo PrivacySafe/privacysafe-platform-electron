@@ -23,6 +23,9 @@ import { spawn } from 'child_process';
 import { defer, Deferred } from './lib-common/processes/deferred';
 import { DATA_DIR_NAME, DEFAULT_SIGNUP_URL, isInAsar, toAsarUnpacked } from './bundle-confs';
 
+export const SYSTEM_DOMAIN = '3nweb.computer';
+export const NOTIFICATIONS_SYSTEM_COMPONENT = 'notifications';
+
 export const SIGNUP_URL = (CUSTOM_SIGNUP_URL ?
 	CUSTOM_SIGNUP_URL : DEFAULT_SIGNUP_URL
 );

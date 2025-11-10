@@ -19,7 +19,7 @@ import { Core, CoreConf } from "core-3nweb-client-lib";
 import { makeInWorkerWasmCryptor } from "core-3nweb-client-lib/build/cryptors";
 import { makeNetClient } from "../electron/net";
 import { prepareUserDataMntPath, prepareDebugAppsDataMntPaths, MountsInOS } from "../shell/mounts/mounts-in-os";
-import { logError } from "../confs";
+import { logError, NOTIFICATIONS_SYSTEM_COMPONENT, SYSTEM_DOMAIN } from "../confs";
 import { makeServiceLocator } from "core-3nweb-client-lib";
 import { promises as dns } from 'dns';
 import { GetServiceToHandleNewCall, makeClientSideConnector, ClientSideConnector } from "../rpc";
@@ -35,6 +35,7 @@ import { makeSystemCAP } from "./caps/system";
 import { makeShellCAPs } from "./caps/shell";
 import { makeMediaDevicesCAP } from "./caps/mediaDevices";
 import { makeUICap } from "../ui";
+import { Connectivity, makeConnectivity } from "../connectivity";
 
 type SysUtils = web3n.system.SysUtils;
 type Logout = web3n.system.Logout;
@@ -45,6 +46,7 @@ type W3N = web3n.system.W3N;
 type SitesW3N = web3n.caps.sites.W3N;
 type GUIComponentDef = web3n.caps.GUIComponent;
 type OpenDashboard = web3n.shell.OpenDashboard;
+type ProgressCB = web3n.startup.ProgressCB;
 
 export function makeCoreDriver(
 	conf: CoreConf, makeSystemCapFns: () => SysUtils,
@@ -64,7 +66,8 @@ export class CoreDriver {
 	private signedUser: string|undefined = undefined;
 	private readonly fsMounts: MountsInOS;
 	private readonly rpcClientSide: ClientSideConnector;
-	private readonly userNotifications = new Notifications();
+	private readonly userNotifications: Notifications;
+	private readonly connectivity: Connectivity;
 	private coreReady: Deferred<void>|undefined = defer();
 
 	constructor(
@@ -86,10 +89,15 @@ export class CoreDriver {
 		);
 		this.fsMounts = new MountsInOS(this.core.getStorages());
 		this.rpcClientSide = makeClientSideConnector(getService);
+		this.userNotifications = new Notifications((appDomain, { cmd, params }) => this.startAppWithCmd(
+			SYSTEM_DOMAIN, NOTIFICATIONS_SYSTEM_COMPONENT, appDomain, cmd, ...params
+		));
+		this.connectivity = makeConnectivity(this.whenReady().then(() => this.core.connectivityEvents));
 		Object.seal(this);
 	}
 
 	async close(): Promise<void> {
+		this.connectivity.close();
 		this.userNotifications.close();
 		await this.fsMounts.close().catch(logError);
 		await this.core.close().catch(logError);
@@ -110,14 +118,31 @@ export class CoreDriver {
 		};
 	}
 
+	async startCoreDirectlyFor(userId: string, storageKey: Uint8Array): Promise<void> {
+		if (!this.core) { throw new Error(`Core is already closed`); }
+		const procStarted = await this.core.startDirectlyFromCache(userId, storageKey);
+		if (!procStarted) {
+			throw `Is storage key correct?`;
+		}
+		const { coreInit } = procStarted;
+		await coreInit;
+		this.doAfterInit(userId);
+	}
+
+	async getRootKey(user: string, pass: string, progressCB: ProgressCB): Promise<Uint8Array|undefined> {
+		if (!this.core) { throw new Error(`Core is already closed`); }
+		return this.core.getRootKey(user, pass, progressCB);
+	}
+
 	async whenReady(): Promise<void> {
 		if (this.coreReady) {
 			await this.coreReady.promise;
 		}
 	}
 
-	private async doAfterInit(userId: string, coreAppsInit: Promise<void>): Promise<void> {
+	private async doAfterInit(userId: string, coreAppsInit?: Promise<void>): Promise<void> {
 		this.signedUser = userId;
+		this.userNotifications.setUserId(this.signedUser);
 		await coreAppsInit;
 		if (this.coreReady) {
 			this.coreReady.resolve();
@@ -192,6 +217,7 @@ export class CoreDriver {
 			this.rpcClientSide, appDomain, componentDef, capsReq
 		);
 		const mediaDevices = makeMediaDevicesCAP(capsReq.mediaDevices);
+		const connectivity = connectivityCAP(capsReq.connectivity, this.connectivity);
 		const { close, setApp } = makeCAPsSetAppAndCloseFns(
 			shell, rpc, mediaDevices, baseW3N, closeSelf
 		);
@@ -207,7 +233,7 @@ export class CoreDriver {
 			),
 			shell: shell?.cap,
 			rpc: rpc?.cap,
-			connectivity: connectivityCAP(capsReq.connectivity),
+			connectivity: connectivity?.cap,
 			mediaDevices: mediaDevices?.cap,
 		};
 		return { w3n, close, setApp };

@@ -31,6 +31,11 @@ export function makeDeviceFiles(): DeviceFiles {
 		standardFileToDeviceFolder: async (path: any) => {
 			assert(typeof path === 'string');
 			return await DeviceFS.makeReadonly(path);
+		},
+		statStandardItem: async (path: any) => {
+			assert(typeof path === 'string');
+			const parent = await DeviceFS.makeReadonly(dirname(path));
+			return await parent.stat(basename(path));
 		}
 	};
 }

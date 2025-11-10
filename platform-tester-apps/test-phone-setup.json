@@ -1,18 +1,18 @@
 {
 	"apps": {
-		"tests.3nweb.computer": {
-			"dir": "tests.3nweb.computer",
+		"tests.3nweb.app": {
+			"dir": "tests.3nweb.app",
 			"formFactor": "phone",
 			"launchComponent": "/main-tester-phone.html"
 		},
-		"start-by-cmd.3nweb.computer": {
-			"dir": "start-by-cmd.3nweb.computer",
+		"start-by-cmd.3nweb.app": {
+			"dir": "start-by-cmd.3nweb.app",
 			"skipAutoLaunch": true
 		}
 	},
 	"startupApp": {
-		"domain": "startup.3nweb.computer",
-		"dir": "startup.3nweb.computer"
+		"domain": "startup.3nweb.app",
+		"dir": "startup.3nweb.app"
 	},
 	"users": [
 		{

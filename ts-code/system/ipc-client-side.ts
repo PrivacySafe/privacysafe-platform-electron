@@ -16,6 +16,7 @@
 */
 
 import { Caller, callerSideJSONWrap as jsonCall } from 'core-3nweb-client-lib/build/ipc';
+import { defer } from '../lib-common/processes/deferred';
 
 type SysUtils = web3n.system.SysUtils;
 type Apps = web3n.system.apps.Apps;
@@ -27,6 +28,8 @@ type Platform = web3n.system.platform.Platform;
 type PlatformUpdateEvents = web3n.system.platform.PlatformUpdateEvents;
 type AppsOpener = web3n.system.apps.AppsOpener;
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
+type UserLoginSettings = web3n.system.UserLoginSettings;
+type AutoStartupSettings = web3n.system.AutoStartupSettings;
 type Logout = web3n.system.Logout;
 
 export function makeSystemCaller(caller: Caller, sysPath: string[]): SysUtils {
@@ -37,9 +40,7 @@ export function makeSystemCaller(caller: Caller, sysPath: string[]): SysUtils {
 	const lstAppsCAP = (lstSystemCAP.includes('apps') ?
 		caller.listObj(sysPath.concat('apps')) as (keyof Apps)[] : undefined
 	);
-	return makeSystemBasedOnListing(
-		caller, sysPath, lstSystemCAP, lstAppsCAP
-	);
+	return makeSystemBasedOnListing(caller, sysPath, lstSystemCAP, lstAppsCAP);
 }
 
 function makeSystemBasedOnListing(
@@ -53,15 +54,19 @@ function makeSystemBasedOnListing(
 	}
 	if (lstSystemCAP.includes('platform')) {
 		const platformPath = sysPath.concat('platform');
-		system.platform = makePlatformDownloaderCaller(
-			caller, platformPath
-		);
+		system.platform = makePlatformDownloaderCaller(caller, platformPath);
 	}
 	if (lstSystemCAP.includes('monitor')) {
-		const platformPath = sysPath.concat('monitor');
-		system.monitor = makeSystemMonitorCaller(
-			caller, platformPath
-		);
+		const monitorPath = sysPath.concat('monitor');
+		system.monitor = makeSystemMonitorCaller(caller, monitorPath);
+	}
+	if (lstSystemCAP.includes('userLogin')) {
+		const userLoginPath = sysPath.concat('userLogin');
+		system.userLogin = makeUserLoginCaller(caller, userLoginPath);
+	}
+	if (lstSystemCAP.includes('autoStartup')) {
+		const autoStartupPath = sysPath.concat('autoStartup');
+		system.autoStartup = makeAutoStartupCaller(caller, autoStartupPath);
 	}
 	if (lstSystemCAP.includes('logout')) {
 		const logoutPath = sysPath.concat('logout');
@@ -239,6 +244,44 @@ function callSystemMonitor<M extends keyof SystemMonitor>(
 	caller: Caller, objPath: string[], method: M
 ): SystemMonitor[M] {
 	return jsonCall.makeReqRepObjCaller<SystemMonitor, M>(caller, objPath, method);
+}
+
+function makeUserLoginCaller(caller: Caller, objPath: string[]): UserLoginSettings {
+	const setAutoLogin = jsonCall.makeObservableFuncCaller<number>(caller, objPath.concat('setAutoLogin'));
+	return {
+		isAutoLoginSet: callUserLogin(caller, objPath, 'isAutoLoginSet'),
+		removeAutoLogin: callUserLogin(caller, objPath, 'removeAutoLogin'),
+		setAutoLogin: async (pass, progressCB) => {
+			const { promise, reject, resolve } = defer<number>();
+			setAutoLogin({
+				next: progressCB,
+				complete: resolve,
+				error: reject
+			}, pass);
+			await promise;
+		},
+		isAutoLoginAvailable: callUserLogin(caller, objPath, 'isAutoLoginAvailable')
+	};
+}
+
+function callUserLogin<M extends keyof UserLoginSettings>(
+	caller: Caller, objPath: string[], method: M
+): UserLoginSettings[M] {
+	return jsonCall.makeReqRepObjCaller<UserLoginSettings, M>(caller, objPath, method);
+}
+
+function makeAutoStartupCaller(caller: Caller, objPath: string[]): AutoStartupSettings {
+	return {
+		isAutoStartupAvailable: callAutoStartup(caller, objPath, 'isAutoStartupAvailable'),
+		isAutoStartupSet: callAutoStartup(caller, objPath, 'isAutoStartupSet'),
+		setAutoStartup: callAutoStartup(caller, objPath, 'setAutoStartup'),
+	};
+}
+
+function callAutoStartup<M extends keyof AutoStartupSettings>(
+	caller: Caller, objPath: string[], method: M
+): AutoStartupSettings[M] {
+	return jsonCall.makeReqRepObjCaller<AutoStartupSettings, M>(caller, objPath, method);
 }
 
 

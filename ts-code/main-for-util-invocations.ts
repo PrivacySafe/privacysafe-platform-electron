@@ -15,10 +15,13 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { PLATFORM_NAME } from "./bundle-confs";
+import { checkServicesStartingFromSignup, makeNetClient } from "core-3nweb-client-lib";
+import { DEFAULT_SIGNUP_URL, PLATFORM_NAME } from "./bundle-confs";
 import { bundleVersion } from "./bundle-version";
+import { parse3NWebURL, web3nUrlSchema } from "./electron/app-url-protocol";
 import { UTIL_INVOCATION_ARGS, cliUsageTxt } from "./process-args";
 import { listInstalledBundledApps } from "./system/system-places";
+import { CheckResult, CheckStart } from "core-3nweb-client-lib/build/lib-client/service-checks";
 
 
 export function processOfUtilityArgsIfGiven(): Promise<void>|undefined {
@@ -28,6 +31,8 @@ export function processOfUtilityArgsIfGiven(): Promise<void>|undefined {
 		return Promise.resolve();
 	} else if (UTIL_INVOCATION_ARGS['version']) {
 		return collectAndDisplayVersionsInfo();
+	} else if (UTIL_INVOCATION_ARGS['check-signup']) {
+		return checkSignupAndServicesFrom(UTIL_INVOCATION_ARGS['check-signup']);
 	} else {
 		return;	// explicit undefined
 	}
@@ -51,4 +56,37 @@ ${
 }
 `;
 	console.log(msg);
+}
+
+async function checkSignupAndServicesFrom(signupUrl: string): Promise<void> {
+	const signupParams = parse3NWebURL(signupUrl);
+	if (!signupParams) {
+		throw `signupUrl is not a valid 3nweb signup url`;
+	}
+	const { signupUrl: url, token } = signupParams;
+
+	await checkServicesStartingFromSignup(makeNetClient(), url, token, check => {
+		if ((check as CheckStart).start) {
+			const { service, serviceUrl, userDomain } = (check as CheckStart);
+			if (check.service === 'signup') {
+				console.log(`
+Checking signup at ${serviceUrl} ...`);
+			} else if (userDomain) {
+				console.log(`
+Checking ${userDomain} DNS record for ${service} service ...`);
+			} else if (serviceUrl) {
+				console.log(`
+Ping ${service} service ...`);
+			}
+		} else {
+			const { isOk, message, err } = (check as CheckResult);
+			if (isOk) {
+				console.log(` ✅  `, message);
+			} else if (message) {
+				console.log(` ❌  `, message);
+			} else {
+				console.log(` ❌  Exception thrown in the check`, err);
+			}
+		}
+	});
 }

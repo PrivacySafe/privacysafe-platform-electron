@@ -118,13 +118,11 @@ function makeUserNotificationsShellCAP(
 	userNotifications: CoreDriver['userNotifications']
 ): {
 	cap: web3n.shell.notifications.UserNotifications;
-	setApp: AppSetter; close(): void;
+	close: () => void;
 }|undefined {
 	if (!notifCAPsReq) { return; }
-	const {
-		notifications: cap, setApp, close
-	} = userNotifications.makeFor(appDomain, component);
-	return { cap, setApp, close };
+	const { notifications: cap, close } = userNotifications.makeFor(appDomain, component);
+	return { cap, close };
 }
 
 function startAppWithParamsShellCAP(
