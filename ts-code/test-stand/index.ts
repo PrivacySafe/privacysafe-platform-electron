@@ -60,8 +60,7 @@ export type WrapSiteCAPsAndSetup = (
 	cap: SiteCAPsAndSetup
 ) => { w3n: web3n.testing.CommonW3N; close: () => void; };
 
-export type WrapStartupCAPs =
-	(cap: web3n.startup.W3N) => web3n.testing.StartupW3N;
+export type WrapStartupCAPs = (cap: web3n.caps.startup.W3N) => web3n.testing.StartupW3N;
 
 export type MakeRunner = (userId: string) => AppsRunnerForTesting;
 
@@ -711,14 +710,14 @@ async function startUserWithDevStartupApp(
 	runStartupDevApp: StartDevStartupApp|AppsRunnerForTesting['runStartupDevApp'],
 	baseStand: web3n.testing.BasicTestStand
 ): Promise<void> {
-	const addTestCAP: WrapStartupCAPs = ({ signIn, signUp }) => {
+	const addTestCAP: WrapStartupCAPs = ({ signIn, signUp, provider }) => {
 		const testStand: web3n.testing.StartupTestStand = {
 			staticTestInfo: async () => ({ userId, pass, userNum, signupToken }),
 			log: baseStand.log,
 			record: baseStand.record,
 			exitAll: baseStand.exitAll,
 		};
-		return { signIn, signUp, testStand };
+		return { signIn, signUp, provider, testStand };
 	};
 	const initSteps = await runStartupDevApp(appParams, addTestCAP);
 	await initSteps?.init;

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2022, 2024 3NSoft Inc.
+ Copyright (C) 2020 - 2022, 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -16,7 +16,7 @@
 */
 
 import { Subject, Unsubscribable } from "rxjs";
-import { Envelope, ExposedFn, ObjectsConnector, CoreSide, exposeStartupW3N, exposeW3N, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
+import { Envelope, ExposedFn, ObjectsConnector, CoreSide, exposeStartupW3N, exposeW3N, serviceSideJSONWrap as jsonSrv, ExposedObj } from 'core-3nweb-client-lib/build/ipc';
 import { ipcMain, WebContents } from 'electron';
 import { IPC_CORE_SIDE, IPC_CLIENT_SIDE, IPC_SYNCED_W3N_LIST } from "../ipc-with-core/electron-ipc";
 import { base64, toBuffer } from "../lib-common/buffer-utils";
@@ -39,7 +39,8 @@ import { exposeMediaDevicesCAP } from "../media-devices/ipc-core-side";
 import { unlink } from "../lib-common/async-fs-node";
 import { exposeUICAP } from "../ui/ipc-core-side";
 
-type StartupW3N = web3n.startup.W3N;
+type StartupW3N = web3n.caps.startup.W3N;
+type DefaultProvider = web3n.caps.startup.DefaultProviderSite;
 type W3N = web3n.caps.W3N;
 
 
@@ -89,6 +90,11 @@ export class ElectronIPCConnectors {
 		);
 	}
 
+	connectCustomW3N<T extends object>(expW3N: ExposedObj<T>, client: WebContents): void {
+		const coreSide = this.makeCoreSideConnector(client);
+		coreSide.exposedServices.exposeW3NService(expW3N);
+	}
+
 	private makeCoreSideConnector(client: WebContents): CoreSide {
 		const fromCore = new Subject<Envelope>();
 		const fromClient = new Subject<Envelope>();
@@ -117,7 +123,16 @@ interface Connector {
 
 const extraStartupCAPs = Object.freeze({
 	testStand: exposeStartupTestStandCAP,
+	provider: exposeProviderCAP
 });
+
+function exposeProviderCAP(cap: DefaultProvider): ExposedObj<DefaultProvider> {
+	return {
+		openSiteInChildWindow: jsonSrv.wrapReqReplySrvMethod(cap, 'openSiteInChildWindow'),
+		closeSite: jsonSrv.wrapReqReplySrvMethod(cap, 'closeSite'),
+		getSignupToken: jsonSrv.wrapReqReplySrvMethod(cap, 'getSignupToken'),
+	};
+}
 
 function exposeJSONFunc<F extends Function>(fn: F): ExposedFn {
 	return jsonSrv.wrapReqReplyFunc(fn as any);

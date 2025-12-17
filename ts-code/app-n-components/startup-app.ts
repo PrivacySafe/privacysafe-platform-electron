@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 - 2024 3NSoft Inc.
+ Copyright (C) 2022 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,10 +15,10 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { WebContents } from "electron";
+import { BrowserWindow, WebContents } from "electron";
 import { STARTUP_APP_DOMAIN } from "../bundle-confs";
 import { toCanonicalAddress } from "../lib-common/canonical-address";
-import { DevAppInstanceFromUrl, GUIComponent } from "./gui-component";
+import { DevAppInstanceFromUrl, GUIComponent, PROVIDER_SITE_PRELOAD } from "./gui-component";
 import { appAndManifestOnDev } from "./utils";
 import { CoreDriver } from "../core";
 import { MAIN_GUI_ENTRYPOINT, getLaunchersForUser, getWebGUIComponent } from "../lib-common/manifest-utils";
@@ -28,12 +28,19 @@ import { WrapStartupCAPs } from "../test-stand";
 import { DeviceFS } from "core-3nweb-client-lib";
 import { getSytemFormFactor } from "../ui";
 import { SignupParamsViaURL } from "../electron/app-url-protocol";
+import { makeSessionForSite } from "../electron/session";
+import { ExposedObj, serviceSideJSONWrap as jsonSrv } from "core-3nweb-client-lib/build/ipc";
+import { ServiceProviderW3N } from "../runtime-web-gui/ipc-type";
+import { defer, Deferred } from "../lib-common/processes/deferred";
+import { addDevToolsShortcuts } from "../init-proc/devtools";
+import { logWarning } from "../confs";
 
 
 type AppManifest = web3n.caps.AppManifest;
 type StartupW3N = web3n.startup.W3N;
 type WindowOptions = web3n.ui.WindowOptions;
 type DevAppParams = web3n.testing.config.DevAppParams;
+type DefaultProviderSite = web3n.caps.startup.DefaultProviderSite;
 
 type InstantiateGUI = (
 	entrypoint: string, winOpts: WindowOptions|undefined,
@@ -41,6 +48,7 @@ type InstantiateGUI = (
 ) => Promise<GUIComponent>;
 
 export type ConnectIPC = (coreW3N: StartupW3N, client: WebContents) => void;
+export type ConnectCustomIPC = <T extends object> (expW3N: ExposedObj<T>, client: WebContents) => void;
 
 export class StartupApp {
 
@@ -54,7 +62,7 @@ export class StartupApp {
 
 	static instantiate(
 		usersToFilterOut: string[], devTools: boolean,
-		startCore: CoreDriver['start'], connectIPC: ConnectIPC,
+		startCore: CoreDriver['start'], connectIPC: ConnectIPC, connectCustomIPC: ConnectCustomIPC,
 		signupParams: SignupParamsViaURL|undefined
 	): {
 		startupApp: StartupApp;
@@ -66,9 +74,8 @@ export class StartupApp {
 		}
 		const startupApp = new StartupApp();
 		const { capsForStartup, coreInit } = startCore();
-		const caps = addIdsFilteringToCAPs(
-			capsForStartup, usersToFilterOut
-		);
+		const providerSiteCAP = makeProviderCAP(() => startupApp.gui?.window, connectCustomIPC, devTools);
+		const caps = patchCAPs(capsForStartup, providerSiteCAP, usersToFilterOut);
 		const startProc = appAndManifestOnDev(STARTUP_APP_DOMAIN)
 		.then(({ manifest, appRoot }) => startupApp.startRegularOrDevelopmentGUI(
 			manifest, caps, connectIPC,
@@ -84,16 +91,15 @@ export class StartupApp {
 	static instantiateDev(
 		usersToFilterOut: string[], devParams: DevAppParams,
 		startCore: CoreDriver['start'], wrapCAP: WrapStartupCAPs,
-		connectIPC: ConnectIPC
+		connectIPC: ConnectIPC, connectCustomIPC: ConnectCustomIPC
 	): ReturnType<typeof StartupApp.instantiate> {
 		if (StartupApp.startProc) {
 			throw new Error(`Startup process is already running`);
 		}
 		const startupApp = new StartupApp();
 		const { capsForStartup, coreInit } = startCore();
-		const caps = wrapCAP(addIdsFilteringToCAPs(
-			capsForStartup, usersToFilterOut, true
-		));
+		const providerSiteCAP = makeProviderCAP(() => startupApp.gui?.window, connectCustomIPC, true);
+		const caps = wrapCAP(patchCAPs(capsForStartup, providerSiteCAP, usersToFilterOut, true));
 		const { manifest, url, dir } = devParams;
 		const startProc = DeviceFS.makeReadonly(dir)
 		.then((appRoot) => {
@@ -157,14 +163,12 @@ Object.freeze(StartupApp.prototype);
 Object.seal(StartupApp);
 
 
-function addIdsFilteringToCAPs(
-	w3n: web3n.startup.W3N, excIds: string[], isTestCAP = false
-): web3n.startup.W3N {
-	if (excIds.length === 0) {
-		return w3n;
-	}
-	return {
-		signIn: {
+function patchCAPs(
+	w3n: web3n.startup.W3N, provider: DefaultProviderSite, excIds: string[], isTestCAP = false
+): web3n.caps.startup.W3N {
+	const signIn: web3n.startup.SignInService = ((excIds.length === 0) ?
+		w3n.signIn :
+		{
 			completeLoginAndLocalSetup: w3n.signIn.completeLoginAndLocalSetup,
 			getUsersOnDisk: () => w3n.signIn.getUsersOnDisk().then(
 				users => users.filter(u => !excIds.includes(toCanonicalAddress(u)))
@@ -188,8 +192,166 @@ function addIdsFilteringToCAPs(
 				}
 			),
 			watchBoot: w3n.signIn.watchBoot
-		},
-		signUp: w3n.signUp
+		}
+	);
+	return {
+		signIn,
+		signUp: w3n.signUp,
+		provider
 	};
 }
 
+function makeProviderCAP(
+	getAppWindow: () => BrowserWindow|undefined, connectCustomIPC: ConnectCustomIPC, devTools: boolean
+): DefaultProviderSite {
+	let closeChild: (() => void)|undefined = undefined;
+	let childWindow: BrowserWindow|undefined = undefined;
+	let deferredToken: Deferred<string>|undefined = undefined;
+	let tokenProvided = false;
+	return {
+		openSiteInChildWindow: async (url) => {
+			const parent = getAppWindow();
+			if (!parent) {
+				return;
+			}
+			if (childWindow) {
+				throw `Site view is already opened`;
+			}
+			const siteUrlRoot = 'https://';
+			childWindow = new BrowserWindow({
+				webPreferences: {
+					session: await makeSessionForSite(siteUrlRoot, devTools),
+					preload: PROVIDER_SITE_PRELOAD,
+					sandbox: true,
+					nodeIntegration: false,
+					contextIsolation: true,
+					devTools,
+				},
+				modal: true,
+				parent,
+				
+			});
+			addDevToolsShortcuts(childWindow);
+			childWindow.webContents.setWindowOpenHandler(() => {
+				logWarning(`Preventing window ${childWindow?.id} from openning new window.`);
+				return { action: 'deny' };
+			});
+			connectCustomIPC<ServiceProviderW3N>(
+				{
+					giveSignupTokenToClientPlatform: jsonSrv.wrapReqReplyFunc(async token => {
+						if (tokenProvided) {
+							throw `Token was already given to platform`;
+						}
+						tokenProvided = true;
+						deferredToken!.resolve(token);
+					}),
+				},
+				childWindow.webContents
+			);
+			deferredToken = defer();
+			childWindow.on('close', () => {
+				if (deferredToken) {
+					if (!tokenProvided) {
+						deferredToken.promise.catch(noop);
+						deferredToken.reject(`Site closed`);
+					}
+					deferredToken = undefined;
+				}
+				if (childWindow) {
+					childWindow = undefined;
+				}
+				if (closeChild) {
+					parent.removeListener('close', closeChild);
+					closeChild = undefined;
+				}
+			});
+			closeChild = () => childWindow?.close();
+			parent.on('close', closeChild);
+			await childWindow.webContents.loadURL(url);
+		},
+		closeSite: async () => closeChild?.(),
+		getSignupToken: async () => {
+			if (!deferredToken) {
+				throw `Was provider site opened?`;
+			}
+			return await deferredToken.promise;
+		}
+	};
+}
+
+// XXX this is opening site in an additional child view in a given window.
+// function makeProviderCAP(
+// 	getAppWindow: () => BrowserWindow|undefined, connectCustomIPC: ConnectCustomIPC, devTools: boolean
+// ): DefaultProviderSite {
+// 	let closeChild: (() => void)|undefined = undefined;
+// 	let childView: WebContentsView|undefined = undefined;
+// 	let deferredToken: Deferred<string>|undefined = undefined;
+// 	let tokenProvided = false;
+// 	return {
+// 		openSiteInView: async (url, bounds) => {
+// 			const win = getAppWindow();
+// 			if (!win) {
+// 				return;
+// 			}
+// 			if (childView) {
+// 				throw `Site view is already opened`;
+// 			}
+// 			const siteUrlRoot = url.substring(0, url.lastIndexOf('/')+1);
+// 			childView = new WebContentsView({
+// 				webPreferences: {
+// 					session: await makeSessionForSite(siteUrlRoot, devTools),
+// 					preload: PROVIDER_SITE_PRELOAD,
+// 					sandbox: true,
+// 					nodeIntegration: false,
+// 					contextIsolation: true
+// 				}
+// 			});
+// 			win.contentView.addChildView(childView);
+// 			connectCustomIPC<ServiceProviderW3N>(
+// 				{
+// 					giveSignupTokenToClientPlatform: jsonSrv.wrapReqReplyFunc(async token => {
+// 						if (tokenProvided) {
+// 							throw `Token was already given to platform`;
+// 						}
+// 						tokenProvided = true;
+// 						deferredToken!.resolve(token);
+// 					}),
+// 				},
+// 				childView.webContents
+// 			);
+// 			deferredToken = defer();
+// 			await childView.webContents.loadURL(url);
+// 			childView.setBounds(bounds);
+// 			closeChild = () => {
+// 				if (deferredToken) {
+// 					if (!tokenProvided) {
+// 						deferredToken.promise.catch(noop);
+// 						deferredToken.reject(`Site closed`);
+// 					}
+// 					deferredToken = undefined;
+// 				}
+// 				if (childView) {
+// 					childView.webContents.close();
+// 					childView.webContents.closeDevTools();
+// 					win.contentView.removeChildView(childView);
+// 					childView = undefined;
+// 				}
+// 				if (closeChild) {
+// 					win.removeListener('close', closeChild);
+// 					closeChild = undefined;
+// 				}
+// 			};
+// 			win.on('close', closeChild);
+// 		},
+// 		setBounds: async bounds => childView?.setBounds(bounds),
+// 		closeSite: async () => closeChild?.(),
+// 		getSignupToken: async () => {
+// 			if (!deferredToken) {
+// 				throw `Was provider site opened?`;
+// 			}
+// 			return await deferredToken.promise;
+// 		}
+// 	};
+// }
+
+function noop() {}

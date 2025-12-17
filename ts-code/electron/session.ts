@@ -349,5 +349,24 @@ export function makeSessionForDevAppFromUrl(
 
 function noop() {}
 
+export async function makeSessionForSite(urlPrefix: string, devTools: boolean): Promise<Session> {
+	const siteSess = generateSession(devTools);
+
+	const allowUrl = makeUrlChecker(urlPrefix, devTools);
+
+	siteSess.webRequest.onBeforeRequest((details, cb) => {
+		if (allowUrl(details.url)) {
+			cb({ cancel: false });
+		} else {
+			logWarning(`Canceled unexpected ${details.method} request for ${details.url}`);
+			cb({ cancel: true });
+		}
+	});
+
+	await setPermissionsInSession(siteSess, undefined, undefined);
+
+	return siteSess;
+}
+
 
 Object.freeze(exports);

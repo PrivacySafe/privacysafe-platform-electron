@@ -116,5 +116,21 @@ function wrapExistingFn<F extends Function>(fn: F, warnMsg: string): F {
 
 function noop() {}
 
+type DefaultProvider = web3n.caps.startup.DefaultProviderSite;
+
+function providerMethod<M extends keyof DefaultProvider>(
+	caller: Caller, objPath: string[], method: M
+): DefaultProvider[M] {
+	return jsonCall.makeReqRepObjCaller(caller, objPath, method);
+}
+
+export function makeProviderCaller(caller: Caller, objPath: string[]): web3n.caps.startup.DefaultProviderSite {
+	return {
+		openSiteInChildWindow: providerMethod(caller, objPath, 'openSiteInChildWindow'),
+		closeSite: providerMethod(caller, objPath, 'closeSite'),
+		getSignupToken: providerMethod(caller, objPath, 'getSignupToken'),
+	};
+}
+
 
 Object.freeze(exports);

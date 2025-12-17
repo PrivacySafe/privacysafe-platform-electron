@@ -19,14 +19,13 @@ import { Subject } from "rxjs";
 import { Envelope, ObjectsConnector, ClientSide, makeStartupW3Nclient } from 'core-3nweb-client-lib/build/ipc';
 import { toBuffer } from "../lib-common/buffer-utils";
 import { makeStartupTestStandCaller } from "../test-stand/test-stand-cap-ipc";
-import { makeClientSideW3N } from "../core/client-side-w3n";
+import { makeClientSideW3N, makeProviderCaller } from "../core/client-side-w3n";
 import { InitIPC } from "./ipc-type";
-import { makeRuntimeException } from "../lib-common/exceptions/runtime";
 
-type StartupW3N = web3n.startup.W3N;
+type StartupW3N = web3n.caps.startup.W3N;
 type W3N = web3n.caps.W3N;
 
-function makeClientSideConnector({
+export function makeClientSideConnector({
 	listObjOnServiceSide, sendMsgToCore, setHandlerOfMsgsFromCore
 }: InitIPC): ClientSide {
 	const fromCore = new Subject<Envelope>();
@@ -53,9 +52,10 @@ export function makeStartupW3N(ipc: InitIPC): StartupW3N {
 	const clientSide = makeClientSideConnector(ipc);
 	const clientW3N = makeStartupW3Nclient<web3n.testing.StartupW3N>(
 		clientSide, {
-			testStand: makeStartupTestStandCaller
+			testStand: makeStartupTestStandCaller,
+			provider: makeProviderCaller
 		}
-	);
+	) as StartupW3N;
 	return clientW3N;
 }
 

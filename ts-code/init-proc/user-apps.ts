@@ -174,6 +174,7 @@ export class UserApps {
 				usersToFilterOut, this.devToolsAllowance(STARTUP_APP_DOMAIN),
 				() => this.core.start(),
 				this.guiConnectors.connectStartupW3N.bind(this.guiConnectors),
+				this.guiConnectors.connectCustomW3N.bind(this.guiConnectors),
 				signupParams
 			)
 		);
@@ -187,7 +188,8 @@ export class UserApps {
 			() => StartupApp.instantiateDev(
 				usersToFilterOut, devParams,
 				() => this.core.start(), wrapCAP,
-				this.guiConnectors.connectStartupW3N.bind(this.guiConnectors)
+				this.guiConnectors.connectStartupW3N.bind(this.guiConnectors),
+				this.guiConnectors.connectCustomW3N.bind(this.guiConnectors)
 			)
 		);
 	}

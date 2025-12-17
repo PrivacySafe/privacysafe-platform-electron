@@ -10,7 +10,7 @@ then
 
 	echo "Packing preloads for web gui runtime ..."
 	(cd build/all/runtime-web-gui || exit $?
-		for fname in 'preload-ipc' 'setup-w3n-for-startup' 'setup-w3n'
+		for fname in 'preload-ipc' 'preload-provider-site' 'setup-w3n-for-startup' 'setup-w3n'
 		do
 			browserify ${fname}.js -u electron -o ${fname}.bundle.js  || exit $?
 		done

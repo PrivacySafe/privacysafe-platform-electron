@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2017 - 2022, 2024 3NSoft Inc.
+ Copyright (C) 2017 - 2022, 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -40,6 +40,7 @@ export type TitleGenerator = (contentTitle: string) => string;
 
 const dirWithPreloads = join(__dirname, '..', 'runtime-web-gui');
 const IPC_PRELOAD = join(dirWithPreloads, 'preload-ipc.bundle.js');
+export const PROVIDER_SITE_PRELOAD = join(dirWithPreloads, 'preload-provider-site.bundle.js');
 
 export class GUIComponent implements Component {
 
@@ -81,8 +82,7 @@ export class GUIComponent implements Component {
 		
 		// prevent opening of new windows
 		this.window.webContents.setWindowOpenHandler(() => {
-			logWarning(`Preventing window ${
-				this.window.id} from openning new window.`);
+			logWarning(`Preventing window ${this.window.id} from openning new window.`);
 			return { action: 'deny' };
 		});
 
@@ -92,6 +92,9 @@ export class GUIComponent implements Component {
 			this.updateTitle();
 		});
 
+		if (this.devToolsEnabled) {
+			addDevToolsShortcuts(this.window);
+		}
 	}
 
 	setCloseListener(onClose: () => void): void {
@@ -166,7 +169,6 @@ export class GUIComponent implements Component {
 		const app = new GUIComponent(
 			domain, parent, entrypoint, caps, opts, generateTitle, services
 		);
-		await app.attachDevTools(session);
 		Object.seal(app);
 		return app;
 	}
@@ -188,15 +190,8 @@ export class GUIComponent implements Component {
 		const app = new GUIComponent(
 			domain, undefined, entrypoint, undefined, opts, t => t, undefined
 		);
-		await app.attachDevTools(session);
 		Object.seal(app);
 		return app;
-	}
-
-	protected async attachDevTools(session: Session): Promise<void> {
-		if (this.devToolsEnabled) {
-			addDevToolsShortcuts(this.window);
-		}
 	}
 
 	async start(urlHash?: string): Promise<void> {
@@ -349,7 +344,6 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 			domain, parent, appUrl, entrypoint, caps, opts,
 			generateTitle, services
 		);
-		await app.attachDevTools(session);
 		Object.seal(app);
 		return app;
 	}
@@ -369,7 +363,6 @@ export class DevAppInstanceFromUrl extends GUIComponent {
 		if (icon) {
 			opts.icon = await nativeImageFromURL(appUrl, icon, domain);
 		}
-		await app.attachDevTools(session);
 		Object.seal(app);
 		return app;
 	}

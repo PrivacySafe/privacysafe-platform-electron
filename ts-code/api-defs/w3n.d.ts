@@ -27,6 +27,7 @@
 /// <reference path="./manifest.d.ts" />
 /// <reference path="./media.d.ts" />
 /// <reference path="./test-stand.d.ts" />
+/// <reference path="./w3n-startup.d.ts" />
 
 declare namespace web3n.caps {
 

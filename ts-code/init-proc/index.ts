@@ -50,8 +50,7 @@ export class InitProc {
 	}|undefined = undefined;
 	private readonly guiConnectors = new ElectronIPCConnectors();
 	private readonly sockConnectors = new SocketIPCConnectors();
-	private readonly platform = new PlatformDownloader();
-	// private readonly userLogin = new UserLogin();
+	private readonly platform = new PlatformDownloader(this.closeAllUserAppsAndUI.bind(this));
 	private readonly deskUI = new DesktopUI(
 		this.onCmdEvents.bind(this),
 		this.appInfoForUI.bind(this)

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021, 2024 3NSoft Inc.
+ Copyright (C) 2021, 2024 - 2025 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -37,7 +37,9 @@ export class PlatformDownloader {
 	private readonly type: 'electron-builder-update' | undefined;
 	private updater: Updater|undefined = undefined;
 
-	constructor() {
+	constructor(
+		private closeProcessesOnUpdateRestart: () => Promise<void>
+	) {
 		this.packInfo = findPackInfo();
 		this.type = packInfoToType(this.packInfo);
 		Object.seal(this);
@@ -99,6 +101,7 @@ export class PlatformDownloader {
 
 	async quitAndInstall(): Promise<void> {
 		this.ensureUpdaterSet();
+		await this.closeProcessesOnUpdateRestart();
 		this.updater!.appUpdater.quitAndInstall();
 	}
 

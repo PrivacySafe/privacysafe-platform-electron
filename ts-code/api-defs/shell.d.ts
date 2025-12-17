@@ -48,6 +48,11 @@ declare namespace web3n.shell {
 		openURL?: OpenURL;
 
 		/**
+		 * Tells OS to move given device fs item to OS-native trash.
+		 */
+		moveDevFSItemToTrash?: MoveDevFSItemToTrash;
+
+		/**
 		 * Clipboard of the device.
 		 * Copy/paste works at least on some linuxies on electron-based implementation
 		 * without this capability, but mac is stricter. This capability should be
@@ -67,6 +72,8 @@ declare namespace web3n.shell {
 	type OpenFolder = (fs: web3n.files.FS) => Promise<void>;
 
 	type OpenURL = (url: string) => Promise<void>;
+
+	type MoveDevFSItemToTrash = (item: web3n.files.FS|web3n.files.File) => Promise<void>;
 
 	interface FSResourceException extends RuntimeException {
 		type: 'fs-resource';
