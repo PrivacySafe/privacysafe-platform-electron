@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { makeRuntimeException } from './exceptions/runtime';
+import { getStackHere, makeRuntimeException } from './exceptions/runtime';
 
 type AppManifest = web3n.caps.AppManifest;
 type GeneralAppManifest = web3n.caps.GeneralAppManifest;

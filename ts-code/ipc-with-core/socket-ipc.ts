@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -35,7 +35,7 @@ export interface SocketConnectInfo {
 const msgTypeToByteValue = {
 	'fst-auth': 1,
 	'list-obj': 11,
-	'ack-bunch': 12,
+	'ack-bytes': 12,
 	'complete-msg': 21,
 	'msg-header': 22,
 	'body-chunk': 23,
@@ -102,8 +102,8 @@ function malformedExc(
 const envelopeType = ProtoType.for<Envelope>(ipc.Envelope);
 const envHeadersType = ProtoType.for<Envelope['headers']>(ipc.EnvelopeHeaders);
 
-export const MAX_NONACK_WRITES = 3;
-export const MAX_NONACK_READS = 1;
+export const MAX_NONACK_WRITES = 1;
+export const MAX_NONACK_READS = 0;
 
 export const MAX_MSG_SIZE = 0x1fffff;
 const COMPLETE_MSG_MAX_BODY_DIFF = 0x400;
@@ -125,13 +125,6 @@ export function toListObjRequestChunk(path: string[]): Uint8Array {
 	return packMsg('list-obj', reqBytes);
 }
 
-export function toAckChunk(path: string[]): Uint8Array {
-	const reqBytes = utf8.pack(JSON.stringify(path));
-	return packMsg('ack-bunch', reqBytes);
-}
-
-export const ACK_CHUNK = packMsg('ack-bunch', new Uint8Array);
-
 export interface ListObjReply {
 	path: string[];
 	lst?: string[];
@@ -146,6 +139,15 @@ export function toListObjReply(
 	}
 	const reqBytes = utf8.pack(JSON.stringify(reply));
 	return packMsg('list-obj', reqBytes);
+}
+
+export function toBytesAck(numOfBytes: number): Uint8Array {
+	if (numOfBytes > 0xffffff) {
+		throw RangeError(`Can acknowledge only up to 0xffffff bytes at a time, while given value ${numOfBytes}`);
+	}
+	const body = new Uint8Array(3);
+	packUintTo3Bytes(numOfBytes, body, 0);
+	return packMsg('ack-bytes', body);
 }
 
 export function* toChunksForSending(
@@ -164,7 +166,7 @@ export function* toChunksForSending(
 		let ofs = 0;
 		while (ofs < body.length) {
 			const end = Math.min(body.length, ofs + maxMsgSize - MSG_HEAD_SIZE - 8);
-			const chunk = body.slice(ofs, end);
+			const chunk = body.subarray(ofs, end);
 			const msgType = (end < body.length) ? 'body-chunk' : 'last-body-chunk';
 			yield packMsg2(msgType, callNumBytes, chunk);
 			ofs = end;
@@ -278,27 +280,27 @@ async function unpackCommonBinaryMsgs(
 export interface MsgOnClientSide extends MsgPartsWithEnvelope {
 	authMaxMsgSize?: number|false;
 	objLst?: ListObjReply;
-	ackBunch?: true;
+	ackBytes?: number;
 }
 
 export async function readMsgOnClientSide(
 	connection: Reader
-): Promise<MsgOnClientSide> {
+): Promise<{ msg: MsgOnClientSide; bytesRead: number; }> {
 	const msgHead = await readMsgHead(connection);
-	const msg = await unpackCommonBinaryMsgs(connection, msgHead);
-	if (msg) { return msg; }
 	const { msgSize, msgType } = msgHead;
-	if (msgHead.msgType === 'ack-bunch') {
-		return { msgType, ackBunch: true };
+	const bytesRead = MSG_HEAD_SIZE + msgSize;
+	const msg = await unpackCommonBinaryMsgs(connection, msgHead);
+	if (msg) { return { msg, bytesRead: bytesRead }; }
+	if (msgHead.msgType === 'ack-bytes') {
+		const buffer = await readExpectedBytes(connection, msgSize);
+		return  { msg: { msgType, ackBytes: uintFrom3Bytes(buffer) }, bytesRead: 0 };
 	} else if (msgType === 'list-obj') {
 		const buffer = await readExpectedBytes(connection, msgSize);
 		const objLst = unpackListObjReply(buffer);
-		return { msgType, objLst };
+		return { msg: { msgType, objLst }, bytesRead };
 	} else if (msgType === 'fst-auth') {
-		return {
-			msgType,
-			authMaxMsgSize: ((msgSize > 0) ? msgSize : false)
-		};
+		const authMaxMsgSize = ((msgSize > 0) ? msgSize : false);
+		return { msg: { msgType, authMaxMsgSize }, bytesRead };
 	} else {
 		throw malformedExc(`Unexpected message type ${msgType}`);
 	}
@@ -307,25 +309,27 @@ export async function readMsgOnClientSide(
 export interface MsgOnCoreSide extends MsgPartsWithEnvelope {
 	authToken?: Uint8Array;
 	objLst?: string[];
-	ackBunch?: true;
+	ackBytes?: number;
 }
 
 export async function readMsgOnCoreSide(
 	connection: Reader
-): Promise<MsgOnCoreSide> {
+): Promise<{ msg: MsgOnCoreSide; bytesRead: number; }> {
 	const msgHead = await readMsgHead(connection);
 	const { msgSize, msgType } = msgHead;
+	const bytesRead = MSG_HEAD_SIZE + msgSize;
 	const msg = await unpackCommonBinaryMsgs(connection, msgHead);
-	if (msg) { return msg; }
-	if (msgHead.msgType === 'ack-bunch') {
-		return { msgType, ackBunch: true };
+	if (msg) { return { msg, bytesRead }; }
+	if (msgHead.msgType === 'ack-bytes') {
+		const buffer = await readExpectedBytes(connection, msgSize);
+		return { msg: { msgType, ackBytes: uintFrom3Bytes(buffer) }, bytesRead };
 	} else if (msgType === 'list-obj') {
 		const buffer = await readExpectedBytes(connection, msgSize);
 		const objLst = unpackListObjRequest(buffer);
-		return { msgType, objLst };
+		return { msg: { msgType, objLst }, bytesRead };
 	} else if (msgType === 'fst-auth') {
 		const authToken = await readExpectedBytes(connection, msgSize);
-		return { msgType, authToken };
+		return { msg: { msgType, authToken }, bytesRead };
 	} else {
 		throw malformedExc(`Unexpected message type ${msgType}`);
 	}

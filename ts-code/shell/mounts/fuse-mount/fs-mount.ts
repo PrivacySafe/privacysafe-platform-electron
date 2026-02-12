@@ -78,8 +78,8 @@ export class FSMount {
 	private readonly syncProc = new NamedProcs();
 	private readonly ctx = Object.freeze({
 		pid: process.pid,
-		uid: process.getuid(),
-		gid: process.getgid()
+		uid: process.getuid?.(),
+		gid: process.getgid?.()
 	});
 	private readonly fds: Descriptors;
 	private mountPath: string|undefined = undefined;

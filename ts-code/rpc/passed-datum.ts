@@ -48,14 +48,13 @@ export function datumFromSerialFormOnCoreSide(
 	} else {
 		return {
 			bytes: ((bytes && (bytes.length > 0)) ? bytes : undefined),
-			passedByReference: passedObjs.map(
-				({ ref }) => expServices.getObjForTransfer(ref!)
-			)
+			passedByReference: passedObjs.map(({ ref }) => expServices.getObjForTransfer(ref!))
 		};
 	}
 }
 
-export function datumToSerialFormOnCoreSide(
+export function 
+datumToSerialFormOnCoreSide(
 	datum: PassedDatum|undefined, expServices: CoreSideServices
 ): SerialFormOfPassedData|undefined {
 	if (!datum?.passedByReference) { return datum; }
@@ -63,9 +62,7 @@ export function datumToSerialFormOnCoreSide(
 	if (passedByReference.length === 0) { return { bytes }; }
 	return {
 		bytes,
-		passedObjs: passedByReference.map(({
-			o, type
-		}: TransferableObj<string>) => {
+		passedObjs: passedByReference.map(({ o, type }: TransferableObj<string>) => {
 			const ref = expServices.findRefIfAlreadyExposed(o);
 			if (ref) { return { ref }; }
 			return exposeTransferable(type as TransferableRefType, o, expServices);

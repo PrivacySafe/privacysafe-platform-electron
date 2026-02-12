@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2025 3NSoft Inc.
+ Copyright (C) 2020 - 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,9 +15,10 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Core, CoreConf } from "core-3nweb-client-lib";
-import { makeInWorkerWasmCryptor } from "core-3nweb-client-lib/build/cryptors";
-import { makeNetClient } from "../electron/net";
+import { Core, CoreConf, makeNetClient } from "core-3nweb-client-lib";
+import { makeNativeCryptor } from "./native-cryptor";
+// import { makeInWorkerWasmCryptor } from "core-3nweb-client-lib/build/cryptors";
+// import { makeNetClient } from "../electron/net";
 import { prepareUserDataMntPath, prepareDebugAppsDataMntPaths, MountsInOS } from "../shell/mounts/mounts-in-os";
 import { logError, NOTIFICATIONS_SYSTEM_COMPONENT, SYSTEM_DOMAIN } from "../confs";
 import { makeServiceLocator } from "core-3nweb-client-lib";
@@ -85,7 +86,7 @@ export class CoreDriver {
 			makeServiceLocator({
 				resolveTxt: hostname => dns.resolveTxt(hostname)
 			}),
-			makeInWorkerWasmCryptor
+			makeNativeCryptor
 		);
 		this.fsMounts = new MountsInOS(this.core.getStorages());
 		this.rpcClientSide = makeClientSideConnector(getService);

@@ -65,7 +65,6 @@ export class Updater {
 		if (!packInfo) {
 			return;
 		}
-		console.log(`🧐 Updater.make, platform is ${platform()}, packInfo is`, packInfo);
 		const { arch, variant } = packInfo;
 		if (variant === 'AppImage') {
 			return new Updater(newBundleVersion, new AppImageUpdater({

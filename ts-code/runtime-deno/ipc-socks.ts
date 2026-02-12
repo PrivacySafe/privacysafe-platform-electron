@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2026 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -18,9 +18,9 @@
 /// <reference path="../api-defs/w3n.d.ts" />
 
 import { Envelope, makeIPCException, ObjectsConnector, ClientSide } from "core-3nweb-client-lib/build/ipc";
-import { SocketConnectInfo, makeSocketIPCException, toAuthRequestChunk, readMsgOnClientSide, toListObjRequestChunk, EnvelopesBuffer, SocketIPCException, MsgOnClientSide, toChunksForSending, MAX_MSG_SIZE, MAX_NONACK_WRITES, MAX_NONACK_READS, ACK_CHUNK } from "../ipc-with-core/socket-ipc";
+import { SocketConnectInfo, makeSocketIPCException, toAuthRequestChunk, readMsgOnClientSide, toListObjRequestChunk, EnvelopesBuffer, SocketIPCException, MsgOnClientSide, toChunksForSending, MAX_MSG_SIZE, toBytesAck } from "../ipc-with-core/socket-ipc";
 import { Subject, Unsubscribable } from "rxjs";
-import { DenoLikeSocket } from "../lib-common/deno-like-socket";
+import { DenoLikeSocket, WriteBackPressure } from "../lib-common/deno-like-socket";
 import { defer, Deferred } from "../lib-common/processes/deferred";
 import { SingleProc } from "../lib-common/processes/single";
 
@@ -47,9 +47,8 @@ export class ClientSocketIPC {
 
 	private maxWriteMsg = MAX_MSG_SIZE;
 
-	private numOfNonAckWrites = 0;
-	private numOfNonAckReads = 0;
-	private writeBackpressure: Deferred<void>|undefined = undefined;
+	private writeBackpressure: WriteBackPressure|undefined = undefined;
+	private numOfBytesToAck = 0;
 
 	constructor(
 		private readonly sockParam: SocketConnectInfo
@@ -118,7 +117,7 @@ export class ClientSocketIPC {
 	private async authenticate(connection: Deno.Conn): Promise<void> {
 		const authReqChunk = toAuthRequestChunk(this.sockParam.token);
 		await connection.write(authReqChunk);
-		const { msgType, authMaxMsgSize } = await readMsgOnClientSide(connection);
+		const { msg: { msgType, authMaxMsgSize } } = await readMsgOnClientSide(connection);
 		if (msgType !== 'fst-auth') {
 			throw makeSocketIPCException({
 				malformedMsg: true,
@@ -127,6 +126,7 @@ export class ClientSocketIPC {
 		}
 		if (authMaxMsgSize) {
 			this.maxWriteMsg = authMaxMsgSize;
+			this.writeBackpressure = new WriteBackPressure(this.maxWriteMsg*2);
 		} else {
 			throw makeSocketIPCException({
 				authFail: true
@@ -134,28 +134,8 @@ export class ClientSocketIPC {
 		}
 	}
 
-	private clearWriteBackpressure(): void {
-		if (this.writeBackpressure) {
-			this.writeBackpressure.resolve();
-			this.writeBackpressure = undefined;
-		}
-	}
-
-	private async feelWriteBackpressure(): Promise<void> {
-		if (this.writeBackpressure) {
-			await this.writeBackpressure.promise;
-			return this.feelWriteBackpressure();
-		} else {
-			this.numOfNonAckWrites += 1;
-			if (this.numOfNonAckWrites >= MAX_NONACK_WRITES) {
-				this.writeBackpressure = defer();
-			}
-		}
-	}
-
 	private async sendToCore(msg: Envelope): Promise<void> {
 		for (const chunk of toChunksForSending(msg, this.maxWriteMsg)) {
-			await this.feelWriteBackpressure();
 			await this.orderlySendChunk(chunk);
 		}
 	}
@@ -163,8 +143,19 @@ export class ClientSocketIPC {
 	private orderlySendChunk(chunk: Uint8Array): Promise<void> {
 		return this.sendingProc.startOrChain(async () => {
 			const conn = await this.connection();
+			await this.writeBackpressure?.feel();
+			this.writeBackpressure!.addNumOfWrittenBytes(chunk.length);
 			await conn.write(chunk);
 		});
+	}
+
+	private scheduleBytesAck(numOfBytes: number): void {
+		this.numOfBytesToAck += numOfBytes;
+		if (this.numOfBytesToAck > this.maxWriteMsg/10) {
+			const ackMsg = toBytesAck(this.numOfBytesToAck);
+			this.numOfBytesToAck = 0;
+			this.orderlySendChunk(ackMsg).catch(noop);
+		}
 	}
 
 	private async listObjAsync(path: string[]): Promise<string[]> {
@@ -204,30 +195,26 @@ export class ClientSocketIPC {
 
 	private async readNext(): Promise<void> {
 		const connection = await this.connection();
-		const msg = await readMsgOnClientSide(connection);
-		if (this.numOfNonAckReads < MAX_NONACK_READS) {
-			this.numOfNonAckReads += 1;
-		} else {
-			this.numOfNonAckReads = 0;
-			await this.orderlySendChunk(ACK_CHUNK);
-		}
+		const { msg, bytesRead } = await readMsgOnClientSide(connection);
 		const envelopeOrFlag = this.envelopeParts.processIfCommonBinaryMsg(msg);
-		if (typeof envelopeOrFlag === 'object') {
-			this.fromCore.next(envelopeOrFlag);
-			return;
-		} else if (envelopeOrFlag === true) {
-			return;	// explicit return for buffered msg
-		} else {
+		if (envelopeOrFlag === false) {
 			await this.processMsgAtConnectorLevel(msg);
+		} else {
+			this.scheduleBytesAck(bytesRead);
+			if (envelopeOrFlag === true) {
+				return;	// explicit return for buffered msg
+			} else {
+				this.fromCore.next(envelopeOrFlag);
+				return;
+			}
 		}
 	}
 
 	private async processMsgAtConnectorLevel(
 		msg: MsgOnClientSide
 	): Promise<void> {
-		if (msg.msgType === 'ack-bunch') {
-			this.numOfNonAckWrites = 0;
-			this.clearWriteBackpressure();
+		if (msg.msgType === 'ack-bytes') {
+			this.writeBackpressure?.ackBytes(msg.ackBytes!);
 		} else if (msg.msgType === 'list-obj') {
 			const reply = msg.objLst!;
 			const reqKey = reply.path.join('.');
@@ -243,12 +230,15 @@ export class ClientSocketIPC {
 				// XXX log/warn call that wasn't found
 			}
 		} else {
-			// XXX log/warn or fail of unknown/unhandled msg type
+			throw new Error(`unknown/unhandled socket ipc msg type`);
 		}
 	}
 
 }
 Object.freeze(ClientSocketIPC.prototype);
+
+
+function noop() {}
 
 
 Object.freeze(exports);

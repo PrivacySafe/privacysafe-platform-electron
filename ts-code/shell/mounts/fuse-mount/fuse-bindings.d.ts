@@ -338,7 +338,7 @@ declare module 'fuse-bindings' {
 		 * Returns the current fuse context (pid, uid, gid). Must be called
 		 * inside a fuse callback.
 		 */
-		context?(): { pid: number, uid: number, gid: number };
+		context?(): { pid: number, uid: number|undefined, gid: number|undefined };
 
 		destroy?(cb: (code: number) => void): void;
 

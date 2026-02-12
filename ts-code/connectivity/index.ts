@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022, 2025 3NSoft Inc.
+ Copyright (C) 2022, 2025 - 2026 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -17,34 +17,39 @@
 
 import { Core } from 'core-3nweb-client-lib';
 import { net } from 'electron';
-import { interval, map, merge, Subscription } from 'rxjs';
+import { interval, map, merge, Subscription, tap } from 'rxjs';
 import { ObserversSet } from '../lib-common/observer-utils';
 
 type ConnectivityEvent = web3n.connectivity.ConnectivityEvent;
 type ConnectivityCAP = web3n.connectivity.Connectivity;
 
-const CHECK_INTERVAL_MILLIS = 3*1000;
+const CHECK_INTERVAL_MILLIS = 30*1000;
 
-export function makeConnectivity(
-	connectivityEvents: Promise<Core['connectivityEvents']>
-) {
+export function makeConnectivity(connectivityEvents: Promise<Core['connectivityEvents']>) {
 
 	const observers = new ObserversSet<ConnectivityEvent>();
 	let checkProc: Subscription|undefined = undefined;
-	connectivityEvents.then(({ inbox$ }) => {
+	connectivityEvents.then(({ inbox$, storage$ }) => {
 		checkProc = merge(
 			interval(CHECK_INTERVAL_MILLIS)
 			.pipe(
 				map(() => ({
 					isOnline: net.isOnline()
-				}))
+				} as ConnectivityEvent))
 			),
 			inbox$
 			.pipe(
-				map(({ service, ping, error, slowSocket, socketClosed }) => ({
+				map(({ service, type, ping, error, slowSocket, socketClosed }) => ({
 					isOnline: net.isOnline(),
-					wsEvent: { service, ping, error, slowSocket, socketClosed }
-				}))
+					wsEvent: { service, type, ping, error, slowSocket, socketClosed }
+				} as ConnectivityEvent))
+			),
+			storage$
+			.pipe(
+				map(({ service, type, ping, error, slowSocket, socketClosed }) => ({
+					isOnline: net.isOnline(),
+					wsEvent: { service, type, ping, error, slowSocket, socketClosed }
+				} as ConnectivityEvent))
 			)
 		)
 		.subscribe(observers);

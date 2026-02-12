@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2022, 2024 - 2025 3NSoft Inc.
+ Copyright (C) 2020 - 2022, 2024 - 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -23,13 +23,13 @@ import { base64, toBuffer } from "../lib-common/buffer-utils";
 import { exposeStartupTestStandCAP, exposeTestStandCAP } from "../test-stand/test-stand-cap-ipc";
 import { bytes as randomBytes, stringOfB64UrlSafeChars } from "../lib-common/random-node";
 import { createServer, Server, Socket } from "net";
-import { EnvelopesBuffer, makeSocketIPCException, MsgOnCoreSide, readMsgOnCoreSide, toAuthReplyChunk, toListObjReply, SocketConnectInfo, toChunksForSending, MAX_MSG_SIZE, MAX_NONACK_WRITES, MAX_NONACK_READS, ACK_CHUNK } from "../ipc-with-core/socket-ipc";
+import { EnvelopesBuffer, makeSocketIPCException, MsgOnCoreSide, readMsgOnCoreSide, toAuthReplyChunk, toListObjReply, SocketConnectInfo, toChunksForSending, MAX_MSG_SIZE, toBytesAck } from "../ipc-with-core/socket-ipc";
 import { logError } from "../confs";
 import { platform } from "process";
 import { assert } from "../lib-common/assert";
 import { defer, Deferred } from "../lib-common/processes/deferred";
 import { SingleProc } from "../lib-common/processes/single";
-import { DenoLikeSocket } from "../lib-common/deno-like-socket";
+import { DenoLikeSocket, WriteBackPressure } from "../lib-common/deno-like-socket";
 import { getPortPromise } from "portfinder";
 import { exposeConnectivityCAP } from "../connectivity/connectivity-cap-ipc";
 import { exposeSystemCAP } from "../system/ipc-core-side";
@@ -285,7 +285,7 @@ export class SocketIPCConnectors {
 	private async incomingConnection(socket: Socket): Promise<void> {
 		const niceSock = new DenoLikeSocket(socket);
 		try {
-			const { msgType, authToken } = await readMsgOnCoreSide(niceSock);
+			const { msg: { msgType, authToken } } = await readMsgOnCoreSide(niceSock);
 			if (msgType !== 'fst-auth') {
 				niceSock.close();
 				return;
@@ -293,7 +293,9 @@ export class SocketIPCConnectors {
 			const connector = this.caps.get(strTokenPart(authToken!));
 			if (connector && connector.tokenSame(authToken!)) {
 				connector.setSocket(niceSock);
-				const maxMsgSize = niceSock.rawSocket().readableHighWaterMark - 0xff;
+				const maxMsgSize = Math.min(
+					niceSock.rawSocket().readableHighWaterMark, niceSock.rawSocket().writableHighWaterMark
+				) - 0x400;
 				await niceSock.write(toAuthReplyChunk(maxMsgSize));
 			} else {
 				await niceSock.write(toAuthReplyChunk(false));
@@ -319,9 +321,8 @@ class CAPsSocket {
 	private readonly envelopeParts = new EnvelopesBuffer();
 	private readonly syncOfSendingToClient = new SingleProc();
 	private maxWriteMsgSize = MAX_MSG_SIZE;
-	private numOfNonAckWrites = 0;
-	private numOfNonAckReads = 0;
-	private writeBackpressure: Deferred<void>|undefined = undefined;
+	private writeBackpressure: WriteBackPressure|undefined = undefined;
+	private numOfBytesToAck = 0;
 
 	constructor(
 		private readonly token: Uint8Array,
@@ -346,7 +347,9 @@ class CAPsSocket {
 
 	setSocket(niceSock: DenoLikeSocket): void {
 		this.niceSock = niceSock;
-		this.maxWriteMsgSize = this.niceSock.rawSocket().writableHighWaterMark - 0xff;
+		const writableHighWaterMark = this.niceSock.rawSocket().writableHighWaterMark;
+		this.maxWriteMsgSize = Math.floor(writableHighWaterMark/3);
+		this.writeBackpressure = new WriteBackPressure(this.maxWriteMsgSize*2);
 		this.niceSock.rawSocket()
 		.on('close', () => this.fromClient.complete())
 		.on('end', () => this.fromClient.complete())
@@ -367,60 +370,38 @@ class CAPsSocket {
 
 	private async readNext(): Promise<void> {
 		if (!this.niceSock) { return; }
-		const msg = await readMsgOnCoreSide(this.niceSock);
-		if (this.numOfNonAckReads < MAX_NONACK_READS) {
-			this.numOfNonAckReads += 1;
-		} else {
-			this.numOfNonAckReads = 0;
-			await this.orderlySendChunk(ACK_CHUNK);
-		}
+		const { msg, bytesRead } = await readMsgOnCoreSide(this.niceSock);
 		const envOrFlag = this.envelopeParts.processIfCommonBinaryMsg(msg);
-		if (typeof envOrFlag === 'object') {
-			this.fromClient.next(envOrFlag);
-		} else if (envOrFlag === true) {
-			return;	// explicit return for buffered msg
-		} else {
+		if (envOrFlag === false) {
 			await this.processMsgAtConnectorLevel(msg);
+		} else {
+			this.scheduleBytesAck(bytesRead);
+			if (envOrFlag === true) {
+				return;	// explicit return for buffered msg
+			} else {
+				this.fromClient.next(envOrFlag);
+			}
 		}
 	}
 
 	private async processMsgAtConnectorLevel(msg: MsgOnCoreSide): Promise<void> {
 		if (!this.niceSock) { return; }
-		if (msg.msgType === 'ack-bunch') {
-			this.numOfNonAckWrites = 0;
-			this.clearWriteBackpressure();
+		if (msg.msgType === 'ack-bytes') {
+			this.writeBackpressure?.ackBytes(msg.ackBytes!);
 		} else if (msg.msgType === 'list-obj') {
 			const path = msg.objLst!;
 			const lst = this.coreSide.exposedServices.listObj(path);
 			await this.orderlySendChunk(toListObjReply(path, lst));
 		} else {
-			// XXX log/warn or fail of unknown/unhandled msg type
-		}
-	}
-
-	private clearWriteBackpressure(): void {
-		if (this.writeBackpressure) {
-			this.writeBackpressure.resolve();
-			this.writeBackpressure = undefined;
-		}
-	}
-
-	private async feelWriteBackpressure(): Promise<void> {
-		if (this.writeBackpressure) {
-			await this.writeBackpressure.promise;
-			return this.feelWriteBackpressure();
-		} else {
-			this.numOfNonAckWrites += 1;
-			if (this.numOfNonAckWrites >= MAX_NONACK_WRITES) {
-				this.writeBackpressure = defer();
-			}
+			throw new Error(`unknown/unhandled socket ipc msg type`);
 		}
 	}
 
 	private async sendToClient(msg: Envelope): Promise<void> {
 		try {
 			for (const chunk of toChunksForSending(msg, this.maxWriteMsgSize)) {
-				await this.feelWriteBackpressure();
+				await this.writeBackpressure?.feel();
+				this.writeBackpressure!.addNumOfWrittenBytes(chunk.length);
 				await this.orderlySendChunk(chunk);
 			}
 		} catch (err) {
@@ -435,6 +416,15 @@ class CAPsSocket {
 			}
 			await this.niceSock!.write(chunk);
 		});
+	}
+
+	private scheduleBytesAck(numOfBytes: number): void {
+		this.numOfBytesToAck += numOfBytes;
+		if (this.numOfBytesToAck > this.maxWriteMsgSize/10) {
+			const ackMsg = toBytesAck(this.numOfBytesToAck);
+			this.numOfBytesToAck = 0;
+			this.orderlySendChunk(ackMsg).catch(noop);
+		}
 	}
 
 	tokenSame(token: Uint8Array): boolean {
@@ -454,7 +444,7 @@ class CAPsSocket {
 		if (!this.niceSock) { return; }
 		this.niceSock.close();
 		this.niceSock = undefined;
-		this.clearWriteBackpressure();
+		this.writeBackpressure = undefined;
 		if (this.sendingProc) {
 			this.sendingProc.unsubscribe();
 			this.sendingProc = undefined;
@@ -464,6 +454,9 @@ class CAPsSocket {
 }
 Object.freeze(CAPsSocket.prototype);
 Object.freeze(CAPsSocket);
+
+
+function noop() {}
 
 
 Object.freeze(exports);

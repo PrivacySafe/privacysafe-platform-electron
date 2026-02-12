@@ -34,6 +34,8 @@ import { EventEmitter } from 'events';
 import { processOfUtilityArgsIfGiven } from './main-for-util-invocations';
 import { appUrlSchema, web3nUrlSchema, ensure3NWebProtocolsAreSetInOS } from './electron/app-url-protocol';
 
+// XXX make it so that OS secure thingy isn't triggered, if there is no autologin file
+
 const utilityInvocation = processOfUtilityArgsIfGiven();
 if (utilityInvocation) {
 

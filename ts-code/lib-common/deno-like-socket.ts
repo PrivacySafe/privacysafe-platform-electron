@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 3NSoft Inc.
+ Copyright (C) 2022, 2026 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -18,6 +18,7 @@
 import { Socket } from "net";
 import { makeRuntimeException } from "./exceptions/runtime";
 import { defer, Deferred } from "./processes/deferred";
+import { assert } from "./assert";
 
 
 export interface Reader {
@@ -100,10 +101,10 @@ export class DenoLikeSocket implements Reader, Writer, Closer {
 
 		try {
 			this.writeInProgress = true;
-			if (!this.socket!.write(p)) {
-				this.drainWait = defer();
-				await this.drainWait.promise;
-			}
+			// XXX wrap with promise, as callback ensures complete write and flush, or you'll get an error
+			await new Promise<void>((resolve, reject) => this.socket!.write(p, err => {
+				if (err) { reject(err); } else { resolve(); }
+			}));
 			return p.length;
 		} finally {
 			this.writeInProgress = false;
@@ -144,7 +145,7 @@ class ChunksFromNodeSocket {
 		deferred: Deferred<number|null>;
 	}|undefined = undefined;
 
-	private readonly buffered: Buffer[] = [];
+	private readonly buffered: Uint8Array[] = [];
 
 	constructor() {
 		Object.seal(this);
@@ -183,28 +184,27 @@ class ChunksFromNodeSocket {
 
 	private fillWithBufferedBytes(p: Uint8Array): number {
 		let ofs = 0;
-		let leftToCopy = p.length;
-		while ((this.buffered.length > 0) && (leftToCopy > 0)) {
+		while (this.buffered[0] && (ofs < p.length)) {
 			const chunk = this.buffered[0];
+			const leftToCopy = p.length - ofs;
 			if (leftToCopy >= chunk.length) {
 				p.set(chunk, ofs);
 				ofs += chunk.length;
 				this.buffered.shift();
 			} else {
-				const toCopy = chunk.slice(0, leftToCopy);
-				const leaveInBuffer = chunk.slice(leftToCopy);
+				const toCopy = chunk.subarray(0, leftToCopy);
+				const leaveInBuffer = chunk.subarray(leftToCopy);
 				p.set(toCopy, ofs);
 				ofs += toCopy.length;
 				this.buffered[0] = leaveInBuffer;
 			}
-			leftToCopy = p.length - ofs;
 		}
-
 		return ofs;
 	}
 
 	absorbFromSocket(chunk: Buffer): void {
 		if (this.currentRead) {
+			assert(this.buffered.length === 0);
 			const { ofs, bucket } = this.currentRead;
 			const leftToRead = bucket.length - ofs;
 			if (leftToRead > chunk.length) {
@@ -215,21 +215,63 @@ class ChunksFromNodeSocket {
 				this.currentRead.deferred.resolve(bucket.length);
 				this.currentRead = undefined;
 			} else {
-				const toCopy = chunk.slice(0, leftToRead);
-				const toBuffer = chunk.slice(leftToRead);
+				const toCopy = chunk.subarray(0, leftToRead);
+				const toBuffer = chunk.subarray(leftToRead);
 				bucket.set(toCopy, ofs);
 				this.currentRead.deferred.resolve(bucket.length);
 				this.currentRead = undefined;
-				this.buffered.push(toBuffer);
+				this.buffered.push(bytesCopy(toBuffer));
 			}
 		} else {
-			this.buffered.push(chunk);
+			this.buffered.push(bytesCopy(chunk));
 		}
 	}
 
 }
 Object.freeze(ChunksFromNodeSocket.prototype);
 Object.freeze(ChunksFromNodeSocket);
+
+
+function bytesCopy(bytes: Buffer|Uint8Array): Uint8Array {
+	const copy = new Uint8Array(bytes.length);
+	copy.set(bytes, 0);
+	return copy;
+}
+
+
+export class WriteBackPressure {
+
+	private numOfUnAckedBytes = 0;
+	private pressure: Deferred<void>|undefined = undefined;
+
+	constructor (
+		private readonly numOfUnAckedBytesToApplyPressure: number
+	) {
+		Object.seal(this);
+	}
+
+	feel(): Promise<void>|undefined {
+		return this.pressure?.promise;
+	}
+
+	addNumOfWrittenBytes(delta: number): void {
+		this.numOfUnAckedBytes += delta;
+		if (!this.pressure && (this.numOfUnAckedBytes >= this.numOfUnAckedBytesToApplyPressure)) {
+			this.pressure = defer();
+		}
+	}
+
+	ackBytes(delta: number): void {
+		this.numOfUnAckedBytes -= delta;
+		if (this.pressure && (this.numOfUnAckedBytes <= this.numOfUnAckedBytesToApplyPressure/3)) {
+			this.pressure.resolve();
+			this.pressure = undefined;
+		}
+	}
+
+}
+Object.freeze(WriteBackPressure.prototype);
+Object.freeze(WriteBackPressure);
 
 
 Object.freeze(exports);

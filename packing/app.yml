@@ -1,7 +1,7 @@
 appId: io.privacysafe.os
 productName: PrivacySafe
 executableName: privacysafe
-copyright: Copyright © 2017 - 2025, 3NSoft, Inc.
+copyright: Copyright © 2017 - 2026, 3NSoft, Inc.
 
 linux:
   category: Utility
@@ -30,6 +30,8 @@ mac:
   entitlements: ./packing/entitlements.mac.plist
   entitlementsInherit: ./packing/entitlements.mac.inherit.plist
 
+"afterPack": "electron-builder-sandbox-fix"
+
 directories:
   app: ./build/app
   output: ./dist/app
@@ -50,12 +52,12 @@ asarUnpack:
   # - node_modules\ecma-nacl\**\*
 
   # cryptor wasm worker from core files
-  - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/worker-wasm.js
-  - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\worker-wasm.js
-  - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/wasm-mp1-modules.js
-  - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\wasm-mp1-modules.js
-  - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/cryptor.wasm
-  - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\cryptor.wasm
+  # - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/worker-wasm.js
+  # - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\worker-wasm.js
+  # - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/wasm-mp1-modules.js
+  # - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\wasm-mp1-modules.js
+  # - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/cryptor.wasm
+  # - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\cryptor.wasm
 
   # system/app unzipper worker files
   - system/system-places/unzip-worker.js
@@ -74,6 +76,10 @@ asarUnpack:
   # packed icons not seen on mac
   - icons/**/*
   - icons\**\*
+
+  # native binaries
+  # - node_modules/native-deno-runtime/**/*
+  # - node_modules\native-deno-runtime\**\*
 
   # runtimes should stay unpacked, as opening process is generic to platform
   - runtimes/**/*

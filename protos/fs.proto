@@ -216,6 +216,10 @@ message CollectionEvent {
 
 // ==== ReadonlyFSVersionedAPI referable object ====
 
+// --- ReadonlyFSVersionedAPI.whenConnected ---
+// Request body is empty
+// Reply body is empty
+
 // --- ReadonlyFSVersionedAPI.stat ---
 // Request body is PathAndFlagsRequestBody
 // Reply body is file.StatsMsg
@@ -273,21 +277,21 @@ message VersionedReadBytesRequestBody {
 // ==== WritableFS referable as impl object (extends ReadonlyFS) ====
 
 // --- WritableFS.updateXAttrs ---
-// Reply has only status and body is empty
+// Reply body is empty
 message UpdateXAttrsRequestBody {
 	string path = 1;
 	file.XAttrsChanges changes = 2;
 }
 
 // --- WritableFS.makeFolder ---
-// Reply has only status and body is empty
+// Reply body is empty
 message MakeFolderRequestBody {
 	string path = 1;
 	common.BooleanValue exclusive = 2;
 }
 
 // --- WritableFS.deleteFolder ---
-// Reply has only status and body is empty
+// Reply body is empty
 message DeleteFolderRequestBody {
 	string path = 1;
 	common.BooleanValue remove_content = 2;
@@ -295,17 +299,17 @@ message DeleteFolderRequestBody {
 
 // --- WritableFS.deleteFile ---
 // Request body is PathOnlyRequestBody
-// Reply has only status and body is empty
+// Reply body is empty
 
 // --- WritableFS.move ---
-// Reply has only status and body is empty
+// Reply body is empty
 message MoveRequestBody {
 	string src = 1;
 	string dst = 2;
 }
 
 // --- WritableFS.copyFile ---
-// Reply has only status and body is empty
+// Reply body is empty
 message CopyFileRequestBody {
 	string src = 1;
 	string dst = 2;
@@ -313,7 +317,7 @@ message CopyFileRequestBody {
 }
 
 // --- WritableFS.copyFolder ---
-// Reply has only status and body is empty
+// Reply body is empty
 message CopyFolderRequestBody {
 	string src = 1;
 	string dst = 2;
@@ -321,7 +325,7 @@ message CopyFolderRequestBody {
 }
 
 // --- WritableFS.saveFile ---
-// Reply has only status and body is empty
+// Reply body is empty
 message SaveFileRequestBody {
 	// file is a reference to File impl object
 	common.ObjectReference file = 1;
@@ -330,7 +334,7 @@ message SaveFileRequestBody {
 }
 
 // --- WritableFS.saveFolder ---
-// Reply has only status and body is empty
+// Reply body is empty
 message SaveFolderRequestBody {
 	// file is a reference to FS impl object
 	common.ObjectReference folder = 1;
@@ -340,10 +344,10 @@ message SaveFolderRequestBody {
 
 // --- WritableFS.deleteLink ---
 // Request body is PathOnlyRequestBody
-// Reply has only status and body is empty
+// Reply body is empty
 
 // --- WritableFS.link ---
-// Reply has only status and body is empty
+// Reply body is empty
 message LinkRequestBody {
 	string path = 1;
 	// target is a reference to either FS or File impl object
@@ -366,7 +370,7 @@ message FileFlags {
 }
 
 // --- WritableFS.writeJSONFile ---
-// Reply has only status and body is empty
+// Reply body is empty
 message WriteJsonFileRequestBody {
 	string path = 1;
 	string json = 2;
@@ -374,7 +378,7 @@ message WriteJsonFileRequestBody {
 }
 
 // --- WritableFS.writeTxtFile ---
-// Reply has only status and body is empty
+// Reply body is empty
 message WriteTxtFileRequestBody {
 	string path = 1;
 	string txt = 2;
@@ -382,7 +386,7 @@ message WriteTxtFileRequestBody {
 }
 
 // --- WritableFS.writeBytes ---
-// Reply has only status and body is empty
+// Reply body is empty
 message WriteBytesRequestBody {
 	string path = 1;
 	bytes bytes = 2;
@@ -469,22 +473,29 @@ message FSSyncIsOnDiskReplyBody {
 	string status = 1;
 }
 
-// --- ReadonlyFSSyncAPI.download ---
-// Reply has only status and body is empty
-message FSSyncDownloadRequestBody {
+// --- ReadonlyFSSyncAPI.startDownload ---
+// Reply body is file.FileSyncStartDownloadReplyBody
+message FSSyncStartDownloadRequestBody {
 	string path = 1;
 	uint64 version = 2;
 }
 
 // --- ReadonlyFSSyncAPI.adoptRemote ---
-// Reply has only status and body is empty
+// Reply body is empty
 message AdoptRemoteRequestBody {
 	string path = 1;
 	file.OptionsToAdopteRemote opts = 2;
 }
 
-// --- ReadonlyFSSyncAPI.diffCurrentAndRemote ---
-message DiffCurrentAndRemoteRequestBody {
+// --- ReadonlyFSSyncAPI.diffCurrentAndRemoteFileVersions ---
+// Reply body is file.DiffCurrentAndRemoteReplyBody
+message DiffCurrentAndRemoteFileVersionsRequestBody {
+	string path = 1;
+	file.OptionsToDiffFileVersions opts = 2;
+}
+
+// --- ReadonlyFSSyncAPI.diffCurrentAndRemoteFolderVersions ---
+message DiffCurrentAndRemoteFolderVersionsRequestBody {
 	string path = 1;
 	common.UInt64Value remote_version = 2;
 }
@@ -493,24 +504,58 @@ message DiffCurrentAndRemoteReplyBody {
 }
 
 message FolderDiff {
-	message TimeStamps {
-		uint64 current = 1;
-		common.UInt64Value remote = 2;
-	}
-	message XAttrs {
-		repeated file.NameAndXAttrValue in_current = 1;
-		repeated file.NameAndXAttrValue in_remote = 2;
-		repeated string name_overlaps = 3;
-	}
+	// CommonDiff fields
 	uint64 current_version = 1;
-	common.UInt64Value remote_version = 2;
-	repeated ListingEntryMsg in_current = 3;
-	repeated ListingEntryMsg in_remote = 4;
-	repeated string name_overlaps = 5;
-	TimeStamps ctime = 6;
-	TimeStamps mtime = 7;
-	XAttrs xattrs = 8;
+	bool is_current_local = 2;
+	common.UInt64Value remote_version = 3;
+	common.UInt64Value synced_version = 4;
+	bool is_remote_removed = 5;
+	file.TimeStampsDiff ctime = 6;
+	file.TimeStampsDiff mtime = 7;
+	repeated file.XAttrDiff xattrs = 8;
+
+	message ItemsByBranches {
+		repeated string in_local = 1;
+		repeated string in_remote = 2;
+	}
+	message Renamed {
+		string local = 1;
+		string remote = 2;
+		string renamed_in = 3;
+	}
+	message Rekeyed {
+		string local = 1;
+		string remote = 2;
+		string rekeyed_in = 3;
+	}
+	ItemsByBranches removed = 11;
+	repeated Renamed renamed = 12;
+	ItemsByBranches added = 13;
+	repeated Rekeyed rekeyed = 14;
+	repeated string name_overlaps = 15;
 }
+
+message RemoteChildRequestBody {
+	string path = 1;
+	string remote_item_name = 2;
+	common.UInt64Value remote_version = 3;
+}
+
+// --- ReadonlyFSSyncAPI.statRemoteItem ---
+// Request body is RemoteChildRequestBody
+// Reply body is file.StatsMsg
+
+// --- ReadonlyFSSyncAPI.listRemoteFolderItem ---
+// Request body is RemoteChildRequestBody
+// Reply body is ListFolderReplyBody
+
+// --- ReadonlyFSSyncAPI.getRemoteFileItem ---
+// Request body is RemoteChildRequestBody
+// Reply body is file.File
+
+// --- ReadonlyFSSyncAPI.getRemoteFolderItem ---
+// Request body is RemoteChildRequestBody
+// Reply body is FS
 
 
 // ==== WritableFSSyncAPI referable object ====
@@ -527,12 +572,29 @@ message FSSyncUploadRequestBody {
 // Reply body is file.FileSyncStartUploadReplyBody
 
 // --- WritableFSSyncAPI.adoptRemoteFolderItem ---
+// Reply body is common.UInt64Value
 message AdoptRemoteFolderItemRequestBody {
 	message Options {
 		common.UInt64Value local_version = 1;
 		common.UInt64Value upload_version = 2;
+		common.BooleanValue replace_local_item = 3;
+		common.StringValue new_item_name = 4;
 	}
 	string path = 1;
 	string item_name = 2;
 	Options opts = 3;
+}
+
+// --- WritableFSSyncAPI.absorbRemoteFolderChanges ---
+message AbsorbRemoteFolderChangesRequestBody {
+	message Options {
+		common.UInt64Value local_version = 1;
+		common.StringValue postfix_for_name_overlaps = 2;
+		common.UInt64Value remote_version = 3;
+	}
+	string path = 1;
+	Options opts = 2;
+}
+message AbsorbRemoteFolderChangesReplyBody {
+	common.UInt64Value new_version = 1;
 }

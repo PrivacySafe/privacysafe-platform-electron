@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2017 - 2022, 2024 3NSoft Inc.
+ Copyright (C) 2017 - 2022, 2024, 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -16,7 +16,6 @@
 */
  
 import { protocol, CustomScheme, Session } from 'electron';
-import { parse as parseUrl, Url } from 'url';
 import { toBuffer, EMPTY_BUFFER } from '../lib-common/buffer-utils';
 import * as mime from 'mime';
 import { logWarning } from '../confs';
@@ -89,7 +88,7 @@ export function setAppProtocolIn(
 	);
 }
 
-function isGetOK(method: string, url: Url, appDomain: string): boolean {
+function isGetOK(method: string, url: URL, appDomain: string): boolean {
 	if (method.toUpperCase() !== 'GET') { return false; }
 	if (url.host !== appDomain) { return false; }
 	return true;
@@ -106,19 +105,19 @@ function makeAppProtoHandler(
 	appRoot: ReadonlyFS, appDomain: string, w3nSetup: W3NSetupType
 ): BufferProtocolHandler {
 	return async (req, cb) => {
-		const url = parseUrl(req.url);
-
-		let isReqOK = isGetOK(req.method, url, appDomain);
-		// url pasing does an encodeURI, that should be undone
-		const pathname = decodeURI(url.pathname!);
-		if (!isReqOK) {
-			logWarning(`Canceled unexpected ${req.method} request for ${req.url}`);
-			cb({ error: -10 });
-			return;
-		}
-
-		const mimeType: string = mime.lookup(pathname);
 		try {
+			const url = new URL(req.url);
+
+			let isReqOK = isGetOK(req.method, url, appDomain);
+			// url pasing does an encodeURI, that should be undone
+			const pathname = decodeURI(url.pathname!);
+			if (!isReqOK) {
+				logWarning(`Canceled unexpected ${req.method} request for ${req.url}`);
+				cb({ error: -10 });
+				return;
+			}
+
+			const mimeType: string = mime.lookup(pathname);
 			const content = await (isW3NSetup(pathname, w3nSetup) ?
 				getW3NSetup(w3nSetup) :
 				appRoot.readBytes(pathname)

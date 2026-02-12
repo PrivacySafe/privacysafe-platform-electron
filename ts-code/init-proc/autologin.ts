@@ -42,7 +42,8 @@ interface UserKeyJSON {
 export async function lookForAutologinUsers(): Promise<UserKey[]|undefined> {
 	const filePath = join(utilDir, AUTOLOGIN_FNAME);
 	try {
-		const users = parseAndCheckCredentials(await readFile(filePath, { encoding: 'utf8' }));
+		const fileContent = await readFile(filePath, { encoding: 'utf8' });
+		const users = parseAndCheckCredentials(fileContent);
 		return ((users.length > 0) ? users : undefined);
 	} catch (exc) {
 		if ((exc as FileException).notFound) {

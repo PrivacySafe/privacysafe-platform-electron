@@ -115,7 +115,6 @@ function fsUsage(srvName: string): void {
 		.withContext(`comparison of original with read from file`)
 		.toBeTrue();
 
-		// XXX following comparisons are to figure if 429604 bug is write
 		const sndRead = await fs.readBytes(fPath1);
 		expect(bytesEqual(fileBytes, sndRead!))
 		.withContext(`comparison of original with second read`)
@@ -167,62 +166,52 @@ function fsUsage(srvName: string): void {
 
 	describe('', () => {
 
-		afterEach(() => syncFS.deleteFolder(folder, true));
+		afterEach(() => syncFS.deleteFolder(folder, true).catch(() => {}));
 
 		const kb = 1024;
 		const mb = 1024 * 1024;
 
 		it(`writes file in app's sync fs`,
-			() => testFileWriting(syncFS, 'writeFileInSyncFS'));
-
-		it(`writes 20KB file in app's sync fs`,
-			() => testFileWriting(syncFS, 'writeFileInSyncFS', 20 * kb));
-
-		it(`writes 40KB file in app's sync fs`,
-			() => testFileWriting(syncFS, 'writeFileInSyncFS', 40 * kb));
-
-		it(`writes 400KB file in app's sync fs`,
-			() => testFileWriting(syncFS, 'writeFileInSyncFS', 400 * kb));
-
-		it(`writes 1MB file in app's sync fs`,
-			() => testFileWriting(syncFS, 'writeFileInSyncFS', 1 * mb), 30000);
-
-		// XXX socket-ipc on mac is still flake on this case of 2mb transfer(s)
-		// it(`writes 2MB file in app's sync fs`,
-		// 	() => testFileWriting(syncFS, 'writeFileInSyncFS', 2 * mb), 30000);
-
-		// XXX socket-ipc on mac is still flake on this case of 10mb transfer(s)
-		// it(`writes 10MB file in app's sync fs`,
-		// 	() => testFileWriting(syncFS, 'writeFileInSyncFS', 10 * mb), 30000);
+			() => testFileWriting(syncFS, 'writeFileInSyncFS')
+		);
 
 		it(`reads file in app's sync fs`,
-			() => testFileReading(syncFS, 'readFileFromSyncFS'));
-
-		it(`reads 20KB file in app's sync fs`,
-			() => testFileReading(syncFS, 'readFileFromSyncFS', 20 * kb));
-
-		it(`reads 40KB file in app's sync fs`,
-			() => testFileReading(syncFS, 'readFileFromSyncFS', 40 * kb));
-
-		it(`reads 400KB file in app's sync fs`,
-			() => testFileReading(syncFS, 'readFileFromSyncFS', 400 * kb));
-
-		it(`reads 1MB file in app's sync fs`,
-			() => testFileReading(syncFS, 'readFileFromSyncFS', 1 * mb), 30000);
-
-		// XXX socket-ipc on mac is still flake on this case of 2mb transfer(s)
-		// it(`reads 2MB file in app's sync fs`,
-		// 	() => testFileReading(syncFS, 'readFileFromSyncFS', 2 * mb), 30000);
-
-		// XXX socket-ipc on mac is still flake on this case of 10mb transfer(s)
-		// it(`reads 10MB file in app's sync fs`,
-		// 	() => testFileReading(syncFS, 'readFileFromSyncFS', 10 * mb), 30000);
+			() => testFileReading(syncFS, 'readFileFromSyncFS')
+		);
 
 		it(`writes json file in app's sync fs`,
-			() => testJSONFileWriting(syncFS, 'writeJSONFileInSyncFS'));
+			() => testJSONFileWriting(syncFS, 'writeJSONFileInSyncFS')
+		);
 	
 		it(`reads json file in app's sync fs`,
-			() => testJSONFileReading(syncFS, 'readJSONFileFromSyncFS'));
+			() => testJSONFileReading(syncFS, 'readJSONFileFromSyncFS')
+		);
+
+		// stress tests below
+
+		for (const x of [ 20, 40, 100, 400 ]) {
+			it(`writes ${x}KB file in app's sync fs`,
+				() => testFileWriting(syncFS, 'writeFileInSyncFS', x * kb), 10000
+			);
+		}
+
+		for (const x of [ 20, 40, 100, 400 ]) {
+			it(`reads ${x}KB file in app's sync fs`,
+				() => testFileReading(syncFS, 'readFileFromSyncFS', x * kb), 10000
+			);
+		}
+
+		for (const x of [ 1, 2, 5, 10 ]) {
+			it(`writes ${x}MB file in app's sync fs`,
+				() => testFileWriting(syncFS, 'writeFileInSyncFS', x * mb), 30000
+			);
+		}
+
+		for (const x of [ 1, 2, 5, 10 ]) {
+			it(`reads ${x}MB file in app's sync fs`,
+				() => testFileReading(syncFS, 'readFileFromSyncFS', x * mb), 30000
+			);
+		}
 
 	});
 
@@ -231,16 +220,20 @@ function fsUsage(srvName: string): void {
 		afterEach(() => localFS.deleteFolder(folder, true));
 
 		it(`writes file in app's local fs`,
-			() => testFileWriting(localFS, 'writeFileInLocalFS'));
+			() => testFileWriting(localFS, 'writeFileInLocalFS')
+		);
 
 		it(`reads file in app's local fs`,
-			() => testFileReading(localFS, 'readFileFromLocalFS'));
+			() => testFileReading(localFS, 'readFileFromLocalFS')
+		);
 
 		it(`writes json file in app's local fs`,
-			() => testJSONFileWriting(localFS, 'writeJSONFileInLocalFS'));
+			() => testJSONFileWriting(localFS, 'writeJSONFileInLocalFS')
+		);
 	
 		it(`reads json file in app's local fs`,
-			() => testJSONFileReading(localFS, 'readJSONFileFromLocalFS'));
+			() => testJSONFileReading(localFS, 'readJSONFileFromLocalFS')
+		);
 
 	});
 
