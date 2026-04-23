@@ -152,6 +152,18 @@ build_variant() {
 			write_pack_info_file $1 $2
 		fi
 	fi
+
+	echo "====================================
+	DEBUG INFO: before calling electron builder
+	pwd is $(pwd)
+	ls -lh :
+	$(ls -lh)
+	------------------------------------------
+	cat $app_dir/$pack_file :
+	$(cat $app_dir/$pack_file)
+	========================================
+	"
+
 	node_modules/.bin/electron-builder --publish never --config $build_conf $arch $variant || return $?
 }
 

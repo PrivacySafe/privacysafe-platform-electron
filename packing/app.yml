@@ -60,12 +60,12 @@ asarUnpack:
   # - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\cryptor.wasm
 
   # system/app unzipper worker files
-  - system/system-places/unzip-worker.js
-  - system\system-places\unzip-worker.js
+  - runner-in-electron/caps/system/system-places/unzip-worker.js
+  - runner-in-electron\caps\system\system-places\unzip-worker.js
   - node_modules/adm-zip/**/*
   - node_modules\adm-zip\**\*
-  - lib-common/buffer-utils.js
-  - lib-common\buffer-utils.js
+  - platform/lib-common/buffer-utils.js
+  - platform\lib-common\buffer-utils.js
 
   # bundled apps are also read by unzipper
   - bundled-apps/**/*
@@ -77,17 +77,13 @@ asarUnpack:
   - icons/**/*
   - icons\**\*
 
-  # native binaries
-  # - node_modules/native-deno-runtime/**/*
-  # - node_modules\native-deno-runtime\**\*
-
   # runtimes should stay unpacked, as opening process is generic to platform
   - runtimes/**/*
   - runtimes\**\*
 
   # preloads for runtimes
-  - runtime-deno/preload.bundle.js
-  - runtime-deno\preload.bundle.js
+  - runner-in-electron/runtime-deno/preload.bundle.js
+  - runner-in-electron\runtime-deno\preload.bundle.js
 
   # packaging info file that gets after asar is created
   - packing-info.json

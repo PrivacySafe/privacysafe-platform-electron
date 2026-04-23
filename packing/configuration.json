@@ -8,7 +8,8 @@
 		"files.app.privacysafe.io",
 		"chat.app.privacysafe.io",
 		"contacts.app.privacysafe.io",
-		"inbox.app.privacysafe.io"
+		"inbox.app.privacysafe.io",
+		"treasure.app.privacysafe.io"
 	],
 	"data-dir-name": ".PrivacySafe",
 	"bundle-base-url": "https://download.privacysafe.app"

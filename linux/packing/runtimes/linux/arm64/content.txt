@@ -1,3 +1,3 @@
-deno version 1.45.2 comes from zip at https://github.com/denoland/deno/releases/download/v1.45.2/deno-aarch64-unknown-linux-gnu.zip
+deno version 2.7.12 comes from zip at https://github.com/denoland/deno/releases/download/v2.7.12/deno-aarch64-unknown-linux-gnu.zip
 Sha512 hashes are
-b31cbde5567d84dd24e87771e761855e977665db2670a6bf169dca84015b5ce172293f2d1b2d738cdc14a896d882c9b9cca761b9266798c7ad4c41b9e7e54023  deno
+64a2f247242aabf21b1c524544f505d411c75d7dd4526c81caaf9f49be975d703d41f8c226e54dd01bf345eb1ba7d642b5c936a8ee370e9cc5e44761aab42f8b  deno

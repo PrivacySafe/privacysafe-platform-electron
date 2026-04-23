@@ -1,1 +1,0 @@
-../../packing/npm-ci-native-modules.sh

@@ -9,6 +9,6 @@
 		"skipLibCheck": true
 	},
 	"exclude": [
-		"api-defs/injected-w3n.d.ts"
+		"platform/api-defs/injected-w3n.d.ts"
 	]
 }

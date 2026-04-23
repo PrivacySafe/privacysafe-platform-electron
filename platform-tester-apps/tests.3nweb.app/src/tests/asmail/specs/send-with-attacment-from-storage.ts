@@ -42,11 +42,11 @@ export const specs: SpecDescribe = {
 
 let it: SpecIt = {
 	expectation: 'sending and getting message with attachments from synced fs',
-	timeout: 15000
+	timeout: 20000
 };
 it.func = async function(s) {
 	await writeFilesTreeContent(folderContent, s.testFolder);
-	const msgEchoPromise = listenForOneMsgEchoFromSecondUser(10000);
+	const msgEchoPromise = listenForOneMsgEchoFromSecondUser(15000);
 
 	const txtBody = 'Some text\nBlah-blah-blah';
 

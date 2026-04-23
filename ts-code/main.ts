@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2025 3NSoft Inc.
+ Copyright (C) 2016 - 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,24 +15,27 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-/**
- * This script starts electron framework and sets up main process.
- */
+// injecting global's expected to be on node, before everything else
+import { makePlatformDeviceFS } from 'core-3nweb-client-lib/build/lib-common-on-node/fs-on-node';
+globalThis.platform = {
+	device_fs: makePlatformDeviceFS()
+};
 
-import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli, SOCKS5_PROXY, urlFromArgs } from './process-args';
+import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli, SOCKS5_PROXY, urlFromArgs } from './runner-in-electron/process-args';
 import { app, dialog, powerMonitor } from 'electron';
-import { InitProc } from './init-proc';
-import { registerAllProtocolShemas } from "./electron/protocols";
+import { InitProc } from './runner-in-electron/init-proc';
+import { registerAllProtocolShemas } from "./runner-in-electron/electron/protocols";
 import { fromEvent, lastValueFrom } from 'rxjs';
-import { appDir, logError, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './confs';
+import { appDir, logError, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './runner-in-electron/confs';
 import { take } from 'rxjs/operators';
-import { makeCoreDriver } from './core';
-import { clearDefaultWindowMenu } from './window-utils/window-menu';
+import { makeCoreDriver } from './platform/core';
+import { clearDefaultWindowMenu } from './runner-in-electron/window-utils/window-menu';
 import { mkdirSync } from 'fs';
-import { sleep } from './lib-common/processes/sleep';
+import { sleep } from './platform/lib-common/processes/sleep';
 import { EventEmitter } from 'events';
-import { processOfUtilityArgsIfGiven } from './main-for-util-invocations';
-import { appUrlSchema, web3nUrlSchema, ensure3NWebProtocolsAreSetInOS } from './electron/app-url-protocol';
+import { processOfUtilityArgsIfGiven } from './runner-in-electron/main-for-util-invocations';
+import { appUrlSchema, web3nUrlSchema, ensure3NWebProtocolsAreSetInOS } from './runner-in-electron/electron/app-url-protocol';
+import { makePlatformResources } from './runner-in-electron/platform-resources';
 
 // XXX make it so that OS secure thingy isn't triggered, if there is no autologin file
 
@@ -76,7 +79,8 @@ if (utilityInvocation) {
 				dataDir: appDir
 			},
 			devToolsFromARGs(),
-			TEST_STAND_CONF
+			TEST_STAND_CONF,
+			makePlatformResources()
 		);
 
 		// Removing default menu

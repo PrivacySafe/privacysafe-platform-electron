@@ -65,6 +65,14 @@
 					"platform": "all",
 					"monitor": "all",
 					"logout": true
+				},
+				"connectToExternal": {
+					"fetch": [
+						{
+							"schema": "https",
+							"domain": "3nweb.org"
+						}
+					]
 				}
 			},
 			"windowOpts": {

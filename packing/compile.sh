@@ -9,8 +9,6 @@ then
 	'all'    - compiles all things in required order, and native compilation targeting current platform,
 	'protos'    - compiles protobuf definition files to node/commojs modules, copying files for TypeScript use,
 	'platform-ts'    - compiles TypeScript code of a platform,
-	'deno-runtime-binary'    - compiles binary with embedded Deno core,
-	'native-modules'    - compiles modules written in Rust (with napi-rs),
 	'deno-preload'    - compiles and packs preload for Deno runtime into a single js file,
 	'platform'    - compiles all needed for platform,
 	'tests'    - compiles test apps.
@@ -48,9 +46,9 @@ rm_and_mk_dir() {
 compile_protos_to_node() {
 
 	local protos_dir="protos"
-	local code_dir="ts-code/protos"
+	local code_dir="ts-code/platform/protos"
 	rm_and_mk_dir $code_dir || return $?
-	local build_dir="build/all/protos"
+	local build_dir="build/all/platform/protos"
 	rm_and_mk_dir $build_dir || return $?
 
 	local pbjs="./node_modules/.bin/pbjs"
@@ -77,9 +75,11 @@ compile_platform_ts() {
 	echo "Compiling typescript ..."
 	tsc -p ts-code || exit $?
 
+	# XXX preloads should probably be in runner-... folder, even when they use platform
+
 	echo "Packing preloads for web gui runtime ..."
 	local build_dir="build/all"
-	(cd $build_dir/runtime-web-gui || exit $?
+	(cd $build_dir/runner-in-electron/runtime-web-gui || exit $?
 		for fname in 'preload-ipc' 'setup-w3n-for-startup' 'setup-w3n'
 		do
 			browserify ${fname}.js -u electron -o ${fname}.bundle.js  || exit $?
@@ -99,70 +99,13 @@ compile_platform_ts() {
 
 }
 
-compile_deno_runtime() {
-	echo "	=========================================="
-	echo "	|   Compiling binary with deno runtime   |"
-	echo "	=========================================="
-	local src_dir="native-deno-runtime"
-	(cd $src_dir || exit $?
-		(cd js  || exit $?
-			deno2 bundle --output w3n.js w3n.ts || exit $?
-		) || exit $?
-		cargo build --release
-	) || return $?
-	rt_dir="build/all/"
-
-	# TODO
-
-}
-
 compile_deno_preload() {
 	echo "	======================================"
 	echo "	|   Compiling deno runtime preload   |"
 	echo "	======================================"
-	(cd build/all/runtime-deno || exit $?
+	(cd build/all/runner-in-electron/runtime-deno || exit $?
 		browserify preload.js -o preload.bundle.js
 	) || return $?
-}
-
-build_n_copy_native_module() {
-	local src_dir="native-modules"
-	local code_dir="ts-code/native-modules"
-	local build_dir="build/all/native-modules"
-
-	local mod=$1
-	local bin_name=$2
-	local mod_dir="$src_dir/$mod"
-	echo "	===================================================="
-	echo "	|   Compiling native module $mod"
-	echo "	===================================================="
-	(cd $mod_dir || exit $?
-		if [ -n "$cross_compile_target" ]
-		then
-			echo "Cross-compiling to $cross_compile_target target."
-			npm run build -- --cross-compile --target $cross_compile_target || exit $?
-		else
-			npm run build || exit $?
-		fi
-	) || return $?
-	local mod_code_dir="$code_dir/$mod"
-	rm_and_mk_dir $mod_code_dir
-	local out_dir="$build_dir/$mod"
-	rm_and_mk_dir $out_dir
-	cp $mod_dir/index.* $mod_code_dir/ || return $?
-	cp $mod_dir/index.* $out_dir/ || return $?
-	mv $mod_dir/$bin_name.* $out_dir/ || return $?
-	echo "$mod module output directory $out_dir"
-	ls -lh $out_dir || return $?
-}
-
-compile_native_modules() {
-	# for mod_dir_and_name in "cryptor-mod napi-cryptor" "spawn-with-ipc-mod napi-spawn-with-ipc"
-	for mod_dir_and_name in "cryptor-mod napi-cryptor"
-	do
-		build_n_copy_native_module $mod_dir_and_name || return $?
-	done
-	echo "Skipping napi-spawn-with-ipc, as some API may have changed."
 }
 
 build_n_copy_app() {
@@ -199,14 +142,9 @@ compile_tests() {
 compile_all_for_platform() {
 	compile_protos_to_node || return $?
 	echo
-	compile_native_modules || return $?
-	echo
 	compile_platform_ts || return $?
 	echo
 	compile_deno_preload || return $?
-	echo
-	echo "Skipping compilation of deno runtime, as it isn't ready, yet."
-	# compile_deno_runtime || return $?
 	echo
 }
 
@@ -233,18 +171,6 @@ elif [ "$work" == "platform-ts" ]
 then
 
 	compile_platform_ts
-	exit $?
-
-elif [ "$work" == "deno-runtime-binary" ]
-then
-
-	compile_deno_runtime
-	exit $?
-
-elif [ "$work" == "native-modules" ]
-then
-
-	compile_native_modules
 	exit $?
 
 elif [ "$work" == "deno-preload" ]
