@@ -16,7 +16,7 @@
 */
 
 import { checkServicesStartingFromSignup, makeNetClient, makeServiceLocator } from "core-3nweb-client-lib";
-import { openSocketFromNode } from "core-3nweb-client-lib/build/lib-common-on-node/websocket-from-node";
+import { openServiceEventsSrcFromNode } from "core-3nweb-client-lib/build/lib-common-on-node/websocket-from-node";
 import { DEFAULT_SIGNUP_URL, PLATFORM_NAME } from "./bundle-confs";
 import { bundleVersion } from "./bundle-version";
 import { parse3NWebURL, web3nUrlSchema } from "./electron/app-url-protocol";
@@ -69,7 +69,7 @@ async function checkSignupAndServicesFrom(signupUrl: string): Promise<void> {
 
 	await checkServicesStartingFromSignup(
 		makeServiceLocator(...dnsResolvers),
-		makeNetClient(requestFromNode, openSocketFromNode),
+		makeNetClient(requestFromNode, openServiceEventsSrcFromNode),
 		url, token,
 		check => {
 			if ((check as CheckStart).start) {

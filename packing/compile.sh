@@ -7,7 +7,7 @@ if [ -z "$work" ]
 then
 	echo "Provide first work argument. Possible values are
 	'all'    - compiles all things in required order, and native compilation targeting current platform,
-	'protos'    - compiles protobuf definition files to node/commojs modules, copying files for TypeScript use,
+	'protos'    - compiles protobuf definition files to node/commonjs modules, copying files for TypeScript use,
 	'platform-ts'    - compiles TypeScript code of a platform,
 	'deno-preload'    - compiles and packs preload for Deno runtime into a single js file,
 	'platform'    - compiles all needed for platform,
@@ -73,7 +73,7 @@ compile_platform_ts() {
 	echo "	|   Compiling platform's TypeScript code   |"
 	echo "	============================================"
 	echo "Compiling typescript ..."
-	tsc -p ts-code || exit $?
+	tsc -p ts-code || return $?
 
 	# XXX preloads should probably be in runner-... folder, even when they use platform
 

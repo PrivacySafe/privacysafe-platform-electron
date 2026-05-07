@@ -426,13 +426,13 @@ export async function appAndManifestFrom(
   return { appRoot, manifest };
 }
 
-function appVersionFolder(
+export function appVersionFolder(
   appDomain: string, version: string
 ): string {
   return `${reverseDomain(appDomain)}/${version}`;
 }
 
-function completePackAppVersionFolder(
+export function completePackAppVersionFolder(
   appDomain: string, version: string
 ): string {
   return `${COMPLETE_PACKS_DIR}/${appVersionFolder(appDomain,  version)}`;

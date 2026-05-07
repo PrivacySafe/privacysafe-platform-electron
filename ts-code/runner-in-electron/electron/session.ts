@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2017, 2019, 2021 - 2022, 2024 - 2025 3NSoft Inc.
+ Copyright (C) 2017, 2019, 2021 - 2022, 2024 - 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -56,11 +56,18 @@ export async function makeSessionForApp(
 		appSes.webRequest.onHeadersReceived(
 			filterFrom(capsReq!.connectToExternal!.fetch!),
 			(details, cb) => {
-				cb({
-					responseHeaders: {
-						...details.responseHeaders,
-						"Access-Control-Allow-Origin": "*"
+				const responseHeaders: Record<string, string|string[]> = {
+					"Access-Control-Allow-Origin": "*"
+				};
+				if (details.responseHeaders) {
+					for (const [hName, hVal] of Object.entries(details.responseHeaders) ) {
+						if (hName.toLowerCase() !== 'access-control-allow-origin') {
+							responseHeaders[hName] = hVal;
+						}
 					}
+				}
+				cb({
+					responseHeaders
 				});
 			}
 		);

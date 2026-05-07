@@ -43,6 +43,7 @@ export class DenoComponent extends AppComponentBase {
 		public readonly connectInfo: SocketConnectInfo,
 		private readonly denoBin: DenoParams,
 		caps: AppCAPsAndSetup,
+		private readonly externalConnections: string[]|undefined,
 		services: PostponedValuesFixedKeysMap<string, Service>|undefined,
 		private fileToLoad: string|undefined
 	) {
@@ -54,12 +55,13 @@ export class DenoComponent extends AppComponentBase {
 
 	static async makeLoadConnectAndStart(
 		domain: string, appRoot: AppFolder, entrypoint: string,
-		caps: AppCAPsAndSetup, connectInfo: SocketConnectInfo,
+		caps: AppCAPsAndSetup, externalConnections: string[]|undefined,
+		connectInfo: SocketConnectInfo,
 		connect: (caps: W3N) => (() => void),
 		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<DenoComponent> {
 		const component = await DenoComponent.make(
-			domain, appRoot, entrypoint, caps, connectInfo, services
+			domain, appRoot, entrypoint, caps, externalConnections, connectInfo, services
 		);
 		const disconnectIPC = connect(caps.w3n);
 		component.setCloseListener(disconnectIPC);
@@ -69,7 +71,8 @@ export class DenoComponent extends AppComponentBase {
 
 	private static async make(
 		domain: string, appRoot: AppFolder, entrypoint: string,
-		caps: AppCAPsAndSetup, connectInfo: SocketConnectInfo,
+		caps: AppCAPsAndSetup, externalConnections: string[]|undefined,
+		connectInfo: SocketConnectInfo,
 		services: PostponedValuesFixedKeysMap<string, Service>|undefined
 	): Promise<DenoComponent> {
 		const denoBin = await denoBinParams();
@@ -79,7 +82,7 @@ export class DenoComponent extends AppComponentBase {
 		);
 		setTimeout(() => fs.unlink(fileToLoad), 5000);
 		return new DenoComponent(
-			domain, entrypoint, connectInfo, denoBin, caps, services, fileToLoad
+			domain, entrypoint, connectInfo, denoBin, caps, externalConnections, services, fileToLoad
 		);
 	}
 
@@ -102,6 +105,14 @@ export class DenoComponent extends AppComponentBase {
 		} else {
 			throw new Error(
 				`Invalid connection type in ${JSON.stringify(this.connectInfo)}`);
+		}
+		if (this.externalConnections) {
+			const allowNetInd = privArgs.findIndex(arg => arg.startsWith('--allow-net='));
+			if (allowNetInd < 0) {
+				privArgs.push(`--allow-net=${this.externalConnections.join(',')}`);
+			} else {
+				privArgs[allowNetInd] = privArgs[allowNetInd] + this.externalConnections.join(',');
+			}
 		}
 		this.proc = spawn(
 			this.denoBin.bin,
@@ -132,8 +143,7 @@ export class DenoComponent extends AppComponentBase {
 		if (this.fileToLoad) {
 			this.spawnProc();
 		} else {
-			throw new Error(`Deno component ${
-				this.domain}:${this.entrypoint} was already started`);
+			throw new Error(`Deno component ${this.domain}:${this.entrypoint} was already started`);
 		}
 	}
 

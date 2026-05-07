@@ -22,7 +22,7 @@ import { BUNDLED_APPS_FOLDER, BUNDLED_APP_PACKS_FOLDER, LAUNCHER_APP_DOMAIN, STA
 import { readManifestFromZip, unzipAppVersionFromFileOnDevice, readFileBytesFromZip, unzipAppVersionFromFile } from './unpack-zipped-app';
 import * as utils from '../../../app-n-components/utils';
 import { makeAppInitExc } from '../../../../platform/caps/shell';
-import { SystemPlaces } from '../../../../platform/caps/system/system-places';
+import { completePackAppVersionFolder, SystemPlaces } from '../../../../platform/caps/system/system-places';
 import type { Logging } from '../../../../platform/inject-defs/confs';
 import { FileException, readdir, readFile, stat } from '../../../../platform/lib-common/async-fs-node';
 
@@ -94,18 +94,6 @@ async function checkPresenceOfBundledPackage(
 
 function bundleZipName(appDomain: string): string {
 	return `${reverseDomain(appDomain)}.zip`;
-}
-
-function appVersionFolder(
-	appDomain: string, version: string
-): string {
-	return `${reverseDomain(appDomain)}/${version}`;
-}
-
-function completePackAppVersionFolder(
-	appDomain: string, version: string
-): string {
-	return `${COMPLETE_PACKS_DIR}/${appVersionFolder(appDomain,  version)}`;
 }
 
 export async function listBundledAppPacks(): Promise<{

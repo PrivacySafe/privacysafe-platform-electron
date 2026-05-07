@@ -36,7 +36,7 @@ import { dohAt } from 'core-3nweb-client-lib';
 import { promises as dns } from 'dns';
 import { makeNetClient } from 'core-3nweb-client-lib';
 import { makeRequestFromNode } from "core-3nweb-client-lib/build/lib-common-on-node/request-from-node";
-import { openSocketFromNode } from "core-3nweb-client-lib/build/lib-common-on-node/websocket-from-node";
+import { openServiceEventsSrcFromNode } from "core-3nweb-client-lib/build/lib-common-on-node/websocket-from-node";
 import { Logging } from '../platform/inject-defs/confs';
 import { makeSystemPlaces } from './caps/system/system-places';
 import { createHash } from "crypto";
@@ -83,7 +83,7 @@ export function makePlatformResources(): PlatformResources {
 		LAUNCHER_APP_DOMAIN,
 		makeCryptor: makeNativeCryptor,
 		random,
-		makeNetClient: () => makeNetClient(requestFromNode, openSocketFromNode),
+		makeNetClient: () => makeNetClient(requestFromNode, openServiceEventsSrcFromNode),
 		makeServiceLocator: makeServiceLocator(...dnsResolvers),
 		makeUserLogin: UserLogin.make,
 		showSystemErrorBox: dialog.showErrorBox.bind(dialog)

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2022, 2024 3NSoft Inc.
+ Copyright (C) 2021 - 2022, 2024, 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -445,4 +445,10 @@ export function isResourceInRequest(
 	return (Array.isArray(resources) ?
 		resources.includes(resource) : (resources === resource)
 	);
+}
+
+export function externalHostsToConnect(component: ServiceComponent): string[]|undefined {
+	const lst = component.capsRequested?.connectToExternal?.fetch?.map(conn => conn.domain)
+	.filter(d => (d.length > 0));
+	return ((lst && (lst.length > 0)) ? lst : undefined);
 }

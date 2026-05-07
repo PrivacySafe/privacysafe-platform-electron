@@ -27,7 +27,7 @@ import type { Logging } from "../../platform/inject-defs/confs";
 import { getSytemFormFactor } from "../caps/ui";
 import { Component, Service } from "../../platform/inject-defs/apps";
 import { PostponedValuesFixedKeysMap } from "../../platform/lib-common/postponed-values-map";
-import { servicesImplementedBy } from "../../platform/lib-common/manifest-utils";
+import { externalHostsToConnect, servicesImplementedBy } from "../../platform/lib-common/manifest-utils";
 import { makeAppInitExc } from "../../platform/caps/shell";
 import { DenoComponent } from "./deno-component";
 import type { SystemPlaces } from "../../platform/caps/system/system-places";
@@ -174,16 +174,16 @@ class AppInElectron extends App {
 	): Promise<Component> {
 		const { appDomain } = this.manifest;
 		const caps = this.capsForNewComponentInstance(entrypoint, component, undefined, undefined);
+		const externalConnections = externalHostsToConnect(component);
 		const {
 			connectInfo, connect
 		} = await this.sockConnectors.createConnector();
 		if (this.devTools) {
-			console.log(`▶️ ${appDomain}${entrypoint} component starts
-			`);
+			console.log(`▶️ ${appDomain}${entrypoint} component starts\n`);
 		}
 		const services = servicesContainerFor(this.manifest, entrypoint);
 		const deno = await DenoComponent.makeLoadConnectAndStart(
-			appDomain, this.appRoot, entrypoint, caps, connectInfo, connect, services
+			appDomain, this.appRoot, entrypoint, caps, externalConnections, connectInfo, connect, services
 		).catch((exc: FileException) => {
 			if ((exc.type === 'file') && exc.notFound) {
 				throw makeAppInitExc(appDomain, {}, {
@@ -196,8 +196,7 @@ class AppInElectron extends App {
 		});
 		if (this.devTools) {
 			const pidStr = (deno.pid ? deno.pid : '**');
-			console.log(`▶️ ✔️ ${appDomain}${entrypoint} component has started, pid ${pidStr}
-			`);
+			console.log(`▶️ ✔️ ${appDomain}${entrypoint} component has started, pid ${pidStr}\n`);
 			deno.stdOut.on('data', chunk => console.log(`${
 				appDomain}${entrypoint} pid ${pidStr}: ${chunk}
 			`));

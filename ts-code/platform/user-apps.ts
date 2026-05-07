@@ -16,7 +16,7 @@
 */
 
 import type { PlatformResources, SignupParamsViaURL, UserAppInfo } from './inject-defs/platform';
-import type { CoreConf } from 'core-3nweb-client-lib';
+import { reverseDomain, type CoreConf } from 'core-3nweb-client-lib';
 import type { CoreDriver, makeCoreDriver, MakeUserMount } from './core';
 import { Subject } from 'rxjs';
 import { sleep } from './lib-common/processes/sleep';
@@ -375,10 +375,6 @@ export class UserApps {
 Object.freeze(UserApps.prototype);
 Object.freeze(UserApps);
 
-
-function reverseDomain(domain: string): string {
-	return domain.split('.').reverse().join('.');
-}
 
 function systemCAPsFrom(
 	sysPlaces: SystemPlaces, appDownloader: AppDownloader,

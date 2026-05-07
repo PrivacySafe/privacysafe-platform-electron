@@ -20,7 +20,7 @@ import * as https from 'https';
 import { RequestOpts, Reply, ContentType, processRequest, formHttpsReqOpts } from './request-utils';
 import { makeSessionFor3NComms } from './session';
 import { NetClient, makeNetClient as makeClient } from 'core-3nweb-client-lib';
-import { openSocketFromNode } from "core-3nweb-client-lib/build/lib-common-on-node/websocket-from-node";
+import { openServiceEventsSrcFromNode } from "core-3nweb-client-lib/build/lib-common-on-node/websocket-from-node";
 
 export { makeException, Reply, RequestOpts, extractIntHeader } from './request-utils';
 
@@ -46,7 +46,7 @@ export function makeNetClient(session?: Electron.Session): NetClient {
 		session = makeSessionFor3NComms();
 	}
 
-	return makeClient(request, openSocketFromNode, reset);
+	return makeClient(request, openServiceEventsSrcFromNode, reset);
 }
 
 Object.freeze(exports);
