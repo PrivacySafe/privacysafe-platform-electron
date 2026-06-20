@@ -64,7 +64,8 @@
 					"apps": "all",
 					"platform": "all",
 					"monitor": "all",
-					"logout": true
+					"logout": true,
+          "userLogin": "all"
 				},
 				"connectToExternal": {
 					"fetch": [

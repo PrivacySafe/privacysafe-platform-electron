@@ -25,41 +25,44 @@ import { PLATFORM_BUNDLE_URL } from "../../../bundle-confs";
 import { bundleVersion } from "../../../bundle-version";
 import { listBundledAppPacks, listInstalledBundledApps } from "../system-places";
 
+type PlatformDownloaderCAP = web3n.system.platform.PlatformDownloader;
 type PlatformUpdateEvents = web3n.system.platform.PlatformUpdateEvents;
 type BundleVersions = web3n.system.platform.BundleVersions;
 type Observer<T> = web3n.Observer<T>;
 type DistChannels = web3n.system.apps.DistChannels;
 
 
-export class PlatformDownloader {
+export class PlatformDownloader implements PlatformDownloaderCAP {
 
-	private readonly packInfo: PackInfo|undefined;
-	private readonly type: 'electron-builder-update' | undefined;
 	private updater: Updater|undefined = undefined;
 
-	constructor(
-		private closeProcessesOnUpdateRestart: () => Promise<void>
+	private constructor(
+		private readonly type: 'electron-builder-update',
+		private readonly packInfo: PackInfo,
+		private readonly closeProcessesOnUpdateRestart: () => Promise<void>
 	) {
-		this.packInfo = findPackInfo();
-		this.type = packInfoToType(this.packInfo);
 		Object.seal(this);
 	}
 
-	async getCurrentVersion(): Promise<BundleVersions> {
-		const bundledApps: BundleVersions['apps'] = {};
-		for (const { id, version } of await listInstalledBundledApps()) {
-			bundledApps[id] = version;
+	static makeIfAvailable(closeProcessesOnUpdateRestart: () => Promise<void>): PlatformDownloader|undefined {
+		const packInfo = findPackInfo();
+		if (!packInfo) {
+			return;
 		}
-		const bundledAppPacks: BundleVersions['app-packs'] = {};
-		for (const { id, version } of await listBundledAppPacks()) {
-			bundledAppPacks[id] = version;
+		const type = packInfoToType(packInfo);
+		if (!type) {
+			return;
 		}
+		return new PlatformDownloader(type, packInfo, closeProcessesOnUpdateRestart);
+	}
+
+	wrapCAP(): PlatformDownloaderCAP {
 		return {
-			apps: bundledApps,
-			"app-packs": bundledAppPacks,
-			bundle: bundleVersion,
-			platform: bundleVersion.substring(0, bundleVersion.indexOf('+')),
-			runtimes: {}
+			getChannels: this.getChannels.bind(this),
+			getLatestVersion: this.getLatestVersion.bind(this),
+			setupUpdater: this.setupUpdater.bind(this),
+			downloadUpdate: this.downloadUpdate.bind(this),
+			quitAndInstall: this.quitAndInstall.bind(this),
 		};
 	}
 
@@ -110,19 +113,33 @@ Object.freeze(PlatformDownloader.prototype);
 Object.freeze(PlatformDownloader);
 
 
-function packInfoToType(
-	packInfo: PackInfo|undefined
-): PlatformDownloader['type'] {
-	if (packInfo) {
-		const os = platform();
-		if ((os === 'linux') && (packInfo.variant === 'AppImage')) {
-			return 'electron-builder-update';
-		} else if ((os === 'darwin')
-		&& ((packInfo.variant === 'dmg') || (packInfo.variant === 'zip'))) {
-			return 'electron-builder-update';
-		} else if ((os === 'win32') && (packInfo.variant === 'nsis')) {
-			return 'electron-builder-update';
-		}
+export async function getPlatformCurrentVersion(): Promise<BundleVersions> {
+	const bundledApps: BundleVersions['apps'] = {};
+	for (const { id, version } of await listInstalledBundledApps()) {
+		bundledApps[id] = version;
+	}
+	const bundledAppPacks: BundleVersions['app-packs'] = {};
+	for (const { id, version } of await listBundledAppPacks()) {
+		bundledAppPacks[id] = version;
+	}
+	return {
+		apps: bundledApps,
+		"app-packs": bundledAppPacks,
+		bundle: bundleVersion,
+		platform: bundleVersion.substring(0, bundleVersion.indexOf('+')),
+		runtimes: {}
+	};
+}
+
+function packInfoToType(packInfo: PackInfo): PlatformDownloader['type']|undefined {
+	const os = platform();
+	if ((os === 'linux') && (packInfo.variant === 'AppImage')) {
+		return 'electron-builder-update';
+	} else if ((os === 'darwin')
+	&& ((packInfo.variant === 'dmg') || (packInfo.variant === 'zip'))) {
+		return 'electron-builder-update';
+	} else if ((os === 'win32') && (packInfo.variant === 'nsis')) {
+		return 'electron-builder-update';
 	}
 }
 

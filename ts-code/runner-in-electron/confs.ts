@@ -68,8 +68,10 @@ export interface PackInfo {
 const PACKING_INFO_FNAME = 'packing-info.json';
 
 export function findPackInfo(): PackInfo|undefined {
-	if (!isInAsar(__dirname)) { return; }
-	const infoFile = toAsarUnpacked(join(__dirname, '..', PACKING_INFO_FNAME));
+	let infoFile = join(__dirname, '..', PACKING_INFO_FNAME);
+	if (isInAsar(__dirname)) {
+		infoFile = toAsarUnpacked(infoFile);
+	}
 	try {
 		return require(infoFile);
 	} catch (err) {

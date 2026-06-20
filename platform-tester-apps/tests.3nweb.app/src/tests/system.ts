@@ -30,13 +30,17 @@ describe(`system.platform`, () => {
 	it(`has all methods`, () => {
 		const platform = w3n.system!.platform!;
 		expect(platform).toBeDefined();
-		expect(typeof platform.getChannels).toBe('function');
 		expect(typeof platform.getCurrentVersion).toBe('function');
-		expect(typeof platform.getLatestVersion).toBe('function');
-		expect(typeof platform.setupUpdater).toBe('function');
-		expect(typeof platform.downloadUpdate).toBe('function');
-		expect(typeof platform.quitAndInstall).toBe('function');
 		expect(typeof platform.wipeFromThisDevice).toBe('function');
+	});
+
+	(w3n.system?.platform?.downloader ? it : xit)(`.downloader has all methods`, () => {
+		const platformDownloader = w3n.system!.platform!.downloader!;
+		expect(typeof platformDownloader.getChannels).toBe('function');
+		expect(typeof platformDownloader.getLatestVersion).toBe('function');
+		expect(typeof platformDownloader.setupUpdater).toBe('function');
+		expect(typeof platformDownloader.downloadUpdate).toBe('function');
+		expect(typeof platformDownloader.quitAndInstall).toBe('function');
 	});
 
 	it('can get platform version', async () => {
@@ -88,6 +92,19 @@ describe(`system.monitor`, () => {
 		expect(monitor).toBeDefined();
 		expect(typeof monitor.listProcs).toBe('function');
 		expect(typeof monitor.listConnectionsToAppServices).toBe('function');
+	});
+
+});
+
+describe(`system.userLogin`, () => {
+
+	it(`has all methods`, () => {
+		const userLogin = w3n.system!.userLogin!;
+		expect(userLogin).toBeDefined();
+		expect(typeof userLogin.isAutoLoginAvailable).toBe('function');
+		expect(typeof userLogin.isAutoLoginSet).toBe('function');
+		expect(typeof userLogin.removeAutoLogin).toBe('function');
+		expect(typeof userLogin.setAutoLogin).toBe('function');
 	});
 
 });

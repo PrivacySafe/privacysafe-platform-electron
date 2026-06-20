@@ -16,7 +16,7 @@
 */
 
 import { Subject } from "rxjs";
-import { Envelope, ObjectsConnector, ClientSide, makeStartupW3Nclient } from 'core-3nweb-client-lib/build/ipc';
+import { Envelope, ObjectsConnector, ClientSide, makeStartupW3Nclient, callerSideJSONWrap as jsonCall } from 'core-3nweb-client-lib/build/ipc';
 import { toBuffer } from "../../platform/lib-common/buffer-utils";
 import { makeStartupTestStandCaller } from "../../platform/caps/test-stand/test-stand-cap-ipc";
 import { makeClientSideW3N, makeProviderCaller } from "../../platform/core/client-side-w3n";
@@ -53,7 +53,8 @@ export function makeStartupW3N(ipc: InitIPC): StartupW3N {
 	const clientW3N = makeStartupW3Nclient<web3n.testing.StartupW3N>(
 		clientSide, {
 			testStand: makeStartupTestStandCaller,
-			provider: makeProviderCaller
+			provider: makeProviderCaller,
+			enableAutoLogin: (caller, path) => jsonCall.makeReqRepFuncCaller(caller, path)
 		}
 	) as StartupW3N;
 	return clientW3N;

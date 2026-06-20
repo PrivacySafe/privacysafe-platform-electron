@@ -22,6 +22,7 @@ type Apps = web3n.system.apps.Apps;
 type AppsDownloader = web3n.system.apps.AppsDownloader;
 type AppsInstaller = web3n.system.apps.AppsInstaller;
 type Platform = web3n.system.platform.Platform;
+type PlatformDownloader = web3n.system.platform.PlatformDownloader;
 type AppsOpener = web3n.system.apps.AppsOpener;
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
 type UserLoginSettings = web3n.system.UserLoginSettings;
@@ -35,7 +36,7 @@ export function exposeSystemCAP(
 		wrap.apps = exposeAppsCAP(cap.apps, expServices)
 	}
 	if (cap.platform) {
-		wrap.platform = exposePlatformDownloaderCAP(cap.platform);
+		wrap.platform = exposePlatformCAP(cap.platform);
 	}
 	if (cap.monitor) {
 		wrap.monitor = exposeSystemMonitorCAP(cap.monitor);
@@ -113,23 +114,30 @@ function exposeAppsDownloaderCAP(
 	};
 }
 
-function exposePlatformDownloaderCAP(
+function exposePlatformCAP(
 	cap: Platform
 ): ExposedObj<Platform> {
+	const wrap: ExposedObj<Platform> = {
+		getCurrentVersion: jsonSrv.wrapReqReplySrvMethod(cap, 'getCurrentVersion'),
+		wipeFromThisDevice: jsonSrv.wrapReqReplySrvMethod(cap, 'wipeFromThisDevice')
+	};
+	if (cap.downloader) {
+		wrap.downloader = exposePlatformDownloaderCAP(cap.downloader);
+	}
+	return wrap;
+}
+
+function exposePlatformDownloaderCAP(
+	cap: PlatformDownloader
+): ExposedObj<PlatformDownloader> {
 	return {
-		getCurrentVersion: jsonSrv.wrapReqReplySrvMethod(
-			cap, 'getCurrentVersion'
-		),
 		getChannels: jsonSrv.wrapReqReplySrvMethod(cap, 'getChannels'),
-		getLatestVersion: jsonSrv.wrapReqReplySrvMethod(
-			cap, 'getLatestVersion'
-		),
+		getLatestVersion: jsonSrv.wrapReqReplySrvMethod(cap, 'getLatestVersion'),
 		setupUpdater: jsonSrv.wrapObservingFunc(
 			(obs, newBundleVersion) => cap.setupUpdater(newBundleVersion, obs)
 		),
 		downloadUpdate: jsonSrv.wrapReqReplySrvMethod(cap, 'downloadUpdate'),
 		quitAndInstall: jsonSrv.wrapReqReplySrvMethod(cap, 'quitAndInstall'),
-		wipeFromThisDevice: jsonSrv.wrapReqReplySrvMethod(cap, 'wipeFromThisDevice')
 	};
 }
 

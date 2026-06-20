@@ -123,11 +123,13 @@ interface Connector {
 
 const extraStartupCAPs = Object.freeze({
 	testStand: exposeStartupTestStandCAP,
-	provider: exposeProviderCAP
+	provider: exposeProviderCAP,
+	enableAutoLogin: exposeJSONFunc
 });
 
 function exposeProviderCAP(cap: DefaultProvider): ExposedObj<DefaultProvider> {
 	return {
+		openInExternal: jsonSrv.wrapReqReplySrvMethod(cap, 'openInExternal'),
 		openSiteInChildWindow: jsonSrv.wrapReqReplySrvMethod(cap, 'openSiteInChildWindow'),
 		closeSite: jsonSrv.wrapReqReplySrvMethod(cap, 'closeSite'),
 		getSignupToken: jsonSrv.wrapReqReplySrvMethod(cap, 'getSignupToken'),

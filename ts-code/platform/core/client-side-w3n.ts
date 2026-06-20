@@ -122,6 +122,7 @@ function providerMethod<M extends keyof DefaultProvider>(
 
 export function makeProviderCaller(caller: Caller, objPath: string[]): web3n.caps.startup.DefaultProviderSite {
 	return {
+		openInExternal: providerMethod(caller, objPath, 'openInExternal'),
 		openSiteInChildWindow: providerMethod(caller, objPath, 'openSiteInChildWindow'),
 		closeSite: providerMethod(caller, objPath, 'closeSite'),
 		getSignupToken: providerMethod(caller, objPath, 'getSignupToken'),

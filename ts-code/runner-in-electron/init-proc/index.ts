@@ -17,12 +17,12 @@
 
 import { TitleGenerator } from '../app-n-components/gui-component';
 import { CoreConf } from 'core-3nweb-client-lib';
-import { CoreDriver, makeCoreDriver, MakeUserMount } from '../../platform/core';
+import { autologinFromStartup, CoreDriver, makeCoreDriver, MakeUserMount } from '../../platform/core';
 import { ElectronIPCConnectors, SocketIPCConnectors } from '../app-n-components/w3n-connectors';
 import { app, dialog, powerMonitor } from 'electron';
 import { logError } from '../confs';
 import { setTimeout } from 'timers';
-import { PlatformDownloader } from '../caps/system/platform';
+import { getPlatformCurrentVersion, PlatformDownloader } from '../caps/system/platform';
 import { UserAppOpenCmd, UserSystemCmd, UserCmd, AppInfoForUI } from '../desktop-integration';
 import { TestStand } from '../test-stand';
 import { toCanonicalAddress } from '../../platform/lib-common/canonical-address';
@@ -33,7 +33,7 @@ import { PLATFORM_NAME, STARTUP_APP_DOMAIN } from '../bundle-confs';
 import { rm } from 'fs/promises';
 import { sleep } from '../../platform/lib-common/processes/sleep';
 import { dirname } from 'path';
-import { lookForAutologinUsers, UserKey } from './autologin';
+import { lookForAutologinUsers, saveUserKeyForAutologin, UserKey } from './autologin';
 import { shouldSkipDashboard } from './auto-startup';
 import { AppCallViaURL } from '../electron/app-url-protocol';
 import { mountIntoOS } from '../caps/shell/mounts';
@@ -49,6 +49,7 @@ import type { SystemPlaces } from '../../platform/caps/system/system-places';
 type TestStandConfig = web3n.testing.config.TestStandConfig;
 type DevAppParams = web3n.testing.config.DevAppParams;
 type WritableFS = web3n.files.WritableFS;
+type SetAutoLogin = web3n.caps.startup.SetAutoLogin;
 
 export class InitProc {
 
@@ -59,7 +60,7 @@ export class InitProc {
 	}|undefined = undefined;
 	private readonly guiConnectors = new ElectronIPCConnectors();
 	private readonly sockConnectors = new SocketIPCConnectors();
-	private readonly platform = new PlatformDownloader(this.closeAllUserAppsAndUI.bind(this));
+	private readonly platformDownloader = PlatformDownloader.makeIfAvailable(this.closeAllUserAppsAndUI.bind(this));
 	private readonly deskUI = new DesktopUI(
 		this.onCmdEvents.bind(this),
 		this.appInfoForUI.bind(this)
@@ -159,13 +160,15 @@ export class InitProc {
 	}
 
 	private instantiateStartupApp(
-		usersToFilterOut: string[], signupParams: SignupParamsViaURL|undefined
+		usersToFilterOut: string[], setAutoLogin: SetAutoLogin, saveUserKey: (storageKey: Uint8Array) => void,
+		signupParams: SignupParamsViaURL|undefined
 	) {
 		return (startCore: CoreDriver['start']) => StartupAppInElectron.instantiate(
 			usersToFilterOut, this.devToolsAllowance(STARTUP_APP_DOMAIN),
-			startCore,
+			() => startCore(saveUserKey),
 			this.guiConnectors.connectStartupW3N.bind(this.guiConnectors),
 			this.guiConnectors.connectCustomW3N.bind(this.guiConnectors),
+			setAutoLogin,
 			signupParams
 		);
 	}
@@ -185,13 +188,14 @@ export class InitProc {
 		if (this.startingUser) {
 			this.startingUser.focusWindow();
 		} else {
+			const { enableAutologin, getUserKeyForAutologin, saveUserKey } = autologinFromStartup();
 			const apps = new UserApps(
 				this.makeDriver, this.conf, this.makeAppsAndSites.bind(this), undefined, undefined,
 				this.devToolsAllowance, () => this.platformCAP, this.mounting?.makeUserMount, this.r
 			);
 			const userIdsToFilterOut = this.openedUsers(true);
 			const proc = apps.setStartupAppProcess(
-				this.instantiateStartupApp(userIdsToFilterOut, signupParams)
+				this.instantiateStartupApp(userIdsToFilterOut, enableAutologin, saveUserKey, signupParams)
 			)
 			.then(async ({ init }) => {
 				const newCoreInitialized = await init;
@@ -210,9 +214,16 @@ export class InitProc {
 			.finally(() => {
 				this.startingUser = undefined;
 			})
-			.then(canContinueLoadingApps => {
+			.then(async canContinueLoadingApps => {
 				if (canContinueLoadingApps) {
-					this.loadUserSystem(apps);
+					await this.loadUserSystem(apps);
+					const keyForAutologin = getUserKeyForAutologin();
+					if (keyForAutologin) {
+						await saveUserKeyForAutologin({
+							key: keyForAutologin,
+							userId: apps.userId
+						});
+					}
 				}
 			});
 			this.startingUser = {
@@ -265,13 +276,15 @@ export class InitProc {
 	}
 
 	private instantiateDevStartupApp(
-		usersToFilterOut: string[], devParams: DevAppParams, wrapCAP: WrapStartupCAPs
+		usersToFilterOut: string[], devParams: DevAppParams, wrapCAP: WrapStartupCAPs,
+		setAutoLogin?: SetAutoLogin, saveUserKey?: (storageKey: Uint8Array) => void
 	) {
 		return (startCore: CoreDriver['start']) => StartupAppInElectron.instantiateDev(
 			usersToFilterOut, devParams,
-			startCore, wrapCAP,
+			() => startCore(saveUserKey), wrapCAP,
 			this.guiConnectors.connectStartupW3N.bind(this.guiConnectors),
-			this.guiConnectors.connectCustomW3N.bind(this.guiConnectors)
+			this.guiConnectors.connectCustomW3N.bind(this.guiConnectors),
+			setAutoLogin ?? (async () => {})
 		);
 	}
 
@@ -289,7 +302,7 @@ export class InitProc {
 			runStartupDevApp: (devParams, wrapCaps) => {
 				const excIds = this.openedUsers(true);
 				return apps.setStartupAppProcess(
-					this.instantiateDevStartupApp(excIds, devParams, wrapCaps)
+					this.instantiateDevStartupApp(excIds, devParams, wrapCaps, async () => {})
 				);
 			},
 			initForDirectStartup: apps.startCoreDirectly.bind(apps),
@@ -306,13 +319,14 @@ export class InitProc {
 		params: DevAppParams, wrapStandCAP: WrapStartupCAPs
 	): Promise<void> {
 		if (!this.startingUser) {
+			const { enableAutologin, getUserKeyForAutologin, saveUserKey } = autologinFromStartup();
 			const apps = new UserApps(
 				this.makeDriver, this.conf, this.makeAppsAndSites.bind(this), undefined, undefined,
 				this.devToolsAllowance, () => this.platformCAP, this.mounting?.makeUserMount, this.r
 			);
 			const excIds = this.openedUsers(true);
 			const proc = apps.setStartupAppProcess(
-				this.instantiateDevStartupApp(excIds, params, wrapStandCAP)
+				this.instantiateDevStartupApp(excIds, params, wrapStandCAP, enableAutologin, saveUserKey)
 			)
 			.then(async ({ init }) => {
 				if (!(await init) && (this.userApps.size === 0)) {
@@ -325,9 +339,16 @@ export class InitProc {
 			.finally(() => {
 				this.startingUser = undefined;
 			})
-			.then(
-				() => this.loadUserSystem(apps)
-			);
+			.then(async () => {
+				await this.loadUserSystem(apps);
+				const keyForAutologin = getUserKeyForAutologin();
+				if (keyForAutologin) {
+					await saveUserKeyForAutologin({
+						key: keyForAutologin,
+						userId: apps.userId
+					});
+				}
+			});
 			this.startingUser = {
 				proc, focusWindow: () => apps.focusStartupWindow()
 			};
@@ -439,13 +460,9 @@ export class InitProc {
 	}
 
 	private readonly platformCAP: web3n.system.platform.Platform = {
-		getCurrentVersion: this.platform.getCurrentVersion.bind(this.platform),
-		getChannels: this.platform.getChannels.bind(this.platform),
-		getLatestVersion: this.platform.getLatestVersion.bind(this.platform),
-		setupUpdater: this.platform.setupUpdater.bind(this.platform),
-		downloadUpdate: this.platform.downloadUpdate.bind(this.platform),
-		quitAndInstall: this.platform.quitAndInstall.bind(this.platform),
-		wipeFromThisDevice: this.wipeFromThisDevice.bind(this)
+		getCurrentVersion: getPlatformCurrentVersion,
+		wipeFromThisDevice: this.wipeFromThisDevice.bind(this),
+		downloader: this.platformDownloader?.wrapCAP(),
 	};
 
 	private async closeAllUserAppsAndUI(): Promise<void> {

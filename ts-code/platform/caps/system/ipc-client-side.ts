@@ -25,6 +25,7 @@ type DownloadProgress = web3n.system.apps.DownloadProgress;
 type AppsInstaller = web3n.system.apps.AppsInstaller;
 type AppUnpackProgress = web3n.system.apps.AppUnpackProgress;
 type Platform = web3n.system.platform.Platform;
+type PlatformDownloader = web3n.system.platform.PlatformDownloader;
 type PlatformUpdateEvents = web3n.system.platform.PlatformUpdateEvents;
 type AppsOpener = web3n.system.apps.AppsOpener;
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
@@ -40,11 +41,15 @@ export function makeSystemCaller(caller: Caller, sysPath: string[]): SysUtils {
 	const lstAppsCAP = (lstSystemCAP.includes('apps') ?
 		caller.listObj(sysPath.concat('apps')) as (keyof Apps)[] : undefined
 	);
-	return makeSystemBasedOnListing(caller, sysPath, lstSystemCAP, lstAppsCAP);
+	const lstPlatformCAP = (lstSystemCAP.includes('platform') ?
+		caller.listObj(sysPath.concat('platform')) as (keyof Platform)[] : undefined
+	);
+	return makeSystemBasedOnListing(caller, sysPath, lstSystemCAP, lstPlatformCAP, lstAppsCAP);
 }
 
 function makeSystemBasedOnListing(
 	caller: Caller, sysPath: string[], lstSystemCAP: (keyof SysUtils)[],
+	lstPlatformCAP: (keyof Platform)[]|undefined,
 	lstAppsCAP: (keyof NonNullable<SysUtils['apps']>)[]|undefined
 ): SysUtils {
 	const system: SysUtils = {};
@@ -54,7 +59,7 @@ function makeSystemBasedOnListing(
 	}
 	if (lstSystemCAP.includes('platform')) {
 		const platformPath = sysPath.concat('platform');
-		system.platform = makePlatformDownloaderCaller(caller, platformPath);
+		system.platform = makePlatformCaller(lstPlatformCAP!, caller, platformPath);
 	}
 	if (lstSystemCAP.includes('monitor')) {
 		const monitorPath = sysPath.concat('monitor');
@@ -88,9 +93,11 @@ export async function promiseSystemCaller(
 		(await caller.listObjAsync(sysPath.concat('apps'))) as (keyof Apps)[] :
 		undefined
 	);
-	return makeSystemBasedOnListing(
-		caller, sysPath, lstSystemCAP, lstAppsCAP
+	const lstPlatformCAP = (lstSystemCAP.includes('platform') ?
+		(await caller.listObjAsync(sysPath.concat('platform'))) as (keyof Platform)[] :
+		undefined
 	);
+	return makeSystemBasedOnListing(caller, sysPath, lstSystemCAP, lstPlatformCAP, lstAppsCAP);
 }
 
 function makeAppsFollowingListing(
@@ -180,22 +187,33 @@ function callAppsInstaller<M extends keyof AppsInstaller>(
 	return jsonCall.makeReqRepObjCaller<AppsInstaller, M>(caller, objPath, method);
 }
 
+function makePlatformCaller(
+	lstPlatformCAP: (keyof Platform)[], caller: Caller, objPath: string[]
+): Platform {
+	const platform: Platform = {
+		getCurrentVersion: callPlatform(caller, objPath, 'getCurrentVersion'),
+		wipeFromThisDevice: callPlatform(caller, objPath, 'wipeFromThisDevice')
+	};
+	if (lstPlatformCAP.includes('downloader')) {
+		platform.downloader = makePlatformDownloaderCaller(caller, objPath.concat('downloader'));
+	}
+	return platform;
+}
+
 function makePlatformDownloaderCaller(
 	caller: Caller, objPath: string[]
-): Platform {
+): PlatformDownloader {
 	return {
-		getCurrentVersion: callPlatform(caller, objPath, 'getCurrentVersion'),
-		getChannels: callPlatform(caller, objPath, 'getChannels'),
-		getLatestVersion: callPlatform(caller, objPath, 'getLatestVersion'),
+		getChannels: callPlDownloader(caller, objPath, 'getChannels'),
+		getLatestVersion: callPlDownloader(caller, objPath, 'getLatestVersion'),
 		setupUpdater: (() => {
 			const fn = jsonCall.makeObservableFuncCaller<PlatformUpdateEvents>(
 				caller, objPath.concat('setupUpdater')
 			);
 			return (newBundleVersion, obs) => fn(obs, newBundleVersion);
 		})(),
-		downloadUpdate: callPlatform(caller, objPath, 'downloadUpdate'),
-		quitAndInstall: callPlatform(caller, objPath, 'quitAndInstall'),
-		wipeFromThisDevice: callPlatform(caller, objPath, 'wipeFromThisDevice')
+		downloadUpdate: callPlDownloader(caller, objPath, 'downloadUpdate'),
+		quitAndInstall: callPlDownloader(caller, objPath, 'quitAndInstall'),
 	};
 }
 
@@ -203,6 +221,12 @@ function callPlatform<M extends keyof Platform>(
 	caller: Caller, objPath: string[], method: M
 ): Platform[M] {
 	return jsonCall.makeReqRepObjCaller<Platform, M>(caller, objPath, method);
+}
+
+function callPlDownloader<M extends keyof PlatformDownloader>(
+	caller: Caller, objPath: string[], method: M
+): PlatformDownloader[M] {
+	return jsonCall.makeReqRepObjCaller<PlatformDownloader, M>(caller, objPath, method);
 }
 
 function makeAppsOpenerCaller(

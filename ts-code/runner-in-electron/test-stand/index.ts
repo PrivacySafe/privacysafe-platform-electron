@@ -692,14 +692,14 @@ async function startUserWithDevStartupApp(
 	runStartupDevApp: StartDevStartupApp|AppsRunnerForTesting['runStartupDevApp'],
 	baseStand: web3n.testing.BasicTestStand
 ): Promise<void> {
-	const addTestCAP: WrapStartupCAPs = ({ signIn, signUp, provider }) => {
+	const addTestCAP: WrapStartupCAPs = ({ signIn, signUp, provider, enableAutoLogin }) => {
 		const testStand: web3n.testing.StartupTestStand = {
 			staticTestInfo: async () => ({ userId, pass, userNum, signupToken }),
 			log: baseStand.log,
 			record: baseStand.record,
 			exitAll: baseStand.exitAll,
 		};
-		return { signIn, signUp, provider, testStand };
+		return { signIn, signUp, provider, enableAutoLogin, testStand };
 	};
 	const initSteps = await runStartupDevApp(appParams, addTestCAP);
 	await initSteps?.init;

@@ -186,7 +186,7 @@ export class UserApps {
 		if (this.core.isStarted() || this.startupApp) {
 			throw new Error(`Startup was already started`);
 		}
-		const { coreInit, startProc, startupApp } = instantiate(() => this.core.start());
+		const { coreInit, startProc, startupApp } = instantiate(this.core.start.bind(this.core));
 		this.startupApp = startupApp;
 		await startProc;
 		const windowClosed = defer<false>();

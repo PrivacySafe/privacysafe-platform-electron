@@ -109,9 +109,11 @@ export class CoreDriver {
 		await this.core.close().catch(this.r.logging.logError);
 	}
 
-	start(): { capsForStartup: web3n.startup.W3N; coreInit: Promise<void>; } {
+	start(
+		saveStorageKeyForAutologin?: (storageKey: Uint8Array) => void
+	): { capsForStartup: web3n.startup.W3N; coreInit: Promise<void>; } {
 		if (!this.core) { throw new Error(`Core is already closed`); }
-		const { capsForStartup, coreInit, coreAppsInit } = this.core.start();
+		const { capsForStartup, coreInit, coreAppsInit } = this.core.start(saveStorageKeyForAutologin);
 		return {
 			capsForStartup,
 			coreInit: coreInit.then(
@@ -252,6 +254,27 @@ Object.freeze(CoreDriver);
 
 
 function noop() {}
+
+export function autologinFromStartup(): {
+	saveUserKey: (storageKey: Uint8Array) => void;
+	getUserKeyForAutologin: () => Uint8Array|undefined;
+	enableAutologin: (enable: boolean) => Promise<void>;
+} {
+	let userKeyForAutoLogin: Uint8Array|undefined = undefined;
+	let setupAutologin = false;
+
+	return {
+		saveUserKey: storageKey => {
+			if (setupAutologin) {
+				userKeyForAutoLogin = storageKey;
+			}
+		},
+		enableAutologin: async enable => {
+			setupAutologin = enable;
+		},
+		getUserKeyForAutologin: () => userKeyForAutoLogin
+	};
+}
 
 
 Object.freeze(exports);

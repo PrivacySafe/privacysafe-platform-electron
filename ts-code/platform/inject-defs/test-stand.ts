@@ -15,10 +15,10 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { GetAppStorage } from "../apps/live-apps";
+import type { GetAppStorage } from "../apps/live-apps";
 import type { CoreDriver } from "../core";
-import { AppCAPsAndSetup, AppSetter, SiteCAPsAndSetup } from "./apps";
-import { UserAppInfo } from "./platform";
+import type { AppCAPsAndSetup, AppSetter, SiteCAPsAndSetup } from "./apps";
+import type { UserAppInfo } from "./platform";
 
 type DevAppParams = web3n.testing.config.DevAppParams;
 type DevSiteParams = web3n.testing.config.DevSiteParams;

@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { BrowserWindow, WebContents } from "electron";
+import { BrowserWindow, shell, WebContents } from "electron";
 import { STARTUP_APP_DOMAIN } from "../bundle-confs";
 import { toCanonicalAddress } from "../../platform/lib-common/canonical-address";
 import { DevAppInstanceFromUrl, GUIComponent, PROVIDER_SITE_PRELOAD } from "./gui-component";
@@ -42,6 +42,7 @@ type StartupW3N = web3n.startup.W3N;
 type WindowOptions = web3n.ui.WindowOptions;
 type DevAppParams = web3n.testing.config.DevAppParams;
 type DefaultProviderSite = web3n.caps.startup.DefaultProviderSite;
+type SetAutoLogin = web3n.caps.startup.SetAutoLogin;
 
 type InstantiateGUI = (
 	entrypoint: string, winOpts: WindowOptions|undefined,
@@ -64,7 +65,7 @@ export class StartupAppInElectron implements StartupApp {
 	static instantiate(
 		usersToFilterOut: string[], devTools: boolean,
 		startCore: CoreDriver['start'], connectIPC: ConnectIPC, connectCustomIPC: ConnectCustomIPC,
-		signupParams: SignupParamsViaURL|undefined
+		setAutoLogin: SetAutoLogin, signupParams: SignupParamsViaURL|undefined
 	): {
 		startupApp: StartupAppInElectron;
 		startProc: Promise<void>;
@@ -76,7 +77,7 @@ export class StartupAppInElectron implements StartupApp {
 		const startupApp = new StartupAppInElectron();
 		const { capsForStartup, coreInit } = startCore();
 		const providerSiteCAP = makeProviderCAP(() => startupApp.gui?.window, connectCustomIPC, devTools);
-		const caps = patchCAPs(capsForStartup, providerSiteCAP, usersToFilterOut);
+		const caps = patchCAPs(capsForStartup, providerSiteCAP, setAutoLogin, usersToFilterOut);
 		const startProc = appAndManifestOnDev(STARTUP_APP_DOMAIN)
 		.then(({ manifest, appRoot }) => startupApp.startRegularOrDevelopmentGUI(
 			manifest, caps, connectIPC,
@@ -92,7 +93,7 @@ export class StartupAppInElectron implements StartupApp {
 	static instantiateDev(
 		usersToFilterOut: string[], devParams: DevAppParams,
 		startCore: CoreDriver['start'], wrapCAP: WrapStartupCAPs,
-		connectIPC: ConnectIPC, connectCustomIPC: ConnectCustomIPC
+		connectIPC: ConnectIPC, connectCustomIPC: ConnectCustomIPC, setAutoLogin: SetAutoLogin
 	): ReturnType<typeof StartupAppInElectron.instantiate> {
 		if (StartupAppInElectron.startProc) {
 			throw new Error(`Startup process is already running`);
@@ -100,7 +101,7 @@ export class StartupAppInElectron implements StartupApp {
 		const startupApp = new StartupAppInElectron();
 		const { capsForStartup, coreInit } = startCore();
 		const providerSiteCAP = makeProviderCAP(() => startupApp.gui?.window, connectCustomIPC, true);
-		const caps = wrapCAP(patchCAPs(capsForStartup, providerSiteCAP, usersToFilterOut, true));
+		const caps = wrapCAP(patchCAPs(capsForStartup, providerSiteCAP, setAutoLogin, usersToFilterOut, true));
 		const { manifest, url, dir } = devParams;
 		const startProc = DeviceFS.makeReadonly(dir)
 		.then((appRoot) => {
@@ -165,7 +166,8 @@ Object.seal(StartupAppInElectron);
 
 
 function patchCAPs(
-	w3n: web3n.startup.W3N, provider: DefaultProviderSite, excIds: string[], isTestCAP = false
+	w3n: web3n.startup.W3N, provider: DefaultProviderSite, setAutoLogin: SetAutoLogin, excIds: string[],
+	isTestCAP = false
 ): web3n.caps.startup.W3N {
 	const signIn: web3n.startup.SignInService = ((excIds.length === 0) ?
 		w3n.signIn :
@@ -198,7 +200,8 @@ function patchCAPs(
 	return {
 		signIn,
 		signUp: w3n.signUp,
-		provider
+		provider,
+		enableAutoLogin: setAutoLogin
 	};
 }
 
@@ -210,7 +213,10 @@ function makeProviderCAP(
 	let deferredToken: Deferred<string>|undefined = undefined;
 	let tokenProvided = false;
 	return {
-		openSiteInChildWindow: async (url) => {
+		openInExternal: async url => {
+			shell.openExternal(url);
+		},
+		openSiteInChildWindow: async url => {
 			const parent = getAppWindow();
 			if (!parent) {
 				return;
