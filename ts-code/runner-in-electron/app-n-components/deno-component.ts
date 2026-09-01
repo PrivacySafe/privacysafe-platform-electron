@@ -119,7 +119,10 @@ export class DenoComponent extends AppComponentBase {
 			[ 'run', ...privArgs, '--no-code-cache', '--no-lock', '--no-check', fileToLoad ],
 			{
 				cwd: utilDir,
-				shell: this.denoBin.spanWithShell
+				shell: this.denoBin.spanWithShell,
+				env: {
+					'DENO_NO_PACKAGE_JSON': '1'
+				}
 			}
 		);
 		this.proc.on('error', this.onError.bind(this));

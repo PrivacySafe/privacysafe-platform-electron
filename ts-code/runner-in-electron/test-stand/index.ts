@@ -31,9 +31,8 @@ import { RPCLogger } from "./log-rpc";
 import { makeTestStandUICap } from "../caps/ui";
 // import { Mounter } from "../caps/shell/mounts/user-mounts";
 import { UserAppInfo } from "../../platform/inject-defs/platform";
-import { AppsRunnerForTesting, DevSiteParamsGetter, MakeRunner, StartDevStartupApp, WrapSiteCAPsAndSetup, WrapStartupCAPs } from "../../platform/inject-defs/test-stand";
-import { Mounter } from "../../platform/inject-defs/caps";
-import { DevAppParamsGetter } from "../../platform/apps/live-apps";
+import type { AppsRunnerForTesting, MakeRunner, DevApps, StartDevStartupApp, WrapSiteCAPsAndSetup, WrapStartupCAPs } from "../../platform/inject-defs/test-stand";
+import type { Mounter } from "../../platform/inject-defs/caps";
 
 type AppManifest = web3n.caps.AppManifest;
 type SiteManifest = web3n.caps.SiteManifest;
@@ -151,6 +150,10 @@ export class TestStand {
 		);
 	}
 
+  listAllApps(): DevAppParams[] {
+		return Array.from(this.devApps.values());
+  }
+
 	private listDevAppsWith(apps: UserAppInfo[]): UserAppInfo[] {
 		for (const devApp of this.devApps.values()) {
 			const { appDomain: id, name } = devApp.manifest;
@@ -168,6 +171,14 @@ export class TestStand {
 			}
 		}
 		return apps;
+	}
+
+	devAppsFor(userId: string): DevApps {
+		return {
+			getAppParams: this.devAppsGetter(userId),
+			getSiteParams: this.devSiteGetter(userId),
+			listAllApps: this.listAllApps.bind(this)
+		};
 	}
 
 	private async startDevAppsForUser(
@@ -216,7 +227,7 @@ export class TestStand {
 		console.log(`✔️ opened ${devSitesOpened} site(s) for test user ${userParams.userId}\n`);
 	}
 
-	devAppsGetter(userId: string): DevAppParamsGetter {
+	private devAppsGetter(userId: string): DevApps['getAppParams'] {
 		const userParams = this.devUsers.slice(1).find(
 			u => areAddressesEqual(u.userId, userId)
 		)!;
@@ -255,7 +266,7 @@ export class TestStand {
 		};
 	}
 
-	devSiteGetter(userId: string): DevSiteParamsGetter {
+	private devSiteGetter(userId: string): DevApps['getSiteParams'] {
 		const userParams = this.devUsers.slice(1).find(
 			u => areAddressesEqual(u.userId, userId)
 		)!;

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020, 2022 3NSoft Inc.
+ Copyright (C) 2020, 2022, 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -18,197 +18,73 @@
 import { ExposedFn, Caller, ExposedObj, FileMsg, exposeFileService, CoreSideServices, makeFileCaller, FSMsg, exposeFSService, makeFSCaller } from 'core-3nweb-client-lib/build/ipc';
 import { ProtoType } from '../../../lib-common/protobuf-msg';
 import { file_dialogs as pb } from '../../../protos/file_dialogs.proto';
+import { capViaRPC } from '../../rpc/client-caps-ipc';
+import { SingleConnectionIPCWrap } from '../../../lib-common/service-ipc/ipc-service';
+import { makeReqRepMethodCaller } from '../../../lib-common/service-ipc/ipc-service-caller';
 
-type FileDialogs = web3n.shell.files.Dialogs;
+type Dialogs = web3n.shell.files.Dialogs;
+type ExposeService = web3n.rpc.service.ExposeService;
 
-export function exposeFileDialogsCAP(
-	cap: FileDialogs, expServices: CoreSideServices
-): ExposedObj<FileDialogs> {
-	const exposed: ExposedObj<FileDialogs> = {};
+export function proxyFileDialogsCAP(
+	cap: Dialogs, expServices: CoreSideServices
+): ExposedObj<Dialogs> {
+	const exposed: ExposedObj<Dialogs> = {};
 	if (cap.openFileDialog) {
-		exposed.openFileDialog = openFileDialog.wrapService(
-			cap.openFileDialog, expServices);
+		exposed.openFileDialog = capViaRPC.expose(cap.openFileDialog as any, expServices);
 	}
 	if (cap.openFolderDialog) {
-		exposed.openFolderDialog = openFolderDialog.wrapService(
-			cap.openFolderDialog, expServices);
+		exposed.openFolderDialog = capViaRPC.expose(cap.openFolderDialog as any, expServices);
 	}
 	if (cap.saveFileDialog) {
-		exposed.saveFileDialog = saveFileDialog.wrapService(
-			cap.saveFileDialog, expServices);
+		exposed.saveFileDialog = capViaRPC.expose(cap.saveFileDialog as any, expServices);
 	}
 	if (cap.saveFolderDialog) {
-		exposed.saveFolderDialog = saveFolderDialog.wrapService(
-			cap.saveFolderDialog, expServices);
+		exposed.saveFolderDialog = capViaRPC.expose(cap.saveFolderDialog as any, expServices);
 	}
 	return exposed;
 }
 
 export function makeFileDialogs(
-	caller: Caller, objPath: string[], exposed: (keyof FileDialogs)[]
-): FileDialogs {
-	const dialogs: FileDialogs = {};
+	caller: Caller, objPath: string[], exposed: (keyof Dialogs)[]
+): Dialogs {
+	const dialogs: Dialogs = {};
 	if (exposed.includes('openFileDialog')) {
-		dialogs.openFileDialog = openFileDialog.makeCaller(caller, objPath);
+		dialogs.openFileDialog = openFileDialog.capOnAppSide(caller, objPath.concat('openFileDialog'));
 	}
 	if (exposed.includes('openFolderDialog')) {
-		dialogs.openFolderDialog = openFolderDialog.makeCaller(caller, objPath);
+		dialogs.openFolderDialog = openFolderDialog.capOnAppSide(caller, objPath.concat('openFolderDialog'));
 	}
 	if (exposed.includes('saveFileDialog')) {
-		dialogs.saveFileDialog = saveFileDialog.makeCaller(caller, objPath);
+		dialogs.saveFileDialog = saveFileDialog.capOnAppSide(caller, objPath.concat('saveFileDialog'));
 	}
 	if (exposed.includes('saveFolderDialog')) {
-		dialogs.saveFolderDialog = saveFolderDialog.makeCaller(caller, objPath);
+		dialogs.saveFolderDialog = saveFolderDialog.capOnAppSide(caller, objPath.concat('saveFolderDialog'));
 	}
 	return dialogs;
 }
 
 
-type FileTypeFilter = web3n.shell.files.FileTypeFilter;
+export namespace openFileDialog {
 
-interface SaveDialogArgs {
-	title: string;
-	btnLabel: string;
-	defaultPath: string;
-	filters?: FileTypeFilter[];
-}
-const saveDialogArgsType = ProtoType.for<SaveDialogArgs>(pb.SaveDialogArgs);
+	const serviceName = 'w3n.shell.fileDialogs.openFileDialog';
 
+	export type capType = NonNullable<Dialogs['openFileDialog']>
 
-namespace saveFileDialog {
-
-	const replyType = ProtoType.for<{
-		file?: FileMsg;
-	}>(pb.SaveFileDialogReplyBody);
-
-	export function wrapService(
-		fn: NonNullable<FileDialogs['saveFileDialog']>,
-		expServices: CoreSideServices
-	): ExposedFn {
-		return bytes => {
-			const { btnLabel, defaultPath, title, filters } =
-				saveDialogArgsType.unpack(bytes);
-			const promise = fn(title, btnLabel, defaultPath, filters)
-			.then(fileObj => {
-				const file = (fileObj ?
-					exposeFileService(fileObj, expServices) : undefined
-				);
-				return replyType.pack({ file });
-			});
-			return { promise };
-		};
+	export function provideServiceOnAppSide(fn: capType, exposeViaRPC: ExposeService, closeApp: () => void): void {
+		const srv = new SingleConnectionIPCWrap(serviceName, closeApp);
+		srv.addReqReplyMethod('open', undefined, fn);
+		srv.startIPC(exposeViaRPC);
 	}
 
-	export function makeCaller(
-		caller: Caller, objPath: string[]
-	): FileDialogs['saveFileDialog'] {
-		const path = objPath.concat('saveFileDialog');
-		return async (title, btnLabel, defaultPath, filters) => {
-			const req = saveDialogArgsType.pack({
-				title, btnLabel, defaultPath, filters
-			});
-			const buf = await caller.startPromiseCall(path, req);
-			const reply = replyType.unpack(buf);
-			return (reply.file ?
-				makeFileCaller(caller, reply.file) as web3n.files.WritableFile :
-				undefined);
-		};
-	}
-
-}
-Object.freeze(saveFileDialog);
-
-
-namespace saveFolderDialog {
-
-	const replyType = ProtoType.for<{
-		folder?: FSMsg;
-	}>(pb.SaveFolderDialogReplyBody);
-
-	export function wrapService(
-		fn: NonNullable<FileDialogs['saveFolderDialog']>,
-		expServices: CoreSideServices
-	): ExposedFn {
-		return bytes => {
-			const { btnLabel, defaultPath, title, filters } =
-				saveDialogArgsType.unpack(bytes);
-			const promise = fn(title, btnLabel, defaultPath, filters)
-			.then(fsObj => {
-				const folder = (fsObj ?
-					exposeFSService(fsObj, expServices) : undefined);
-				return replyType.pack({ folder });
-			});
-			return { promise };
-		};
-	}
-
-	export function makeCaller(
-		caller: Caller, objPath: string[]
-	): FileDialogs['saveFolderDialog'] {
-		const path = objPath.concat('saveFolderDialog');
-		return async (title, btnLabel, defaultPath, filters) => {
-			const req = saveDialogArgsType.pack({
-				title, btnLabel, defaultPath, filters
-			});
-			const buf = await caller.startPromiseCall(path, req);
-			const reply = replyType.unpack(buf);
-			return (reply.folder ?
-				makeFSCaller(caller, reply.folder) as web3n.files.WritableFS :
-				undefined);
-		};
-	}
-
-}
-Object.freeze(saveFolderDialog);
-
-
-interface OpenDialogArgs {
-	title: string;
-	btnLabel: string;
-	multiSelections: boolean;
-	filters?: FileTypeFilter[];
-}
-const openDialogArgsType = ProtoType.for<OpenDialogArgs>(pb.OpenDialogArgs);
-
-
-namespace openFileDialog {
-
-	const replyType = ProtoType.for<{
-		files?: FileMsg[];
-	}>(pb.OpenFileDialogReplyBody);
-
-	export function wrapService(
-		fn: NonNullable<FileDialogs['openFileDialog']>,
-		expServices: CoreSideServices
-	): ExposedFn {
-		return bytes => {
-			const { btnLabel, multiSelections, title, filters } =
-				openDialogArgsType.unpack(bytes);
-			const promise = fn(title, btnLabel, multiSelections, filters)
-			.then(fileObjs => {
-				const files = (fileObjs ?
-					fileObjs.map(f => exposeFileService(f, expServices)) :
-					undefined);
-				return replyType.pack({ files });
-			});
-			return { promise };
-		};
-	}
-
-	export function makeCaller(
-		caller: Caller, objPath: string[]
-	): FileDialogs['openFileDialog'] {
-		const path = objPath.concat('openFileDialog');
+	export function capOnAppSide(caller: Caller, objPath: string[]): capType {
+		const connect = capViaRPC.makeClient(caller, objPath);
 		return async (title, btnLabel, multiSelections, filters) => {
-			const req = openDialogArgsType.pack({
-				title, btnLabel, multiSelections, filters
-			});
-			const buf = await caller.startPromiseCall(path, req);
-			const reply = replyType.unpack(buf);
-			if (reply.files && (reply.files.length > 0)) {
-				return reply.files.map(fMsg => makeFileCaller(caller, fMsg));
-			} else {
-				return undefined;
+			const conn = await connect();
+			try {
+				const capProxy = makeReqRepMethodCaller<capType>(conn, 'open');
+				return await capProxy(title, btnLabel, multiSelections, filters);
+			} finally {
+				conn.close();
 			}
 		};
 	}
@@ -217,52 +93,91 @@ namespace openFileDialog {
 Object.freeze(openFileDialog);
 
 
-namespace openFolderDialog {
+export namespace openFolderDialog {
 
-	const replyType = ProtoType.for<{
-		folders?: FSMsg[];
-	}>(pb.OpenFolderDialogReplyBody);
+	const serviceName = 'w3n.shell.fileDialogs.openFolderDialog';
 
-	export function wrapService(
-		fn: NonNullable<FileDialogs['openFolderDialog']>,
-		expServices: CoreSideServices
-	): ExposedFn {
-		return bytes => {
-			const { btnLabel, multiSelections, title, filters } =
-				openDialogArgsType.unpack(bytes);
-			const promise = fn(title, btnLabel, multiSelections, filters)
-			.then(fsObjs => {
-				const folders = (fsObjs ?
-					fsObjs.map(f => exposeFSService(f, expServices)) :
-					undefined);
-				return replyType.pack({ folders });
-			});
-			return { promise };
-		};
+	export type capType = NonNullable<Dialogs['openFolderDialog']>
+
+	export function provideServiceOnAppSide(fn: capType, exposeViaRPC: ExposeService, closeApp: () => void): void {
+		const srv = new SingleConnectionIPCWrap(serviceName, closeApp);
+		srv.addReqReplyMethod('open', undefined, fn);
+		srv.startIPC(exposeViaRPC);
 	}
 
-	export function makeCaller(
-		caller: Caller, objPath: string[]
-	): FileDialogs['openFolderDialog'] {
-		const path = objPath.concat('openFolderDialog');
+	export function capOnAppSide(caller: Caller, objPath: string[]): capType {
+		const connect = capViaRPC.makeClient(caller, objPath);
 		return async (title, btnLabel, multiSelections, filters) => {
-			const req = openDialogArgsType.pack({
-				title, btnLabel, multiSelections, filters
-			});
-			const buf = await caller.startPromiseCall(path, req);
-			const reply = replyType.unpack(buf);
-			if (reply.folders && (reply.folders.length > 0)) {
-				const folders = reply.folders.map(
-					fsMsg => makeFSCaller(caller, fsMsg));
-				return folders as web3n.files.WritableFS[];
-			} else {
-				return undefined;
+			const conn = await connect();
+			try {
+				const capProxy = makeReqRepMethodCaller<capType>(conn, 'open');
+				return await capProxy(title, btnLabel, multiSelections, filters);
+			} finally {
+				conn.close();
 			}
 		};
 	}
 
 }
 Object.freeze(openFolderDialog);
+
+
+export namespace saveFileDialog {
+
+	const serviceName = 'w3n.shell.fileDialogs.saveFileDialog';
+
+	export function provideServiceOnAppSide(
+		fn: NonNullable<Dialogs['saveFileDialog']>, exposeViaRPC: ExposeService, closeApp: () => void
+	): void {
+		const srv = new SingleConnectionIPCWrap(serviceName, closeApp);
+		srv.addReqReplyMethod('open', undefined, fn);
+		srv.startIPC(exposeViaRPC);
+	}
+
+	export function capOnAppSide(caller: Caller, objPath: string[]): NonNullable<Dialogs['saveFileDialog']> {
+		const connect = capViaRPC.makeClient(caller, objPath);
+		return async (title, btnLabel, defaultPath, filters) => {
+			const conn = await connect();
+			try {
+				const capProxy = makeReqRepMethodCaller<NonNullable<Dialogs['saveFileDialog']>>(conn, 'open');
+				return await capProxy(title, btnLabel, defaultPath, filters);
+			} finally {
+				conn.close();
+			}
+		};
+	}
+
+}
+Object.freeze(openFileDialog);
+
+
+export namespace saveFolderDialog {
+
+	const serviceName = 'w3n.shell.fileDialogs.saveFolderDialog';
+
+	export function provideServiceOnAppSide(
+		fn: NonNullable<Dialogs['saveFolderDialog']>, exposeViaRPC: ExposeService, closeApp: () => void
+	): void {
+		const srv = new SingleConnectionIPCWrap(serviceName, closeApp);
+		srv.addReqReplyMethod('open', undefined, fn);
+		srv.startIPC(exposeViaRPC);
+	}
+
+	export function capOnAppSide(caller: Caller, objPath: string[]): NonNullable<Dialogs['saveFolderDialog']> {
+		const connect = capViaRPC.makeClient(caller, objPath);
+		return async (title, btnLabel, defaultPath, filters) => {
+			const conn = await connect();
+			try {
+				const capProxy = makeReqRepMethodCaller<NonNullable<Dialogs['saveFolderDialog']>>(conn, 'open');
+				return await capProxy(title, btnLabel, defaultPath, filters);
+			} finally {
+				conn.close();
+			}
+		};
+	}
+
+}
+Object.freeze(openFileDialog);
 
 
 Object.freeze(exports);

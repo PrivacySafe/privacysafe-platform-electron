@@ -251,8 +251,7 @@ Object.freeze(Connection);
 export class ServiceConnector implements Service {
 
 	private connectionSink: Observer<IncomingConnection>|undefined = undefined;
-	private  deferredSink: Deferred<Observer<IncomingConnection>>|undefined =
-		defer();
+	private  deferredSink: Deferred<Observer<IncomingConnection>>|undefined = defer();
 	private acceptingCalls = true;
 	private readonly connections = new Set<Connection>();
 
@@ -287,15 +286,13 @@ export class ServiceConnector implements Service {
 	}
 
 	ensureCallerAllowed(callerApp: string, callerComponent: string): void {
-		if (!isCallerAllowed(
-			this.appDomain, this.allowedCallers, callerApp, callerComponent
-		)) {
+		if (!isCallerAllowed(this.appDomain, this.allowedCallers, callerApp, callerComponent)) {
 			throw makeRPCException(
 				this.appDomain, this.srvName,
 				{ callerNotAllowed: true },
 				{ callerApp, callerComponent }
 			);
-		}	
+		}
 	}
 
 	setSinkForConnections(sink: Observer<IncomingConnection>): void {
@@ -325,9 +322,7 @@ export class ServiceConnector implements Service {
 			throw this.makeExc({ connectionNotAccepted: true });
 		}
 		const srvSideSink = await this.getConnectionSink();
-		const connection = new Connection(
-			this.appDomain, this.srvName, callerApp, callerComponent
-		);
+		const connection = new Connection(this.appDomain, this.srvName, callerApp, callerComponent);
 		this.connections.add(connection);
 		connection.doOnClose(() => this.connections.delete(connection));
 		const { srvSide, clientSide } = connection.makePair();

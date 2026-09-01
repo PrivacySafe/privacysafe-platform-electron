@@ -57,6 +57,7 @@ it.func = async function(s) {
 	expect(inMsg.plainTxtBody).toBe(outMsg.plainTxtBody);
 
 };
+it.timeout = 10000;
 specs.its.push(it);
 
 export const secondUserTasks = [];

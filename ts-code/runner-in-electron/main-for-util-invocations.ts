@@ -17,9 +17,9 @@
 
 import { checkServicesStartingFromSignup, makeNetClient, makeServiceLocator } from "core-3nweb-client-lib";
 import { openServiceEventsSrcFromNode } from "core-3nweb-client-lib/build/lib-common-on-node/websocket-from-node";
-import { DEFAULT_SIGNUP_URL, PLATFORM_NAME } from "./bundle-confs";
+import { PLATFORM_NAME } from "./bundle-confs";
 import { bundleVersion } from "./bundle-version";
-import { parse3NWebURL, web3nUrlSchema } from "./electron/app-url-protocol";
+import { parse3NWebURL } from "./electron/custom-url-schemas";
 import { UTIL_INVOCATION_ARGS, cliUsageTxt } from "./process-args";
 import { listInstalledBundledApps } from "./caps/system/system-places";
 import { CheckResult, CheckStart } from "core-3nweb-client-lib/build/lib-client/service-checks";
@@ -61,7 +61,7 @@ ${
 }
 
 async function checkSignupAndServicesFrom(signupUrl: string): Promise<void> {
-	const signupParams = parse3NWebURL(signupUrl);
+	const { signupParams } = parse3NWebURL(signupUrl);
 	if (!signupParams) {
 		throw `signupUrl is not a valid 3nweb signup url`;
 	}

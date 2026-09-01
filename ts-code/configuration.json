@@ -1,10 +1,17 @@
 {
-	"launcher-app": "launcher.3nweb.app",
-	"startup-app": "startup.3nweb.app",
-	"signup-url": "https://3nweb.net/signup/",
-	"platform-name": "3NWeb",
+	"launcher-app": "launcher.app.privacysafe.io",
+	"startup-app": "startup.app.privacysafe.io",
+	"contacts-app": "contacts.app.privacysafe.io",
+	"signup-url": "https://signup.privacysafe.me/",
+	"platform-name": "PrivacySafe",
 	"bundled-apps": [],
-	"bundled-app-packs": [],
-	"data-dir-name": ".3NWeb",
-	"bundle-base-url": "https://3nsoft.com/downloads/PrivacySafe"
+	"bundled-app-packs": [
+		"files.app.privacysafe.io",
+		"chat.app.privacysafe.io",
+		"contacts.app.privacysafe.io",
+		"inbox.app.privacysafe.io",
+		"treasure.app.privacysafe.io"
+	],
+	"data-dir-name": ".PrivacySafe",
+	"bundle-base-url": "https://download.privacysafe.app"
 }

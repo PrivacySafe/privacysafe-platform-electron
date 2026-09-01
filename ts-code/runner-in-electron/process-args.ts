@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2018, 2020 - 2024 3NSoft Inc.
+ Copyright (C) 2018, 2020 - 2024, 2026 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -20,12 +20,13 @@ import { isAbsolute, join } from "path";
 import { assert } from "../platform/lib-common/assert";
 import { parseArgv, ArgDef, cliUsageToString, CliUsageSection } from "./lib-common/parse-argv";
 import { PLATFORM_NAME } from "./bundle-confs";
-import { AppCallViaURL, appUrlSchema, parse3NWebURL, parseAppURL, web3nUrlSchema } from "./electron/app-url-protocol";
+import { AppCallViaURL, appUrlSchema, parse3NWebURL, parseAppURL, web3nUrlSchema } from "./electron/custom-url-schemas";
 import type { DevToolsAppAllowance } from "../platform/inject-defs/test-stand";
 import { SignupParamsViaURL } from "../platform/inject-defs/platform";
 
 type TestStandConfig = web3n.testing.config.TestStandConfig;
 type FormFactor = web3n.ui.FormFactor;
+type CmdParams = web3n.shell.commands.CmdParams;
 
 function checkedFolderArgType(
 	folder: string
@@ -188,6 +189,10 @@ const usage: CliUsageSection[] = [
 	{
 		header: `Options:`,
 		optionList: platformArgDefs
+	},
+	{
+		header: `Calls with supported URLs`,
+		content: `Platform expects to process w3n: and w3n-app: URL schemas. Desktop environments simply invoke program with URL as a parameter. This implies that if argument with URL is given, it will be processed as such, but only one URL argument.`
 	}
 ];
 
@@ -234,6 +239,7 @@ const DEV_TOOL_FLAG = !!parsedCliArgs['devtools'];
 export function urlFromArgs(argv: string[]): {
 	appCallViaURL?: AppCallViaURL;
 	signupParams?: SignupParamsViaURL;
+	systemCmd?: CmdParams;
 } {
 	const appUrlArg = argv.find(arg => arg.startsWith(`${appUrlSchema}://`));
 	if (appUrlArg) {
@@ -241,14 +247,10 @@ export function urlFromArgs(argv: string[]): {
 			appCallViaURL: parseAppURL(appUrlArg)
 		};
 	}
-
 	const web3nUrl = argv.find(arg => arg.startsWith(`${web3nUrlSchema}://`));
 	if (web3nUrl) {
-		return {
-			signupParams: parse3NWebURL(web3nUrl)
-		};
+		return parse3NWebURL(web3nUrl);
 	}
-
 	return {};
 }
 

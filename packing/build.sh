@@ -4,6 +4,12 @@ arch="$1"
 shift 1
 variants="$@"
 
+if [ ! -d "packing/runtimes" ] || [ ! -d "packing/bundled-apps" ]
+then
+	echo "Building needs packing directory to have bundled-apps and runtimes. If testing is done on pre-packed, these directories can be empty."
+	exit -1
+fi
+
 get_platform() {
 	local platform="$(node -e 'console.log(os.platform())')"
 	case $platform in 
@@ -111,8 +117,8 @@ copy_code $src_dir $app_dir || exit $?
 prep_package_json $pack_file $app_dir "main.js" || exit $?
 prep_package_lock_json $lock_file $app_dir || exit $?
 
-echo "Copying configuration.json and asset files from packing/ into $app_dir/"
-cp_list="icons runtimes bundled-apps configuration.json"
+echo "Copying asset files from packing/ into $app_dir/"
+cp_list="icons runtimes bundled-apps"
 (cd $app_dir || exit $?
 	rm -rf $cp_list || exit $?
 ) || exit $?

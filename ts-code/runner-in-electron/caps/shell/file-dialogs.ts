@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2017, 2020, 2022 3NSoft Inc.
+ Copyright (C) 2016 - 2017, 2020, 2022, 2026 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -19,17 +19,11 @@ import { dialog } from 'electron';
 import { basename, dirname } from 'path';
 import { stat as fsStat } from '../../../platform/lib-common/async-fs-node';
 import { DeviceFS } from 'core-3nweb-client-lib';
-import { FileException } from '../../../platform/lib-common/exceptions/file';
-import { GUIComponent } from '../../app-n-components/gui-component';
-import { AppSetter } from '../../../platform/inject-defs/apps';
-
-type Dialogs = web3n.shell.files.Dialogs;
-
-export function makeAllFileDialogOpeners(): {
-	openers: Dialogs; setApp: AppSetter; close(): void;
-} {
-	return (new DevFileOpener()).wrap();
-}
+import type { FileException } from '../../../platform/lib-common/exceptions/file';
+import type { GUIComponent } from '../../app-n-components/gui-component';
+import type { AppSetter, Component, Service } from '../../../platform/inject-defs/apps';
+import { openFileDialog, openFolderDialog, saveFileDialog, saveFolderDialog } from '../../../platform/caps/shell/file-dialogs/file-dialogs-cap-ipc';
+import { makeServiceOverRPCFromPlatform } from '../../../platform/caps/rpc';
 
 type BrowserWindow = Electron.BrowserWindow;
 type FileTypeFilter = web3n.shell.files.FileTypeFilter;
@@ -38,39 +32,42 @@ type ReadonlyFile = web3n.files.ReadonlyFile;
 type WritableFS = web3n.files.WritableFS;
 type ReadonlyFS = web3n.files.ReadonlyFS;
 
+export async function defaultServiceForFileDialogsCAPs(caller: Component, capName: string): Promise<Service> {
+	const { provide, service } = makeServiceOverRPCFromPlatform(capName);
+	function closeApp() {} // is a noop
+	const dialogOpener = new DevFileOpener((caller as GUIComponent).window);
+	switch (capName) {
+		case 'w3n.shell.fileDialogs.openFileDialog':
+			openFileDialog.provideServiceOnAppSide(dialogOpener.openFileDialog.bind(dialogOpener), provide, closeApp);
+			break;
+		case 'w3n.shell.fileDialogs.openFolderDialog':
+			openFolderDialog.provideServiceOnAppSide(dialogOpener.openFolderDialog.bind(dialogOpener), provide, closeApp);
+			break;
+		case 'w3n.shell.fileDialogs.saveFileDialog':
+			saveFileDialog.provideServiceOnAppSide(dialogOpener.saveFileDialog.bind(this), provide, closeApp);
+			break;
+		case 'w3n.shell.fileDialogs.saveFolderDialog':
+			saveFolderDialog.provideServiceOnAppSide(dialogOpener.saveFolderDialog.bind(this), provide, closeApp);
+			break;
+		default:
+			throw `Implementation is not found for capability ${capName}`;
+	}
+	return service;
+}
+
+
 class DevFileOpener {
 
-	private win: BrowserWindow|undefined = undefined;
-
-	constructor() {
+	constructor(
+		private readonly win: BrowserWindow
+	) {
 		Object.seal(this);
 	}
 
-	wrap(): ReturnType<typeof makeAllFileDialogOpeners> {
-		return {
-			openers: {
-				openFileDialog: this.openFileDialog.bind(this),
-				openFolderDialog: this.openFolderDialog.bind(this),
-				saveFileDialog: this.saveFileDialog.bind(this),
-				saveFolderDialog: this.saveFolderDialog.bind(this),
-			},
-			setApp: this.setAppInstance.bind(this),
-			close: (): void => {
-				this.win = undefined;
-			}
-		};
-	}
-
-	private setAppInstance(app: GUIComponent): void {
-		if (this.win) { throw new Error(`Window instance is already set`); }
-		this.win = app.window;
-	}
-
 	async openFileDialog(
-		title: string, buttonLabel: string, multiSelections: boolean,
-		filters?: FileTypeFilter[]
+		title: string, buttonLabel: string, multiSelections: boolean, opts: { filters?: FileTypeFilter[] }
 	): Promise<ReadonlyFile[]|undefined> {
-		const res = await this.openningDialog('file', title, buttonLabel, multiSelections, filters);
+		const res = await this.openningDialog('file', title, buttonLabel, multiSelections, opts?.filters);
 		if (res.canceled || (res.filePaths.length === 0)) { return; }
 		const files: ReadonlyFile[] = [];
 		for (const path of res.filePaths) {
@@ -80,10 +77,9 @@ class DevFileOpener {
 	}
 
 	async openFolderDialog(
-		title: string, buttonLabel: string, multiSelections: boolean,
-		filters?: FileTypeFilter[]
+		title: string, buttonLabel: string, multiSelections: boolean, opts: { filters?: FileTypeFilter[] }
 	): Promise<WritableFS[]|undefined> {
-		const res = await this.openningDialog('fs', title, buttonLabel, multiSelections, filters);
+		const res = await this.openningDialog('fs', title, buttonLabel, multiSelections, opts?.filters);
 		if (res.canceled || (res.filePaths.length === 0)) { return; }
 		const folders: WritableFS[] = [];
 		for (const path of res.filePaths) {
@@ -93,8 +89,7 @@ class DevFileOpener {
 	}
 
 	private async openningDialog(
-		type: 'file'|'fs', title: string, buttonLabel: string,
-		multiSelections: boolean, filters?: FileTypeFilter[]
+		type: 'file'|'fs', title: string, buttonLabel: string, multiSelections: boolean, filters?: FileTypeFilter[]
 	): Promise<Electron.OpenDialogReturnValue> {
 		if (!this.win || this.win.isDestroyed()) {
 			throw new Error(`Parent window is either not set, or is already gone`);
@@ -105,16 +100,13 @@ class DevFileOpener {
 		}
 		properties.push('createDirectory');
 		this.win.focus();
-		return dialog.showOpenDialog(
-			this.win,
-			{ title, buttonLabel, filters, properties });
+		return dialog.showOpenDialog(this.win, { title, buttonLabel, filters, properties });
 	}
 
 	async saveFileDialog(
-		title: string, buttonLabel: string, defaultPath: string,
-		filters?: FileTypeFilter[]
+		title: string, buttonLabel: string, defaultPath: string, opts: { filters?: FileTypeFilter[] }
 	): Promise<WritableFile|undefined> {
-		const res = await this.savingDialog(title, buttonLabel, defaultPath, filters);
+		const res = await this.savingDialog(title, buttonLabel, defaultPath, opts?.filters);
 		if (res.canceled || !res.filePath) { return; }
 		const path = res.filePath;
 		const exists = !!(await fsStat(path).catch((exc: FileException) => {
@@ -125,10 +117,9 @@ class DevFileOpener {
 	}
 
 	async saveFolderDialog(
-		title: string, buttonLabel: string, defaultPath: string,
-		filters?: FileTypeFilter[]
+		title: string, buttonLabel: string, defaultPath: string, opts: { filters?: FileTypeFilter[] }
 	): Promise<WritableFS|undefined> {
-		const res = await this.savingDialog(title, buttonLabel, defaultPath, filters);
+		const res = await this.savingDialog(title, buttonLabel, defaultPath, opts?.filters);
 		if (res.canceled || !res.filePath) { return; }
 		const path = res.filePath;
 		const exists = !!(await fsStat(path).catch((exc: FileException) => {
@@ -139,21 +130,16 @@ class DevFileOpener {
 	}
 
 	private savingDialog(
-		title: string, buttonLabel: string, defaultPath: string,
-		filters?: FileTypeFilter[]
+		title: string, buttonLabel: string, defaultPath: string, filters?: FileTypeFilter[]
 	): Promise<Electron.SaveDialogReturnValue> {
 		if (!this.win || this.win.isDestroyed()) {
-			throw new Error(`Parent window is either not set, or is already gone`); }
+			throw new Error(`Parent window is either not set, or is already gone`);
+		}
 		this.win.focus();
-		return dialog.showSaveDialog(
-			this.win,
-			{ title, buttonLabel, defaultPath, filters }
-		);
+		return dialog.showSaveDialog(this.win, { title, buttonLabel, defaultPath, filters });
 	}
 
-	getDevFS(
-		path: string, writable = false, create = false, exclusive = false
-	): Promise<WritableFS|ReadonlyFS> {
+	getDevFS(path: string, writable = false, create = false, exclusive = false): Promise<WritableFS|ReadonlyFS> {
 		if (writable) {
 			return DeviceFS.makeWritable(path, create, exclusive);
 		} else {
@@ -189,9 +175,7 @@ async function makeFileFor(
 	}
 } 
 
-async function makeFolderFor(
-	path: string, exists: boolean, isWritable: boolean
-): Promise<ReadonlyFS|WritableFS> {
+async function makeFolderFor(path: string, exists: boolean, isWritable: boolean): Promise<ReadonlyFS|WritableFS> {
 	const fName = basename(path);
 	const folder = dirname(path);
 	const fs = await DeviceFS.makeWritable(folder);

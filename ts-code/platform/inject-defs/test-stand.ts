@@ -47,8 +47,30 @@ export type StartDevStartupApp = (
 	params: DevAppParams, wrapStandCAP: WrapStartupCAPs
 ) => Promise<void>;
 
-export type DevSiteParamsGetter = (
-	appDomain: string, entrypoint: string|undefined
-) => { params: DevSiteParams; wrapCAPs: WrapSiteCAPsAndSetup; }|undefined;
+// export type DevSiteParamsGetter = (
+// 	appDomain: string, entrypoint: string|undefined
+// ) => { params: DevSiteParams; wrapCAPs: WrapSiteCAPsAndSetup; }|undefined;
 
+// export type DevAppParamsGetter = (appDomain: string) => {
+// 	params: DevAppParams;
+// 	capsWrapper: WrapAppCAPsAndSetup;
+// }|undefined;
 
+export type WrapAppCAPsAndSetup = (
+	entrypoint: string, cap: AppCAPsAndSetup,
+	focusThisWindow: (() => Promise<void>)|undefined
+) => { w3n: web3n.testing.CommonW3N; close: () => void; setApp: AppSetter; };
+
+export interface DevApps {
+
+	getAppParams: (appDomain: string) => {
+		params: DevAppParams; capsWrapper: WrapAppCAPsAndSetup;
+	}|undefined;
+
+	getSiteParams: (
+		appDomain: string, entrypoint: string|undefined
+	) => { params: DevSiteParams; wrapCAPs: WrapSiteCAPsAndSetup; }|undefined;
+
+	listAllApps(): DevAppParams[]
+
+}

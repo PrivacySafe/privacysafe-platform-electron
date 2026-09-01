@@ -18,10 +18,10 @@
 import type { Core, makeCryptor, MakeNet, ServiceLocatorMaker } from "core-3nweb-client-lib";
 import type { ShellCAPs } from "./caps";
 import type { Logging } from "./confs";
-import type { AppSetter } from "./apps";
+import type { AppSetter, Component, Service } from "./apps";
 import type { SystemPlaces } from "../caps/system/system-places";
 import type { AppDownloader } from "../caps/system/apps-downloader";
-import { AsyncRNG } from "core-3nweb-client-lib/build/lib-common/rng-def";
+import type { AsyncRNG } from "core-3nweb-client-lib/build/lib-common/rng-def";
 
 export interface SignupParamsViaURL {
 	signupUrl: string;
@@ -51,6 +51,8 @@ type UI = web3n.ui.UI;
 type W3N = web3n.caps.W3N;
 type RequestedCAPs = web3n.caps.RequestedCAPs;
 type ConnectivityCAP = web3n.connectivity.Connectivity;
+type FormFactor = web3n.ui.FormFactor;
+type FSItem = web3n.files.FSItem;
 
 export interface CAPsImpls {
 
@@ -93,6 +95,12 @@ export interface PlatformResources {
 	makeServiceLocator: ServiceLocatorMaker;
 
 	makeNetClient: MakeNet;
+
+	getSytemFormFactor: () => FormFactor;
+
+	sysFilesOnDevice: () => Promise<FSItem>;
+
+	getServiceForCAP?: (caller: Component, capName: string) => Promise<Service>;
 
 }
 

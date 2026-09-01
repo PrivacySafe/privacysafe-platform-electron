@@ -16,28 +16,19 @@
 */
 
 import { SingleProc } from "../lib-common/processes/single";
-import { App } from "./app";
-import { AppCAPsAndSetup, AppSetter } from "../inject-defs/apps";
-import { Logging } from "../inject-defs/confs";
+import type { App } from "./app";
+import type { AppCAPsAndSetup, AppSetter } from "../inject-defs/apps";
+import type { Logging } from "../inject-defs/confs";
+import type { DevApps } from "../inject-defs/test-stand";
 
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
 type OpenComponentInfo = web3n.system.monitor.OpenComponentInfo;
 type OpenConnectionInfo = web3n.system.monitor.OpenConnectionInfo;
 type PostInstallState =web3n.system.apps.PostInstallState;
+type FormFactor = web3n.ui.FormFactor;
 type WritableFS = web3n.files.WritableFS;
-type DevAppParams = web3n.testing.config.DevAppParams;
 
 export type GetAppStorage = (type: 'local'|'synced') => Promise<WritableFS>;
-
-export type DevAppParamsGetter = (appDomain: string) => {
-	params: DevAppParams;
-	capsWrapper: WrapAppCAPsAndSetup;
-}|undefined;
-
-export type WrapAppCAPsAndSetup = (
-	entrypoint: string, cap: AppCAPsAndSetup,
-	focusThisWindow: (() => Promise<void>)|undefined
-) => { w3n: web3n.testing.CommonW3N; close: () => void; setApp: AppSetter; };
 
 export abstract class LiveApps {
 
@@ -46,8 +37,9 @@ export abstract class LiveApps {
 	private canAddApps = true;
 
 	protected constructor(
+		public readonly getSytemFormFactor: () => FormFactor,
 		protected readonly getAppStorage: (appDomain: string) => GetAppStorage,
-		private readonly devApps: DevAppParamsGetter|undefined,
+		private readonly getDevAppParams: DevApps['getAppParams']|undefined,
 		protected readonly logging: Logging
 	) {}
 
@@ -72,7 +64,7 @@ export abstract class LiveApps {
 				return app;
 			}
 			this.ensureCanAddApp();
-			const devAppParams = this.devApps?.(appId);
+			const devAppParams = this.getDevAppParams?.(appId);
 			const getAppStorage = this.getAppStorage(appId);
 			app = await (devAppParams ?
 				this.makeDevApp(devAppParams, getAppStorage, () => this.removeFromAppsById(app!)) :
@@ -91,7 +83,7 @@ export abstract class LiveApps {
 	): Promise<App>;
 
 	protected abstract makeDevApp(
-		devAppParams: NonNullable<ReturnType<DevAppParamsGetter>>,
+		devAppParams: NonNullable<ReturnType<DevApps['getAppParams']>>,
 		getAppStorage: GetAppStorage,
 		removeThisFromLiveApps: () => void
 	): Promise<App>;
@@ -140,15 +132,12 @@ export abstract class LiveApps {
 		const appsToClose = idsOfAppsToClose
 		.map(appId => this.appsById.get(appId))
 		.filter(app => !!app) as App[];
-		await Promise.all(appsToClose
-		.map(app => app.stopAndClose().catch(
-			err => this.logging.logError(err, `Error on app closing`)
-		)));
+		await Promise.all(appsToClose.map(
+			app => app.stopAndClose().catch(err => this.logging.logError(err, `Error on app closing`))
+		));
 	}
 
-	followupAppInstall(
-		appId: string, version: string
-	): PostInstallState {
+	followupAppInstall(appId: string, version: string): PostInstallState {
 		const app = this.appsById.get(appId);
 		if (!app || (app.version === version)) {
 			return 'all-done';
@@ -171,9 +160,7 @@ export abstract class LiveApps {
 	makeMonitor(): SystemMonitor {
 		return {
 			listProcs: this.listProcs.bind(this),
-			listConnectionsToAppServices: this.listConnectionsToAppServices.bind(
-				this
-			)
+			listConnectionsToAppServices: this.listConnectionsToAppServices.bind(this)
 		};
 	}
 
@@ -192,9 +179,7 @@ export abstract class LiveApps {
 		return lst;
 	}
 
-	private async listConnectionsToAppServices(
-		appId: string
-	): Promise<OpenConnectionInfo[]|undefined> {
+	private async listConnectionsToAppServices(appId: string): Promise<OpenConnectionInfo[]|undefined> {
 		const app = this.appsById.get(appId);
 		return app?.openSrvConnections;
 	}

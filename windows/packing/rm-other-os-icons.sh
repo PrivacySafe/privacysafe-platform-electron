@@ -1,1 +1,0 @@
-../../packing/rm-other-os-icons.sh

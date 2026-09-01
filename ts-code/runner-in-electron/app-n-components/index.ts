@@ -17,20 +17,20 @@
 
 import { DeviceFS } from "core-3nweb-client-lib";
 import { App, AppFolder } from "../../platform/apps/app";
-import { DevAppParamsGetter, GetAppStorage, LiveApps, WrapAppCAPsAndSetup } from "../../platform/apps/live-apps";
+import { GetAppStorage, LiveApps } from "../../platform/apps/live-apps";
 import { CoreDriver } from "../../platform/core";
 import { ScreenGUIPlacements } from "../window-utils/screen-gui-placements";
 import { DevAppInstanceFromUrl, GUIComponent, TitleGenerator } from "./gui-component";
 import { ElectronIPCConnectors, SocketIPCConnectors } from "./w3n-connectors";
 import { isBundledApp } from "../bundle-confs";
 import type { Logging } from "../../platform/inject-defs/confs";
-import { getSytemFormFactor } from "../caps/ui";
 import { Component, Service } from "../../platform/inject-defs/apps";
 import { PostponedValuesFixedKeysMap } from "../../platform/lib-common/postponed-values-map";
 import { externalHostsToConnect, servicesImplementedBy } from "../../platform/lib-common/manifest-utils";
 import { makeAppInitExc } from "../../platform/caps/shell";
 import { DenoComponent } from "./deno-component";
 import type { SystemPlaces } from "../../platform/caps/system/system-places";
+import type { DevApps, WrapAppCAPsAndSetup } from "../../platform/inject-defs/test-stand";
 
 type AppManifest = web3n.caps.AppManifest;
 type FormFactor = web3n.ui.FormFactor;
@@ -38,11 +38,14 @@ type CmdParams = web3n.shell.commands.CmdParams;
 type GUIComponentDef = web3n.caps.GUIComponent;
 type SrvDef = web3n.caps.ServiceComponent;
 type GUISrvDef = web3n.caps.GUIServiceComponent;
+type CAPsImplDef = web3n.caps.CAPsImplementingComponent;
+type GUICAPsImplDef = web3n.caps.CAPsImplementingGUIComponent;
 type FileException = web3n.files.FileException;
 
 export class LiveAppsInElectron extends LiveApps {
 
 	constructor(
+		getSytemFormFactor: () => FormFactor,
 		private readonly findInstalledApp: SystemPlaces['findInstalledApp'],
 		private readonly appAndManifestOnDev: SystemPlaces['appAndManifestOnDev'],
 		private readonly makeAppCAPs: CoreDriver['makeCAPsForAppComponent'],
@@ -51,10 +54,10 @@ export class LiveAppsInElectron extends LiveApps {
 		private readonly sockConnectors: SocketIPCConnectors,
 		private readonly titleMaker: TitleGenerator,
 		private readonly guiPlacement: ScreenGUIPlacements,
-		devApps: DevAppParamsGetter|undefined,
+		getDevAppParams: DevApps['getAppParams']|undefined,
 		logging: Logging
 	) {
-		super(getAppStorage, devApps, logging);
+		super(getSytemFormFactor, getAppStorage, getDevAppParams, logging);
 		Object.seal(this);
 	}
 
@@ -71,28 +74,29 @@ export class LiveAppsInElectron extends LiveApps {
 			this.findInstalledApp(appId)
 		);
 		return new AppInElectron(
-			manifest, appRoot, this.makeAppCAPs, getAppStorage,
+			manifest, appRoot,  this.getSytemFormFactor, this.makeAppCAPs, getAppStorage,
 			this.guiConnectors, this.sockConnectors,
 			this.guiPlacement, this.titleMaker,
-			devTools, undefined, undefined, undefined,
+			devTools, undefined, undefined,
 			removeThisFromLiveApps, this.logging
 		);
 	}
 
 	protected async makeDevApp(
-		devAppParams: NonNullable<ReturnType<DevAppParamsGetter>>,
+		devAppParams: NonNullable<ReturnType<DevApps['getAppParams']>>,
 		getAppStorage: GetAppStorage,
 		removeThisFromLiveApps: () => void
 	): Promise<App> {
 		const {
 			params: { dir, manifest, url, formFactor }, capsWrapper
 		} = devAppParams;
+		const getUIFF = () => (formFactor ?? this.getSytemFormFactor());
 		const appRoot = await DeviceFS.makeReadonly(dir);
 		return new AppInElectron(
-			manifest, appRoot, this.makeAppCAPs, getAppStorage,
+			manifest, appRoot, getUIFF, this.makeAppCAPs, getAppStorage,
 			this.guiConnectors, this.sockConnectors,
 			this.guiPlacement, this.titleMaker,
-			true, url, formFactor, capsWrapper,
+			true, url, capsWrapper,
 			removeThisFromLiveApps, this.logging
 		);
 	}
@@ -107,6 +111,7 @@ class AppInElectron extends App {
 	constructor(
 		manifest: AppManifest,
 		appRoot: AppFolder,
+		getUIFF: () => FormFactor,
 		makeAppCAPs: CoreDriver['makeCAPsForAppComponent'],
 		getAppStorage: GetAppStorage,
 		private readonly guiConnectors: ElectronIPCConnectors,
@@ -115,23 +120,19 @@ class AppInElectron extends App {
 		private readonly titleMaker: TitleGenerator,
 		devTools: boolean,
 		private readonly devRootUrl: string|undefined,
-		private readonly formFactor: FormFactor|undefined,
 		devCAPsWrapper: WrapAppCAPsAndSetup|undefined,
 		removeThisFromLiveApps: () => void,
 		logging: Logging
 	) {
 		super(
-			manifest, appRoot, makeAppCAPs, getAppStorage, removeThisFromLiveApps, devTools, devCAPsWrapper, logging
+			manifest, appRoot, getUIFF, makeAppCAPs, getAppStorage, removeThisFromLiveApps,
+			devTools, devCAPsWrapper, logging
 		);
 		Object.seal(this);
 	}
 
-	protected get uiFF(): FormFactor {
-		return this.formFactor ?? getSytemFormFactor();
-	}
-
 	protected async makeAndStartGUIComponentInstance(
-		entrypoint: string, component: GUIComponentDef|GUISrvDef,
+		entrypoint: string, component: GUIComponentDef|GUISrvDef|GUICAPsImplDef,
 		startCmd: CmdParams|undefined, guiParent: GUIComponent|undefined,
 		devTools?: boolean
 	): Promise<GUIComponent> {
@@ -170,7 +171,7 @@ class AppInElectron extends App {
 	}
 
 	protected async makeAndStartDenoComponentInstance(
-		entrypoint: string, component: SrvDef
+		entrypoint: string, component: SrvDef|CAPsImplDef
 	): Promise<Component> {
 		const { appDomain } = this.manifest;
 		const caps = this.capsForNewComponentInstance(entrypoint, component, undefined, undefined);

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022, 2024 - 2025 3NSoft Inc.
+ Copyright (C) 2022, 2024 - 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -31,6 +31,47 @@ describe(`shell.userNotifications`, () => {
 		expect(typeof w3n.shell!.userNotifications!.addNotification).toBe('function');
 		expect(typeof w3n.shell!.userNotifications!.removeNotification).toBe('function');
 		expect(typeof w3n.shell!.userNotifications!.watch).toBe('function');
+	});
+
+});
+
+describe(`shell.fileDialogs`, () => {
+
+	it(`app manifest requests the cap, and it is expected`, async () => {
+		expect(typeof w3n.shell).toBe('object');
+		expect(typeof w3n.shell!.fileDialogs).toBe('object');
+		expect(typeof w3n.shell!.fileDialogs!.openFileDialog).toBe('function');
+		expect(typeof w3n.shell!.fileDialogs!.openFolderDialog).toBe('function');
+		expect(typeof w3n.shell!.fileDialogs!.saveFileDialog).toBe('function');
+		expect(typeof w3n.shell!.fileDialogs!.saveFolderDialog).toBe('function');
+	});
+
+	it(`.openFileDialog`, async () => {
+		const title = `Pick file ${Date.now()}`;
+		const files = (await w3n.shell!.fileDialogs!.openFileDialog?.(title, 'Open', false))!;
+		expect(files[0].name).withContext(`test component names file with title`).toBe(title);
+		expect(typeof files[0].readTxt).toBe('function');
+	});
+
+	it(`.openFolderDialog`, async () => {
+		const title = `Pick file ${Date.now()}`;
+		const folders = (await w3n.shell!.fileDialogs!.openFolderDialog?.(title, 'Open', false))!;
+		expect(folders[0].name).withContext(`test component names folder with title`).toBe(title);
+		expect(typeof folders[0].readTxtFile).toBe('function');
+	});
+
+	it(`.saveFileDialog`, async () => {
+		const title = `Pick file ${Date.now()}`;
+		const file = (await w3n.shell!.fileDialogs!.saveFileDialog?.(title, 'Open', ''))!;
+		expect(file.name).withContext(`test component names file with title`).toBe(title);
+		expect(typeof file.writeTxt).toBe('function');
+	});
+
+	it(`.saveFolderDialog`, async () => {
+		const title = `Pick file ${Date.now()}`;
+		const folder = (await w3n.shell!.fileDialogs!.saveFolderDialog?.(title, 'Open', ''))!;
+		expect(folder.name).withContext(`test component names folder with title`).toBe(title);
+		expect(typeof folder.writeTxtFile).toBe('function');
 	});
 
 });

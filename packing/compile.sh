@@ -45,7 +45,7 @@ rm_and_mk_dir() {
 
 compile_protos_to_node() {
 
-	local protos_dir="protos"
+	local protos_dir="protos-platform"
 	local code_dir="ts-code/platform/protos"
 	rm_and_mk_dir $code_dir || return $?
 	local build_dir="build/all/platform/protos"

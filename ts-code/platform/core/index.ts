@@ -22,7 +22,7 @@ import { StartAppWithCmd } from "../caps/shell/cmd-invocation";
 import { GetAppFSResourceFor } from "../caps/shell/fs-resource";
 import { makeRpcCAP } from "../caps/rpc";
 import { connectivityCAP } from "../caps/connectivity/connectivity";
-import { makeSystemCAP } from "../caps/system";
+import { makeSystemCAP, OtherUsersFns, TurnOffFns } from "../caps/system";
 import { makeShellCAPs } from "../caps/shell";
 import { NOTIFICATIONS_SYSTEM_COMPONENT, SYSTEM_DOMAIN } from "../inject-defs/confs";
 import { AppSetter, Component, makeCAPsSetAppAndCloseFns, SiteCAPsAndSetup } from "../inject-defs/apps";
@@ -31,7 +31,6 @@ import { Notifications } from "../caps/shell/user-notifications";
 import { PlatformResources } from "../inject-defs/platform";
 
 type SysUtils = web3n.system.SysUtils;
-type Logout = web3n.system.Logout;
 type AppComponent = web3n.caps.AppComponent;
 type SiteComponent = web3n.caps.SiteComponent;
 type CmdParams = web3n.shell.commands.CmdParams;
@@ -47,13 +46,13 @@ export type MakeTestStandMount = () => Promise<Mounter>;
 export function makeCoreDriver(
 	conf: CoreConf, makeSystemCapFns: () => SysUtils,
 	startAppWithCmd: StartAppWithCmd, openDashboard: OpenDashboard,
-	logout: Logout, getService: GetServiceToHandleNewCall,
-	getAppFSResourceFor: GetAppFSResourceFor, makeUserMounts: MakeUserMount|undefined,
-		r: PlatformResources
+	turnOffFns: TurnOffFns, otherUsersFns: ((currentUserId: string) => OtherUsersFns)|undefined,
+	getService: GetServiceToHandleNewCall, getAppFSResourceFor: GetAppFSResourceFor,
+	makeUserMounts: MakeUserMount|undefined, r: PlatformResources
 ): CoreDriver {
 	return new CoreDriver(
-		conf, makeSystemCapFns, startAppWithCmd, openDashboard, logout, getService, getAppFSResourceFor,
-		makeUserMounts, r
+		conf, makeSystemCapFns, startAppWithCmd, openDashboard, turnOffFns, otherUsersFns,
+		getService, getAppFSResourceFor, makeUserMounts, r
 	);
 }
 
@@ -72,7 +71,8 @@ export class CoreDriver {
 		private readonly makeSystemCapFns: () => SysUtils,
 		private readonly startAppWithCmd: StartAppWithCmd,
 		private readonly openDashboard: OpenDashboard,
-		private readonly logout: Logout,
+		private readonly turnOffFns: TurnOffFns,
+		private readonly otherUsersFns: ((currentUserId: string) => OtherUsersFns)|undefined,
 		getService: GetServiceToHandleNewCall,
 		private readonly getAppFSResourceFor: GetAppFSResourceFor,
 		makeUserMounts: MakeUserMount|undefined,
@@ -82,6 +82,7 @@ export class CoreDriver {
 			conf,
 			this.r.makeNetClient,
 			this.r.makeServiceLocator,
+			this.r.sysFilesOnDevice,
 			this.r.makeCryptor,
 			this.r.random
 		);
@@ -192,11 +193,10 @@ export class CoreDriver {
 			this.startAppWithCmd,
 			this.openDashboard,
 			this.fsMounts,
+			this.rpcClientSide,
 			this.r.caps.shell
 		);
-		const rpc = makeRpcCAP(
-			this.rpcClientSide, appDomain, componentDef, capsReq
-		);
+		const rpc = makeRpcCAP(this.rpcClientSide, appDomain, componentDef, capsReq);
 		const mediaDevices = this.r.caps.makeMediaDevicesCAP?.(capsReq.mediaDevices);
 		const connectivity = (this.connectivity ?
 			connectivityCAP(capsReq.connectivity, this.connectivity) : undefined
@@ -211,7 +211,8 @@ export class CoreDriver {
 			closeSelf: closeSelf.cap,
 			system: makeSystemCAP(
 				this.makeSystemCapFns,
-				this.logout,
+				this.turnOffFns,
+				this.otherUsersFns?.(this.signedUser!),
 				(capsReq as web3n.system.RequestedCAPs).system
 			),
 			shell: shell?.cap,

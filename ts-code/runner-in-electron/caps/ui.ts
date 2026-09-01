@@ -70,13 +70,13 @@ export function conformWinOptsToFormFactor(
 		if (!winOpts) {
 			winOpts = {};
 		}
-		setFixedsizeIn(winOpts, { width: 360, height: 768 });
+		setSizeWithAdjustableHeightIn(winOpts, { width: 360, height: 768 });
 	} else if ((requiredFF === 'tablet')
 	&& (deviceFF === 'desktop')) {
 		if (!winOpts) {
 			winOpts = {};
 		}
-		setFixedsizeIn(winOpts, { width: 800, height: 600 });
+		setSizeWithAdjustableHeightIn(winOpts, { width: 800, height: 600 });
 	}
 
 	return winOpts;
@@ -91,7 +91,7 @@ function removeSizeParamsIn(winOpts: WindowOptions): void {
 	delete winOpts.maxWidth;
 }
 
-function setFixedsizeIn(
+function setSizeWithAdjustableHeightIn(
 	winOpts: WindowOptions,
 	{ width, height }: { width: number, height: number }
 ): void {
@@ -99,6 +99,6 @@ function setFixedsizeIn(
 	winOpts.minWidth = width;
 	winOpts.maxWidth = width;
 	winOpts.height = height;
-	winOpts.minHeight = height;
+	winOpts.minHeight = Math.floor(height/2);
 	winOpts.maxHeight = height;
 }

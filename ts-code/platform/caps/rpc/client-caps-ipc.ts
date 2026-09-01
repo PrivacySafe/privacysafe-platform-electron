@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 - 2023 3NSoft Inc.
+ Copyright (C) 2022 - 2023, 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -88,6 +88,32 @@ export namespace otherAppsRPC {
 
 }
 
+export namespace capViaRPC {
+
+	export function expose(
+		fn: () => Promise<RPCConnection>, expServices: CoreSideServices
+	): ExposedFn {
+		return buf => {
+			const promise = fn()
+			.then(c => {
+				const ref = rpcConnection.expose(c, expServices);
+				return objRefType.pack(ref);
+			});
+			return { promise };
+		};
+	}
+
+	export function makeClient(caller: Caller, objPath: string[]): () => Promise<RPCConnection> {
+		return () => caller
+		.startPromiseCall(objPath, undefined)
+		.then(buf => {
+			const ref = objRefType.unpack(buf);
+			return rpcConnection.makeCaller(caller, ref);
+		});
+	}
+
+}
+
 
 namespace rpcConnection {
 
@@ -96,10 +122,8 @@ namespace rpcConnection {
 	): ObjectReference<'RPCConnection'> {
 		const exp: ExposedObj<RPCConnection> = {
 			close: close.wrapService(c.close),
-			makeRequestReplyCall: makeRequestReplyCall.wrapService(
-				c.makeRequestReplyCall, expServices),
-			startObservableCall: startObservableCall.wrapService(
-				c.startObservableCall, expServices)
+			makeRequestReplyCall: makeRequestReplyCall.wrapService(c.makeRequestReplyCall, expServices),
+			startObservableCall: startObservableCall.wrapService(c.startObservableCall, expServices)
 		};
 		return expServices.exposeDroppableService('RPCConnection', exp, c);
 	}
@@ -110,8 +134,7 @@ namespace rpcConnection {
 		checkRefObjTypeIs('RPCConnection', ref);
 		return {
 			close: close.makeCaller(caller, ref.path),
-			makeRequestReplyCall: makeRequestReplyCall.makeCaller(
-				caller, ref.path),
+			makeRequestReplyCall: makeRequestReplyCall.makeCaller(caller, ref.path),
 			startObservableCall: startObservableCall.makeCaller(caller, ref.path)
 		};
 	}
@@ -150,9 +173,7 @@ namespace rpcConnection {
 		): ExposedFn {
 			return buf => {
 				const { method, req } = callStartType.unpack(buf);
-				const promise = fn(
-					method, datumFromSerialFormOnCoreSide(req, expServices)
-				)
+				const promise = fn(method, datumFromSerialFormOnCoreSide(req, expServices))
 				.then(d => packDatumOnCoreSide(d, expServices));
 				return { promise };
 			};

@@ -1,1 +1,0 @@
-../../packing/protos-to-node-module.sh

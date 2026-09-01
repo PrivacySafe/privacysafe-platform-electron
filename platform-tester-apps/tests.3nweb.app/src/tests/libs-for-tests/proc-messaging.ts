@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2024 3NSoft Inc.
+ Copyright (C) 2024 - 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -15,11 +15,16 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { defer, Deferred } from "../../lib-common/processes/deferred.js";
+
 export function getOneMsgFromProcess<T>(
 	userNum: number|undefined, appDomain: string|undefined,
 	component: string|undefined,
 	timeout = 4900
 ): Promise<T> {
+
+	// XXX redo this with getMsgsFromProcess(...., 1)
+
 	return new Promise<T>((resolve, reject) => {
 		let promiseCompleted = false;
 		setTimeout(() => {
@@ -58,25 +63,42 @@ export function getOneMsgFromProcess<T>(
 	});
 }
 
-export function getMsgsStreamFromProcess<T>(
-	userNum: number|undefined, appDomain: string|undefined,
-	component: string|undefined
-): ReadableStream<T> {
-	let unsub: () => void;
-	return new ReadableStream<T>({
-		start: async ctrl => {
-			unsub = w3n.testStand.observeMsgsFromOtherLocalTestProcess(
-				{
-					next: (msg: T) => ctrl.enqueue(msg),
-					error: err => {
-						ctrl.error(err);
-						ctrl.close();
-					},
-					complete: () => ctrl.close()
-				},
-				userNum, appDomain, component
-			);
+export async function* getMsgsFromProcess<T>(
+	userNum: number|undefined, appDomain: string|undefined, component: string|undefined, numOfMsgsToGet: number
+) {
+
+	// XXX add timeout
+
+	let msgCounter = 0;
+	let expectedMsg: Deferred<T|undefined>|undefined = defer();
+	const unsub = w3n.testStand.observeMsgsFromOtherLocalTestProcess(
+		{
+			next: (msg: T) => {
+				expectedMsg?.resolve(msg);
+				msgCounter += 1;
+				expectedMsg = ((msgCounter < numOfMsgsToGet) ? defer() : undefined);
+			},
+			error: err => {
+				expectedMsg?.reject(err);
+				expectedMsg = undefined;
+			},
+			complete: () => {
+				expectedMsg?.resolve(undefined);
+				expectedMsg = undefined;
+			}
 		},
-		cancel: () => unsub()
-	}) as ReadableStream<T> & AsyncIterable<T>;
+		userNum, appDomain, component
+	);
+	try {
+		while (expectedMsg) {
+			const msg = await expectedMsg?.promise;
+			if (msg) {
+				yield msg;
+			} else {
+				break;
+			}
+		}
+	} finally {
+		unsub();
+	}
 }

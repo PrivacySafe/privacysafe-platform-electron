@@ -25,31 +25,34 @@ import { setTimeout } from 'timers';
 import { getPlatformCurrentVersion, PlatformDownloader } from '../caps/system/platform';
 import { UserAppOpenCmd, UserSystemCmd, UserCmd, AppInfoForUI } from '../desktop-integration';
 import { TestStand } from '../test-stand';
-import { toCanonicalAddress } from '../../platform/lib-common/canonical-address';
+import { areAddressesEqual, toCanonicalAddress } from '../../platform/lib-common/canonical-address';
 import { DesktopUI } from '../desktop-integration';
 import { UserApps } from '../../platform/user-apps';
 import { assert } from '../../platform/lib-common/assert';
-import { PLATFORM_NAME, STARTUP_APP_DOMAIN } from '../bundle-confs';
+import { CONTACTS_APP_DOMAIN, PLATFORM_NAME, STARTUP_APP_DOMAIN } from '../bundle-confs';
 import { rm } from 'fs/promises';
 import { sleep } from '../../platform/lib-common/processes/sleep';
 import { dirname } from 'path';
 import { lookForAutologinUsers, saveUserKeyForAutologin, UserKey } from './autologin';
 import { shouldSkipDashboard } from './auto-startup';
-import { AppCallViaURL } from '../electron/app-url-protocol';
+import { AppCallViaURL, SysCmd } from '../electron/custom-url-schemas';
 import { mountIntoOS } from '../caps/shell/mounts';
-import { AppsRunnerForTesting, DevToolsAppAllowance, WrapStartupCAPs } from '../../platform/inject-defs/test-stand';
+import { AppsRunnerForTesting, DevApps, DevToolsAppAllowance, WrapStartupCAPs } from '../../platform/inject-defs/test-stand';
 import { Sites } from '../site-runner';
 import { ScreenGUIPlacements } from '../window-utils/screen-gui-placements';
 import { StartupAppInElectron } from '../app-n-components/startup-app';
 import { PlatformResources, SignupParamsViaURL } from '../../platform/inject-defs/platform';
 import { LiveAppsInElectron } from '../app-n-components';
-import { DevAppParamsGetter, GetAppStorage, LiveApps } from '../../platform/apps/live-apps';
+import { GetAppStorage, LiveApps } from '../../platform/apps/live-apps';
 import type { SystemPlaces } from '../../platform/caps/system/system-places';
+import { getSytemFormFactor } from '../caps/ui';
+import { OtherUsersFns } from '../../platform/caps/system';
 
 type TestStandConfig = web3n.testing.config.TestStandConfig;
 type DevAppParams = web3n.testing.config.DevAppParams;
 type WritableFS = web3n.files.WritableFS;
 type SetAutoLogin = web3n.caps.startup.SetAutoLogin;
+type CmdParams = web3n.shell.commands.CmdParams;
 
 export class InitProc {
 
@@ -139,17 +142,17 @@ export class InitProc {
     appAndManifestOnDev: SystemPlaces['appAndManifestOnDev'],
 		makeAppCAPs: CoreDriver['makeCAPsForAppComponent'],
 		getAppStorage: (appDomain: string) => GetAppStorage,
-		devApps: DevAppParamsGetter|undefined,
+		getDevAppParams: DevApps['getAppParams']|undefined,
 		makeSiteCAPs: CoreDriver['makeCAPsForSiteComponent'],
 		guiPlacementFS: Promise<WritableFS>,
 		userId: () => string
 	): { apps: LiveApps; sites: Sites; } {
 		const apps = new LiveAppsInElectron(
-			findInstalledApp, appAndManifestOnDev, makeAppCAPs, getAppStorage,
+			getSytemFormFactor, findInstalledApp, appAndManifestOnDev, makeAppCAPs, getAppStorage,
 			this.guiConnectors, this.sockConnectors,
 			this.makeTitleGenerator(userId),
 			new ScreenGUIPlacements(guiPlacementFS),
-			devApps, this.r.logging
+			getDevAppParams, this.r.logging
 		);
 		const sites = new Sites(
 			this.guiConnectors,
@@ -175,8 +178,8 @@ export class InitProc {
 
 	private async startUserWithKey({ userId, key }: UserKey, openLauncher: boolean): Promise<void> {
 		const apps = new UserApps(
-			this.makeDriver, this.conf, this.makeAppsAndSites.bind(this), undefined, undefined,
-			this.devToolsAllowance, () => this.platformCAP, this.mounting?.makeUserMount, this.r
+			this.makeDriver, this.conf, this.makeAppsAndSites.bind(this), undefined, this.devToolsAllowance,
+			this.otherUsersFns, () => this.platformCAP, this.mounting?.makeUserMount, this.r
 		);
 		await apps.startCoreDirectlyFor(userId, key);
 		this.userApps.set(toCanonicalAddress(apps.userId), apps);
@@ -190,8 +193,8 @@ export class InitProc {
 		} else {
 			const { enableAutologin, getUserKeyForAutologin, saveUserKey } = autologinFromStartup();
 			const apps = new UserApps(
-				this.makeDriver, this.conf, this.makeAppsAndSites.bind(this), undefined, undefined,
-				this.devToolsAllowance, () => this.platformCAP, this.mounting?.makeUserMount, this.r
+				this.makeDriver, this.conf, this.makeAppsAndSites.bind(this), undefined, this.devToolsAllowance,
+				this.otherUsersFns, () => this.platformCAP, this.mounting?.makeUserMount, this.r
 			);
 			const userIdsToFilterOut = this.openedUsers(true);
 			const proc = apps.setStartupAppProcess(
@@ -244,6 +247,10 @@ export class InitProc {
 			} else if ((ev.type === 'app-downloaded')
 			|| (ev.type === 'app-installed')) {
 				this.deskUI.addOrUpdateApp(apps.userId, ev.app);
+			} else if (ev.type === 'closed') {
+				if (ev.closePlatform) {
+					this.exit();
+				}
 			}
 		});
 	}
@@ -292,9 +299,8 @@ export class InitProc {
 		assert(!!this.testStand);
 		const apps = new UserApps(
 			this.makeDriver, this.conf, this.makeAppsAndSites.bind(this),
-			this.testStand!.devAppsGetter(userId),
-			this.testStand!.devSiteGetter(userId),
-			this.devToolsAllowance, () => this.platformCAP, this.mounting?.makeUserMount, this.r
+			this.testStand!.devAppsFor(userId), this.devToolsAllowance,
+			this.otherUsersFns, () => this.platformCAP, this.mounting?.makeUserMount, this.r
 		);
 		this.userApps.set(toCanonicalAddress(userId), apps);
 		this.watchUserAppsEvents(apps);
@@ -321,8 +327,8 @@ export class InitProc {
 		if (!this.startingUser) {
 			const { enableAutologin, getUserKeyForAutologin, saveUserKey } = autologinFromStartup();
 			const apps = new UserApps(
-				this.makeDriver, this.conf, this.makeAppsAndSites.bind(this), undefined, undefined,
-				this.devToolsAllowance, () => this.platformCAP, this.mounting?.makeUserMount, this.r
+				this.makeDriver, this.conf, this.makeAppsAndSites.bind(this), undefined, this.devToolsAllowance,
+				this.otherUsersFns, () => this.platformCAP, this.mounting?.makeUserMount, this.r
 			);
 			const excIds = this.openedUsers(true);
 			const proc = apps.setStartupAppProcess(
@@ -385,7 +391,7 @@ export class InitProc {
 			}
 
 			if ((cmd as UserSystemCmd).item === 'logout') {
-				await apps.exit(true);
+				await apps.exit();
 			} else if ((cmd as UserSystemCmd).item === 'close-all-apps') {
 				apps.closeAllApps();
 			}
@@ -432,9 +438,50 @@ export class InitProc {
 		});
 	}
 
+	handleSystemCmdCall(systemCmd: CmdParams): void {
+		let appDomain: string;
+		if (systemCmd.cmd as SysCmd === 'add-contact') {
+			appDomain = CONTACTS_APP_DOMAIN;
+		} else {
+			return;
+		}
+		let userApps: UserApps|undefined = undefined;
+		if (this.userApps.size > 1) {
+			dialog.showMessageBox({
+				type: 'info',
+				title: PLATFORM_NAME,
+				message: `${PLATFORM_NAME} received a call to handle command "${systemCmd.cmd}" but can't decide which user this is directed`
+			}).catch(err => {
+				console.error(err);
+			});
+		} else {
+			userApps = this.userApps.get(Array.from(this.userApps.keys())[0]);
+		}
+		if (!userApps) {
+			return;
+		}
+		userApps.executeCommand(appDomain, systemCmd).catch(err => {
+			console.error(err);
+		});
+	}
+
 	handleSignupURL(signupParams: SignupParamsViaURL): void {
 		this.startUser(signupParams).catch(logError);
 	}
+
+	private readonly otherUsersFns = (currentUser: string): OtherUsersFns => {
+		return () => ({
+			openLogin: () => this.startUser(),
+			list: async () => {
+				const otherUsers = this.openedUsers().filter(userId => !areAddressesEqual(userId, currentUser));
+				return ((otherUsers.length > 0) ? otherUsers : undefined);
+			},
+			openDashboardOf: async userId => {
+				const userApps = this.userApps.get(toCanonicalAddress(userId));
+				await userApps?.openAppLauncher();
+			}
+		});
+	};
 
 	private async wipeFromThisDevice(): Promise<void> {
 		const {

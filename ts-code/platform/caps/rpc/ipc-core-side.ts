@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2023 3NSoft Inc.
+ Copyright (C) 2023, 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -16,10 +16,11 @@
 */
 
 import { ExposedObj, CoreSideServices } from 'core-3nweb-client-lib/build/ipc';
-import { exposeService } from './expose-service-cap-ipc';
+import { exposeService, provideCAPViaRPC } from './expose-service-cap-ipc';
 import { thisAppRPC, otherAppsRPC } from './client-caps-ipc';
 
 type RPC = web3n.rpc.RPC;
+type ExposeService = web3n.rpc.service.ExposeService;
 
 export function exposeRpcCAP(
 	cap: RPC, expServices: CoreSideServices
@@ -33,6 +34,10 @@ export function exposeRpcCAP(
 	}
 	if (cap.exposeService) {
 		wrap.exposeService = exposeService.expose(cap.exposeService, expServices);
+	}
+	if (cap.provideCAPtoSystem) {
+		// wrap on app's side uses this simple exposeService for providing CAPs, hence, we shadow type here
+		wrap.provideCAPtoSystem = provideCAPViaRPC.expose(cap.provideCAPtoSystem as ExposeService, expServices);
 	}
 	return wrap;
 }

@@ -1,0 +1,64 @@
+
+"afterPack": "electron-builder-sandbox-fix"
+
+directories:
+  app: ./build/app
+  output: ./dist/app
+
+asarUnpack:
+  # node's worker_threads can read only unpacked plain files, hence unpack
+
+  # cryptor-worker sets path for workers, depending on own location
+  - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/cryptor-worker.js
+  - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\cryptor-worker.js
+
+  # cryptor js worker from core files (uncomment when using it)
+  # - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/worker-js.js
+  # - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\worker-js.js
+  # - node_modules/core-3nweb-client-lib/build/lib-common/exceptions/error.js
+  # - node_modules\core-3nweb-client-lib\build\lib-common\exceptions\error.js
+  # - node_modules/ecma-nacl/**/*
+  # - node_modules\ecma-nacl\**\*
+
+  # cryptor wasm worker from core files
+  # - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/worker-wasm.js
+  # - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\worker-wasm.js
+  # - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/wasm-mp1-modules.js
+  # - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\wasm-mp1-modules.js
+  # - node_modules/core-3nweb-client-lib/build/lib-client/cryptor/cryptor.wasm
+  # - node_modules\core-3nweb-client-lib\build\lib-client\cryptor\cryptor.wasm
+
+  # system/app unzipper worker files
+  - runner-in-electron/caps/system/system-places/unzip-worker.js
+  - runner-in-electron\caps\system\system-places\unzip-worker.js
+  - node_modules/adm-zip/**/*
+  - node_modules\adm-zip\**\*
+  - platform/lib-common/buffer-utils.js
+  - platform\lib-common\buffer-utils.js
+
+  # bundled apps are also read by unzipper
+  - bundled-apps/**/*
+  - bundled-apps\**\*
+  - bundled-app-packs/**/*
+  - bundled-app-packs\**\*
+
+  # packed icons not seen on mac
+  - icons/**/*
+  - icons\**\*
+
+  # runtimes should stay unpacked, as opening process is generic to platform
+  - runtimes/**/*
+  - runtimes\**\*
+
+  # preloads for runtimes
+  - runner-in-electron/runtime-deno/preload.bundle.js
+  - runner-in-electron\runtime-deno\preload.bundle.js
+
+  # packaging info file that gets after asar is created
+  - packing-info.json
+
+  # bundle configuration
+  - configuration.json
+
+  # native modules (mac)
+  - node_modules/mac-screen-capture-permissions/build/Release/*.node

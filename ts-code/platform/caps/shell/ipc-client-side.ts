@@ -121,6 +121,10 @@ function makeShellFollowingListing(
 			findRefOf: caller.srvRefOf.bind(caller)
 		}) as any;
 	});
+	if (shellCAPs.includes('scanUrlQR')) {
+		const scanPath = objPath.concat('scanUrlQR');
+		shell.scanUrlQR = jsonCall.makeReqRepFuncCaller(caller, scanPath) as NonNullable<ShellCAPs['scanUrlQR']>;
+	}
 	return shell;
 }
 

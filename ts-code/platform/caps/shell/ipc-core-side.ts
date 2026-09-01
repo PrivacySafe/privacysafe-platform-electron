@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2025 3NSoft Inc.
+ Copyright (C) 2020 - 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -16,7 +16,7 @@
 */
 
 import { ExposedObj, CoreSideServices, serviceSideJSONWrap as jsonSrv } from 'core-3nweb-client-lib/build/ipc';
-import { exposeFileDialogsCAP } from "./file-dialogs/file-dialogs-cap-ipc";
+import { proxyFileDialogsCAP } from "./file-dialogs/file-dialogs-cap-ipc";
 import { exposeUserNotificationsCAP } from "./user-notifications/user-notifications-cap-ipc";
 import { exposeGetFSResourceCAP } from './fs-resource/fs-resource-caps-ipc';
 import { exposeClipboardCAP } from './clipboard/clipboard-cap-ipc';
@@ -30,7 +30,7 @@ export function exposeShellCAPs(
 ): ExposedObj<ShellCAPs> {
 	const wrap: ExposedObj<ShellCAPs> = {};
 	if (cap.fileDialogs) {
-		wrap.fileDialogs = exposeFileDialogsCAP(cap.fileDialogs, expServices);
+		wrap.fileDialogs = proxyFileDialogsCAP(cap.fileDialogs, expServices);
 	}
 	if (cap.userNotifications) {
 		wrap.userNotifications = exposeUserNotificationsCAP(
@@ -73,6 +73,9 @@ export function exposeShellCAPs(
 			wrap[method] = jsonSrv.wrapReqReplySrvMethod(cap, method, { findReferencedObj });
 		}
 	});
+	if (cap.scanUrlQR) {
+		wrap.scanUrlQR = jsonSrv.wrapReqReplyFunc(cap.scanUrlQR);
+	}
 	return wrap;
 }
 

@@ -22,6 +22,7 @@ type GeneralAppManifest = web3n.caps.GeneralAppManifest;
 type SimpleGUIAppManifest = web3n.caps.SimpleGUIAppManifest;
 type GUIComponentDef = web3n.caps.GUIComponent;
 type ServiceComponent = web3n.caps.ServiceComponent;
+type CAPsImplementingComponent = web3n.caps.CAPsImplementingComponent;
 type GUIServiceComponent = web3n.caps.GUIServiceComponent;
 type AppComponent = web3n.caps.AppComponent;
 type AllowedCallers = web3n.caps.AllowedCallers;
@@ -231,7 +232,7 @@ function makeLauncherForGeneralAppManifest(m: GeneralAppManifest): LauncherDef {
 
 export function getComponentForCommand(
 	m: AppManifest, cmd: string, currentFormFactor: UserInterfaceFormFactor
-): { entrypoint: string; component: GUIComponentDef }|undefined {
+): { entrypoint: string; component: GUIComponentDef; }|undefined {
 	if (!(m as GeneralAppManifest).components) {
 		return;
 	}
@@ -248,7 +249,7 @@ export function getComponentForCommand(
 
 export function getComponentForService(
 	m: AppManifest, service: string, currentFormFactor: UserInterfaceFormFactor
-): { entrypoint: string; component: ServiceComponent }|undefined {
+): { entrypoint: string; component: ServiceComponent; }|undefined {
 	if (!(m as GeneralAppManifest).components) {
 		return;
 	}
@@ -259,6 +260,41 @@ export function getComponentForService(
 		}
 	}
 	return;	// explicit undefined return
+}
+
+export function getComponentForServiceProvidingCAP(
+	m: AppManifest, capName: string, currentFormFactor: UserInterfaceFormFactor
+): { entrypoint: string; component: CAPsImplementingComponent; }|undefined {
+	if (!(m as GeneralAppManifest).components) {
+		return;
+	}
+	for (const [entrypoint, def] of Object.entries((m as GeneralAppManifest).components)) {
+		const capImpls = (def as CAPsImplementingComponent).capImpls;
+		if (capImpls
+		&& (Array.isArray(capImpls) ? capImpls.includes(capName) : (capImpls === capName))
+		&& isApplicableToFormFactor(def as GUIServiceComponent, currentFormFactor)) {
+			return { entrypoint, component: def as CAPsImplementingComponent };
+		}
+	}
+	return;	// explicit undefined return
+}
+
+export function getProvidedCAPs(m: AppManifest, currentFormFactor: UserInterfaceFormFactor): string[]|undefined {
+	if (!(m as GeneralAppManifest).components) {
+		return;
+	}
+	const caps: string[] = [];
+	for (const [entrypoint, def] of Object.entries((m as GeneralAppManifest).components)) {
+		const capImpls = (def as CAPsImplementingComponent).capImpls;
+		if (capImpls && isApplicableToFormFactor(def as GUIServiceComponent, currentFormFactor)) {
+			if (Array.isArray(capImpls)) {
+				caps.push(...capImpls);
+			} else {
+				caps.push(capImpls);
+			}
+		}
+	}
+	return ((caps.length === 0) ? undefined : caps);
 }
 
 export function getAllGUIComponents(
@@ -324,12 +360,29 @@ export function servicesImplementedBy(
 		return;
 	}
 	const c = (m as GeneralAppManifest).components[entrypoint];
-	if ((c as ServiceComponent).services) {
-		const services = Object.keys((c as ServiceComponent).services);
-		return ((services.length === 0) ? undefined : services);
-	} else {
+	if (!c) {
 		return;
 	}
+	let services = ((c as ServiceComponent).services ?
+		Array.from(Object.keys((c as ServiceComponent).services)) : undefined
+	);
+	const capImpls = (c as CAPsImplementingComponent).capImpls;
+	if (capImpls) {
+		if (Array.isArray(capImpls)) {
+			if (services) {
+				services.push(...capImpls);
+			} else {
+				services = capImpls;
+			}
+		} else {
+			if (services) {
+				services.push(capImpls);
+			} else {
+				services = [ capImpls ];
+			}
+		}
+	}
+	return ((!services || (services.length === 0)) ? undefined : services);
 }
 
 export function makeRPCException(
@@ -447,7 +500,7 @@ export function isResourceInRequest(
 	);
 }
 
-export function externalHostsToConnect(component: ServiceComponent): string[]|undefined {
+export function externalHostsToConnect(component: ServiceComponent|CAPsImplementingComponent): string[]|undefined {
 	const lst = component.capsRequested?.connectToExternal?.fetch?.map(conn => conn.domain)
 	.filter(d => (d.length > 0));
 	return ((lst && (lst.length > 0)) ? lst : undefined);

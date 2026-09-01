@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2023 3NSoft Inc.
+ Copyright (C) 2023, 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -17,7 +17,8 @@
 
 import { Caller } from 'core-3nweb-client-lib/build/ipc';
 import { otherAppsRPC, thisAppRPC } from './client-caps-ipc';
-import { exposeService } from './expose-service-cap-ipc';
+import { exposeService, provideCAPViaRPC } from './expose-service-cap-ipc';
+import { makeProviderOfCAPsViaRPC } from '../service-powered-caps';
 
 type RPC = web3n.rpc.RPC;
 
@@ -47,14 +48,14 @@ function makeRpcFollowingListing(
 		rpc.thisApp = thisAppRPC.makeClient(caller, objPath.concat('thisApp'));
 	}
 	if (lstRpcCAP.includes('otherAppsRPC')) {
-		rpc.otherAppsRPC = otherAppsRPC.makeClient(
-			caller, objPath.concat('otherAppsRPC')
-		);
+		rpc.otherAppsRPC = otherAppsRPC.makeClient(caller, objPath.concat('otherAppsRPC'));
 	}
 	if (lstRpcCAP.includes('exposeService')) {
-		rpc.exposeService = exposeService.makeClient(
-			caller, objPath.concat('exposeService')
-		);
+		rpc.exposeService = exposeService.makeClient(caller, objPath.concat('exposeService'));
+	}
+	if (lstRpcCAP.includes('provideCAPtoSystem')) {
+		const capRPC = provideCAPViaRPC.makeClient(caller, objPath.concat('provideCAPtoSystem'));
+		rpc.provideCAPtoSystem = makeProviderOfCAPsViaRPC(capRPC);
 	}
 	return rpc;
 }

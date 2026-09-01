@@ -22,10 +22,11 @@ import { logWarning } from '../confs';
 import { join } from 'path';
 import { readFile } from '../../platform/lib-common/async-fs-node';
 import { AppFolder } from '../../platform/apps/app';
+import { appUrlSchema } from './custom-url-schemas';
 
 export const protoSchemas = {
 	W3N_APP: {
-		scheme: 'w3n-app',
+		scheme: appUrlSchema,
 		privileges: {
 			standard: true,
 			secure: true,
@@ -43,8 +44,6 @@ export function registerAllProtocolShemas(): void {
 		protoSchemas.W3N_APP
 	]);
 }
-
-type ReadonlyFS = web3n.files.ReadonlyFS;
 
 export type W3NSetupType = 'regular'|'startup';
 

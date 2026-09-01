@@ -17,7 +17,6 @@
 
 type W3N = web3n.system.W3N;
 type SysUtils = web3n.system.SysUtils;
-type Logout = web3n.system.Logout;
 type Apps = web3n.system.apps.Apps;
 type Platform = web3n.system.platform.Platform;
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
@@ -25,8 +24,22 @@ type UserLogin = web3n.system.UserLoginSettings;
 type AutoStartup = web3n.system.AutoStartupSettings;
 type RequestedCAPs = web3n.system.RequestedCAPs;
 
+export interface TurnOffFns {
+	logout: () => Promise<void>;
+	closeCurrentUserApps: () => Promise<void>;
+	exitPlatform: () => Promise<void>;
+}
+
+export type OtherUsersFns = () => {
+	openLogin: () => Promise<void>;
+	list: () => Promise<string[]|undefined>;
+	openDashboardOf: (userId: string) => Promise<void>;
+};
+
 export function makeSystemCAP(
-	makeSystemCapFns: () => SysUtils, logoutFn: Logout,
+	makeSystemCapFns: () => SysUtils,
+	turnOffFns: TurnOffFns,
+	otherUsersFns: OtherUsersFns|undefined,
 	sysReq: RequestedCAPs['system']
 ): W3N['system'] {
 	if (!sysReq) {
@@ -36,19 +49,21 @@ export function makeSystemCAP(
 	const apps = makeAppsCAP(systemCapFns.apps!, sysReq);
 	const platform = makePlatformCAP(systemCapFns.platform!, sysReq);
 	const monitor = makeSystemMonitorCAP(systemCapFns.monitor!, sysReq);
-	const logout = makeLogoutCAP(logoutFn, sysReq);
+	const logoutCAPs = makeLogoutCAPs(turnOffFns, sysReq);
+	const otherOpenUsers = makeOtherUsersCAP(otherUsersFns, sysReq);
 	const userLogin = makeSystemUserLoginCAP(systemCapFns.userLogin!, sysReq);
 	const autoStartup = makeAutoStartupCAP(systemCapFns.autoStartup!, sysReq);
-	if (apps || platform || monitor || logout || userLogin) {
-		return {
-			apps,
-			platform,
-			monitor,
-			logout,
-			userLogin,
-			autoStartup
-		};
-	}
+	return {
+		closeCurrentUserApps: logoutCAPs?.closeCurrentUserApps,
+		logout: logoutCAPs?.logout,
+		exitPlatform: logoutCAPs?.exitPlatform,
+		otherOpenUsers,
+		apps,
+		platform,
+		monitor,
+		userLogin,
+		autoStartup
+	};
 }
 
 function makeAppsCAP(
@@ -87,11 +102,22 @@ function makeSystemMonitorCAP(
 	}
 }
 
-function makeLogoutCAP(
-	logout: Logout, sysReq: NonNullable<RequestedCAPs['system']>
-): SysUtils['logout'] {
+function makeLogoutCAPs(
+	turnOffFns: TurnOffFns, sysReq: NonNullable<RequestedCAPs['system']>
+): TurnOffFns|undefined {
 	if (sysReq.logout === true) {
-		return logout;
+		return turnOffFns;
+	}
+}
+
+function makeOtherUsersCAP(
+	otherUsersFns: OtherUsersFns|undefined, sysReq: NonNullable<RequestedCAPs['system']>
+): SysUtils['otherOpenUsers'] {
+	if (!otherUsersFns) {
+		return;
+	}
+	if (sysReq.otherOpenUsers === 'all') {
+		return otherUsersFns();
 	}
 }
 

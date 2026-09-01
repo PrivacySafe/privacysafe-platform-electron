@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2025 3NSoft Inc.
+ Copyright (C) 2020 - 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -27,6 +27,7 @@ type AppsOpener = web3n.system.apps.AppsOpener;
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
 type UserLoginSettings = web3n.system.UserLoginSettings;
 type AutoStartupSettings = web3n.system.AutoStartupSettings;
+type OtherOpenUsers = web3n.system.OtherOpenUsers;
 
 export function exposeSystemCAP(
 	cap: SysUtils, expServices: CoreSideServices
@@ -49,6 +50,15 @@ export function exposeSystemCAP(
 	}
 	if (cap.logout) {
 		wrap.logout = jsonSrv.wrapReqReplyFunc(cap.logout);
+	}
+	if (cap.closeCurrentUserApps) {
+		wrap.closeCurrentUserApps = jsonSrv.wrapReqReplyFunc(cap.closeCurrentUserApps);
+	}
+	if (cap.exitPlatform) {
+		wrap.exitPlatform = jsonSrv.wrapReqReplyFunc(cap.exitPlatform);
+	}
+	if (cap.otherOpenUsers) {
+		wrap.otherOpenUsers = exposeOtherUsersCAP(cap.otherOpenUsers);
 	}
 	return wrap;
 }
@@ -193,6 +203,14 @@ function exposeAutoStartupCAP(cap: AutoStartupSettings): ExposedObj<AutoStartupS
 		isAutoStartupAvailable: jsonSrv.wrapReqReplySrvMethod(cap, 'isAutoStartupAvailable'),
 		isAutoStartupSet: jsonSrv.wrapReqReplySrvMethod(cap, 'isAutoStartupSet'),
 		setAutoStartup: jsonSrv.wrapReqReplySrvMethod(cap, 'setAutoStartup'),
+	};
+}
+
+function exposeOtherUsersCAP(cap: OtherOpenUsers): ExposedObj<OtherOpenUsers> {
+	return {
+		openLogin: jsonSrv.wrapReqReplySrvMethod(cap, 'openLogin'),
+		list: jsonSrv.wrapReqReplySrvMethod(cap, 'list'),
+		openDashboardOf: jsonSrv.wrapReqReplySrvMethod(cap, 'openDashboardOf')
 	};
 }
 

@@ -22,6 +22,8 @@ import { makeDeviceFiles } from "./device-files";
 import { AppSetter, CAPsSetupFns, GUIComponent, makeCAPsSetAppAndCloseFns } from "../../inject-defs/apps";
 import { makeRuntimeException } from "../../lib-common/exceptions/runtime";
 import { ShellCAPs } from "../../inject-defs/caps";
+import type { ClientSideConnector } from "../rpc/index";
+import { makeCAPconnector } from "../rpc";
 
 type W3N = web3n.caps.W3N;
 type GUIComponentDef = web3n.caps.GUIComponent;
@@ -39,6 +41,7 @@ export function makeShellCAPs(
 	startAppWithCmd: CoreDriver['startAppWithCmd'],
 	openDashboardFn: CoreDriver['openDashboard'],
 	userMounts: CoreDriver['fsMounts'],
+	rpcClientSide: ClientSideConnector,
 	r: ShellCAPs
 ): {
 	cap: NonNullable<W3N['shell']>; setApp: AppSetter; close: () => void;
@@ -47,9 +50,7 @@ export function makeShellCAPs(
 	const cap: NonNullable<W3N['shell']> = {};
 	const capsSetupFns: CAPsSetupFns[] = [];
 	if (capsReq.shell) {
-		const fileDialogs = (r.makeAllFileDialogOpeners ?
-			fileDialogShellCAP(capsReq.shell.fileDialog, r.makeAllFileDialogOpeners) : undefined
-		);
+		const fileDialogs = fileDialogShellCAP(capsReq.shell.fileDialog, rpcClientSide);
 		if (fileDialogs) {
 			cap.fileDialogs = fileDialogs.cap;
 			capsSetupFns.push(fileDialogs);
@@ -107,6 +108,10 @@ export function makeShellCAPs(
 		if (openURL) {
 			cap.openURL = openURL.cap;
 		}
+		const scanUrlQR = makeScanUrlQRCAP(capsReq.shell.scanUrlQR, r.scanUrlQR);
+		if (scanUrlQR) {
+			cap.scanUrlQR = scanUrlQR.cap;
+		}
 	}
 	if (cmdHandlerDef) {
 		const capFns = makeCmdHandlerCAP(appDomain, cmdHandlerDef, startCmd);
@@ -154,22 +159,33 @@ function startAppWithParamsShellCAP(
 
 function fileDialogShellCAP(
 	fileDialogCAPsReq: web3n.caps.ShellCAPsSetting['fileDialog'],
-	makeAllFileDialogOpeners: NonNullable<ShellCAPs['makeAllFileDialogOpeners']>
+	rpcClientSide: ClientSideConnector
 ): {
 	cap: web3n.shell.files.Dialogs; setApp: AppSetter; close(): void;
 }|undefined {
 	if (!fileDialogCAPsReq) { return; }
+	const capsSetupFns: CAPsSetupFns[] = [];
+	function makeFDialogCAP(capName: string) {
+		const capFns = makeCAPconnector(capName, rpcClientSide);
+		capsSetupFns.push(capFns);
+		return capFns.cap;
+	}
 	if (fileDialogCAPsReq === 'all') {
-		const { openers: cap, close, setApp } = makeAllFileDialogOpeners();
+		const cap: web3n.shell.files.Dialogs = {
+			openFileDialog: makeFDialogCAP('w3n.shell.fileDialogs.openFileDialog') as any,
+			openFolderDialog: makeFDialogCAP('w3n.shell.fileDialogs.openFolderDialog') as any,
+			saveFileDialog: makeFDialogCAP('w3n.shell.fileDialogs.saveFileDialog') as any,
+			saveFolderDialog: makeFDialogCAP('w3n.shell.fileDialogs.saveFolderDialog') as any
+		};
+		const { close, setApp } = makeCAPsSetAppAndCloseFns(...capsSetupFns);
 		return { cap, close, setApp };
 	} else if (fileDialogCAPsReq ===  'readonly') {
-		const { openers, close, setApp } = makeAllFileDialogOpeners();
-		return {
-			setApp, close, cap: {
-				openFileDialog: openers.openFileDialog,
-				openFolderDialog: openers.openFolderDialog,
-			},
+		const cap: web3n.shell.files.Dialogs = {
+			openFileDialog: makeFDialogCAP('w3n.shell.fileDialogs.openFileDialog') as any,
+			openFolderDialog: makeFDialogCAP('w3n.shell.fileDialogs.openFolderDialog') as any
 		};
+		const { close, setApp } = makeCAPsSetAppAndCloseFns(...capsSetupFns);
+		return { cap, close, setApp };
 	}
 }
 
@@ -232,6 +248,17 @@ export function makeAppInitExc(
 		params = { appDomain };
 	}
 	return makeRuntimeException<AppInitException>('app-init', params, flags);
+}
+
+function makeScanUrlQRCAP(
+	capsReq: web3n.caps.ShellCAPsSetting['scanUrlQR'],
+	impl: web3n.shell.ShellCAPs['scanUrlQR']
+): {
+	cap: NonNullable<web3n.shell.ShellCAPs['scanUrlQR']>;
+}|undefined {
+	if (impl && capsReq) {
+		return { cap: impl };
+	}
 }
 
 

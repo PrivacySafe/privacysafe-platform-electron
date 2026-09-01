@@ -1,1 +1,0 @@
-../../packing/patch-type-files.sh

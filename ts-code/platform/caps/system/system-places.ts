@@ -112,6 +112,10 @@ export class SystemPlaces {
     return componentFS;
   }
 
+  async listManifestsDataOfInstalledApps<T>(getDataFromManifest: (m: AppManifest) => T): Promise<T[]> {
+    return listManifestsDataOfInstalledApps(await this.getAppsCodeFS(), this.logError, getDataFromManifest);
+  }
+
   async listCurrentApps(): Promise<{ id: string; version: string; }[]> {
     const lst = await listInstalledApps(await this.getAppsCodeFS(), this.logError);
     return lst.concat(await this.listInstalledBundledApps());
@@ -446,25 +450,31 @@ function completePacksAppFolder(appDomain: string): string {
   return `${COMPLETE_PACKS_DIR}/${reverseDomain(appDomain)}`;
 }
 
-async function listInstalledApps(
+async function listManifestsDataOfInstalledApps<T>(
+  codeFS: ReadonlyFS, logError: Logging['logError'],
+  getDataFromManifest: (m: AppManifest) => T
+): Promise<T[]> {
+  const lst = await codeFS.listFolder('/');
+  const appsData: T[] = [];
+  for (const entry of lst) {
+    try {
+      const appFS = await getInstalledAppDir(codeFS, entry.name);
+      if (!appFS) {
+        continue;
+      }
+      const m = await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
+      appsData.push(getDataFromManifest(m));
+    } catch (err) {
+      await logError(err, `Error during listing app in ${entry.name} folder of installed`);
+    }
+  }
+  return appsData;
+}
+
+function listInstalledApps(
   codeFS: ReadonlyFS, logError: Logging['logError']
 ): Promise<{ id: string; version: string; }[]> {
-  const lst = await codeFS.listFolder('/');
-  const infos: { id: string; version: string; }[] = [];
-  for (const entry of lst) {
-    const appFS = await getInstalledAppDir(codeFS, entry.name)
-    .catch(err => logError(
-      err, `Error during listing app in ${entry.name} folder of installed`
-    ));
-    if (!appFS) {
-      continue;
-    }
-    const {
-      appDomain: id, version
-    } = await appFS.readJSONFile<AppManifest>(MANIFEST_FILE);
-    infos.push({ id, version });
-  }
-  return infos;
+  return listManifestsDataOfInstalledApps(codeFS, logError, m => ({ id: m.appDomain, version: m.version }));
 }
 
 async function getInstalledAppDir(

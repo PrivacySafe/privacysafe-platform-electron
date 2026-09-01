@@ -50,7 +50,7 @@ export function makeClientSideConnector({
 
 export function makeStartupW3N(ipc: InitIPC): StartupW3N {
 	const clientSide = makeClientSideConnector(ipc);
-	const clientW3N = makeStartupW3Nclient<web3n.testing.StartupW3N>(
+	const clientW3N = makeStartupW3Nclient<Omit<web3n.testing.StartupW3N, 'scanUrlQR'>>(
 		clientSide, {
 			testStand: makeStartupTestStandCaller,
 			provider: makeProviderCaller,

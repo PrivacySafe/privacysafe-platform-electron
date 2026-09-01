@@ -16,13 +16,12 @@
 */
 
 import type { Notifications } from "../caps/shell/user-notifications";
-import type { AppSetter } from "./apps";
 
 type FS = web3n.files.FS;
 type File = web3n.files.File;
 type CmdParams = web3n.shell.commands.CmdParams;
-type Dialogs = web3n.shell.files.Dialogs;
 type Clipboard = NonNullable<web3n.shell.ShellCAPs['clipboard']>;
+type ScanUrlQR = NonNullable<web3n.shell.ShellCAPs['scanUrlQR']>;
 
 export interface Mounter {
 
@@ -43,10 +42,6 @@ export interface Mounter {
 }
 
 export interface ShellCAPs {
-
-	makeAllFileDialogOpeners?: () => {
-		openers: Dialogs; setApp: AppSetter; close(): void;
-	},
 
 	makeClipboardCAP?: (capsReq: web3n.caps.ShellCAPsSetting['clipboard']) => { cap: Clipboard; }|undefined;
 
@@ -83,6 +78,8 @@ export interface ShellCAPs {
 	}|undefined;
 
 	makeNotifications?: (triggerCmd: (appDomain: string, cmd: CmdParams) => Promise<void>) => Notifications;
+
+	scanUrlQR?: ScanUrlQR;
 
 }
 

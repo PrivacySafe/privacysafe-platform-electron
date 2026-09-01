@@ -17,7 +17,8 @@
 
 import type { makeLogger } from "core-3nweb-client-lib";
 
+export { SYSTEM_DOMAIN } from "core-3nweb-client-lib";
+
 export type Logging = ReturnType<typeof makeLogger>;
 
-export const SYSTEM_DOMAIN = '3nweb.computer';
 export const NOTIFICATIONS_SYSTEM_COMPONENT = 'notifications';

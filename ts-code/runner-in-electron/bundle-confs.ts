@@ -55,6 +55,7 @@ export const BUNDLED_APP_PACKS_FOLDER = toAsarUnpacked(
 interface ConfigurableConstants {
 	'launcher-app': string;
 	'startup-app': string;
+	'contacts-app': string;
 	'signup-url': string;
 	'platform-name': string;
 	'bundled-apps': string[];
@@ -83,6 +84,8 @@ export const DEFAULT_SIGNUP_URL = getConfStringConst('signup-url');
 
 export const STARTUP_APP_DOMAIN = getConfStringConst('startup-app');
 export const LAUNCHER_APP_DOMAIN = getConfStringConst('launcher-app');
+
+export const CONTACTS_APP_DOMAIN = getConfStringConst('contacts-app');
 
 export const PLATFORM_NAME = getConfStringConst('platform-name');
 

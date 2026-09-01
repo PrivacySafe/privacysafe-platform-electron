@@ -18,7 +18,7 @@
 import { TitleGenerator } from "../app-n-components/gui-component";
 import { CoreDriver } from "../../platform/core";
 import { ElectronIPCConnectors } from "../app-n-components/w3n-connectors";
-import { DevSiteParamsGetter } from "../../platform/inject-defs/test-stand";
+import { DevApps } from "../../platform/inject-defs/test-stand";
 import { Sites as SitesType } from "../../platform/inject-defs/sites";
 
 
@@ -76,7 +76,7 @@ export class Sites implements SitesType {
 	}
 
 	async devOpenSiteComponent(
-		dev: NonNullable<ReturnType<DevSiteParamsGetter>>, entrypoint: string
+		dev: NonNullable<ReturnType<DevApps['getSiteParams']>>, entrypoint: string
 	): Promise<void> {
 
 		console.log(` ----- missing dev site opening with runner, using sample -----`);

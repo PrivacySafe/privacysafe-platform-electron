@@ -1,1 +1,0 @@
-../../packing/npm-install.sh

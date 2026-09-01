@@ -1,3 +1,0 @@
-deno version 2.7.12 comes from zip at https://github.com/denoland/deno/releases/download/v2.7.12/deno-aarch64-apple-darwin.zip
-Sha512 hashes are
-b6e385c0a3de6cfbe5cdc0685e0ef33032951c98e425b1603f3ac44e772db610a90b4ffe2c9fc9f64e666ad6ced8a9b88fff2309a6f588cf843bc6eda2ccad97  deno

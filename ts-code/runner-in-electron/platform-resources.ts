@@ -19,12 +19,11 @@ import type { PlatformResources } from '../platform/inject-defs/platform';
 import{ appLog, dohURLs, logError, logWarning, recordUnhandledRejectionsInProcess } from './confs';
 import { makeAutoStartupCAP } from './init-proc/auto-startup';
 import { AppDownloader } from '../platform/caps/system/apps-downloader';
-import { makeAllFileDialogOpeners } from './caps/shell/file-dialogs';
 import { makeClipboardCAP } from './caps/shell/clipboard';
 import { makeOpenFileCAP, makeOpenFolderCAP, makeOpenURLCAP, openInMountedFolderCAP } from "./caps/shell/openers";
 import { makeMountsCAP } from './caps/shell/mounts';
 import { Notifications } from './caps/shell/user-notifications';
-import { makeUICap } from './caps/ui';
+import { getSytemFormFactor, makeUICap } from './caps/ui';
 import { makeMediaDevicesCAP } from './caps/media-devices/mediaDevices';
 import { makeConnectivity } from './caps/connectivity';
 import { LAUNCHER_APP_DOMAIN } from './bundle-confs';
@@ -41,6 +40,8 @@ import { Logging } from '../platform/inject-defs/confs';
 import { makeSystemPlaces } from './caps/system/system-places';
 import { createHash } from "crypto";
 import { bytes as random } from './lib-common/random-node';
+import { getServiceForCAP } from './caps/cap-over-rpc-from-platform';
+import { sysFilesOnDevice } from 'core-3nweb-client-lib/build/lib-common-on-node/device-fs-places';
 
 export const requestFromNode = makeRequestFromNode();
 
@@ -69,7 +70,6 @@ export function makePlatformResources(): PlatformResources {
 			makeMediaDevicesCAP,
 			makeConnectivity,
 			shell: {
-				makeAllFileDialogOpeners,
 				makeClipboardCAP,
 				makeOpenFileCAP,
 				makeOpenFolderCAP,
@@ -86,6 +86,9 @@ export function makePlatformResources(): PlatformResources {
 		makeNetClient: () => makeNetClient(requestFromNode, openServiceEventsSrcFromNode),
 		makeServiceLocator: makeServiceLocator(...dnsResolvers),
 		makeUserLogin: UserLogin.make,
-		showSystemErrorBox: dialog.showErrorBox.bind(dialog)
+		showSystemErrorBox: dialog.showErrorBox.bind(dialog),
+		getSytemFormFactor,
+		sysFilesOnDevice: sysFilesOnDevice,
+		getServiceForCAP
 	};
 }

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 - 2025 3NSoft Inc.
+ Copyright (C) 2020 - 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -31,7 +31,7 @@ type AppsOpener = web3n.system.apps.AppsOpener;
 type SystemMonitor = web3n.system.monitor.SystemMonitor;
 type UserLoginSettings = web3n.system.UserLoginSettings;
 type AutoStartupSettings = web3n.system.AutoStartupSettings;
-type Logout = web3n.system.Logout;
+type OtherOpenUsers = web3n.system.OtherOpenUsers;
 
 export function makeSystemCaller(caller: Caller, sysPath: string[]): SysUtils {
 	if (!caller.listObj) {
@@ -75,7 +75,23 @@ function makeSystemBasedOnListing(
 	}
 	if (lstSystemCAP.includes('logout')) {
 		const logoutPath = sysPath.concat('logout');
-		system.logout = jsonCall.makeReqRepFuncCaller<Logout>(caller, logoutPath);
+		system.logout = jsonCall.makeReqRepFuncCaller<NonNullable<SysUtils['logout']>>(caller, logoutPath);
+	}
+	if (lstSystemCAP.includes('closeCurrentUserApps')) {
+		const closeCurrentUserAppsPath = sysPath.concat('closeCurrentUserApps');
+		system.closeCurrentUserApps = jsonCall.makeReqRepFuncCaller<NonNullable<SysUtils['closeCurrentUserApps']>>(
+			caller, closeCurrentUserAppsPath
+		);
+	}
+	if (lstSystemCAP.includes('exitPlatform')) {
+		const exitPlatformPath = sysPath.concat('exitPlatform');
+		system.exitPlatform = jsonCall.makeReqRepFuncCaller<NonNullable<SysUtils['exitPlatform']>>(
+			caller, exitPlatformPath
+		);
+	}
+	if (lstSystemCAP.includes('otherOpenUsers')) {
+		const otherOpenUsersPath = sysPath.concat('otherOpenUsers');
+		system.otherOpenUsers = makeOtherOpenUsersCaller(caller, otherOpenUsersPath);
 	}
 	return system;
 }
@@ -306,6 +322,20 @@ function callAutoStartup<M extends keyof AutoStartupSettings>(
 	caller: Caller, objPath: string[], method: M
 ): AutoStartupSettings[M] {
 	return jsonCall.makeReqRepObjCaller<AutoStartupSettings, M>(caller, objPath, method);
+}
+
+function makeOtherOpenUsersCaller(caller: Caller, objPath: string[]): OtherOpenUsers {
+	return {
+		openLogin: callOtherOpenUsers(caller, objPath, 'openLogin'),
+		list: callOtherOpenUsers(caller, objPath, 'list'),
+		openDashboardOf: callOtherOpenUsers(caller, objPath, 'openDashboardOf')
+	};
+}
+
+function callOtherOpenUsers<M extends keyof OtherOpenUsers>(
+	caller: Caller, objPath: string[], method: M
+): OtherOpenUsers[M] {
+	return jsonCall.makeReqRepObjCaller<OtherOpenUsers, M>(caller, objPath, method);
 }
 
 

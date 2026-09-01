@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 - 2023 3NSoft Inc.
+ Copyright (C) 2022 - 2023, 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -73,6 +73,9 @@ export namespace exposeService {
 
 }
 Object.freeze(exposeService);
+
+
+export const provideCAPViaRPC = exposeService;
 
 
 namespace connection {

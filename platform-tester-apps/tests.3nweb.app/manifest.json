@@ -45,6 +45,7 @@
 				"logToPlatform": true,
 				"shell": {
 					"userNotifications": true,
+					"fileDialog": "all",
 					"startAppCmds": {
 						"thisApp": [ "command-1", "command-2" ],
 						"otherApps": {
@@ -65,6 +66,7 @@
 					"platform": "all",
 					"monitor": "all",
 					"logout": true,
+					"otherOpenUsers": "all",
           "userLogin": "all"
 				},
 				"connectToExternal": {
@@ -117,6 +119,7 @@
 				"logToPlatform": true,
 				"shell": {
 					"userNotifications": true,
+					"fileDialog": "all",
 					"startAppCmds": {
 						"thisApp": [ "command-1", "command-2" ],
 						"otherApps": {
@@ -136,7 +139,9 @@
 					"apps": "all",
 					"platform": "all",
 					"monitor": "all",
-					"logout": true
+					"logout": true,
+					"otherOpenUsers": "all",
+          "userLogin": "all"
 				}
 			}
 		},
@@ -284,6 +289,48 @@
 			},
 			"runtime": "web-gui",
 			"formFactor": "phone"
+		},
+
+		"/file-dialog-caps-provider.html": {
+			"runtime": "web-gui",
+			"formFactor": "desktop",
+			"capImpls": [
+				"w3n.shell.fileDialogs.openFileDialog",
+				"w3n.shell.fileDialogs.openFolderDialog",
+				"w3n.shell.fileDialogs.saveFileDialog",
+				"w3n.shell.fileDialogs.saveFolderDialog"
+			],
+			"childOfGUICaller": true,
+			"forOneConnectionOnly": true,
+			"capsRequested": {
+				"storage": {
+					"userFS": "all"
+				}
+			},
+			"windowOpts": {
+				"modal": true,
+				"useContentSize": true,
+				"width": 500,
+				"height": 300
+			}
+		},
+
+		"/file-dialog-caps-provider-phone.html": {
+			"runtime": "web-gui",
+			"formFactor": "phone",
+			"capImpls": [
+				"w3n.shell.fileDialogs.openFileDialog",
+				"w3n.shell.fileDialogs.openFolderDialog",
+				"w3n.shell.fileDialogs.saveFileDialog",
+				"w3n.shell.fileDialogs.saveFolderDialog"
+			],
+			"childOfGUICaller": true,
+			"forOneConnectionOnly": true,
+			"capsRequested": {
+				"storage": {
+					"userFS": "all"
+				}
+			}
 		}
 
 	}

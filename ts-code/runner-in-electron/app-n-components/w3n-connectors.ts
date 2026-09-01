@@ -21,11 +21,10 @@ import { ipcMain, WebContents } from 'electron';
 import { IPC_CORE_SIDE, IPC_CLIENT_SIDE, IPC_SYNCED_W3N_LIST } from "../ipc-with-core/electron-ipc";
 import { base64, toBuffer } from "../../platform/lib-common/buffer-utils";
 import { exposeStartupTestStandCAP, exposeTestStandCAP } from "../../platform/caps/test-stand/test-stand-cap-ipc";
-import { bytes as randomBytes, stringOfB64UrlSafeChars } from "../lib-common/random-node";
+import { bytes as randomBytes } from "../lib-common/random-node";
 import { createServer, Server, Socket } from "net";
 import { EnvelopesBuffer, makeSocketIPCException, MsgOnCoreSide, readMsgOnCoreSide, toAuthReplyChunk, toListObjReply, SocketConnectInfo, toChunksForSending, MAX_MSG_SIZE, toBytesAck } from "../ipc-with-core/socket-ipc";
 import { logError } from "../confs";
-import { platform } from "process";
 import { assert } from "../../platform/lib-common/assert";
 import { defer, Deferred } from "../../platform/lib-common/processes/deferred";
 import { SingleProc } from "../../platform/lib-common/processes/single";
@@ -124,7 +123,8 @@ interface Connector {
 const extraStartupCAPs = Object.freeze({
 	testStand: exposeStartupTestStandCAP,
 	provider: exposeProviderCAP,
-	enableAutoLogin: exposeJSONFunc
+	enableAutoLogin: exposeJSONFunc,
+	scanUrlQR: exposeJSONFunc
 });
 
 function exposeProviderCAP(cap: DefaultProvider): ExposedObj<DefaultProvider> {

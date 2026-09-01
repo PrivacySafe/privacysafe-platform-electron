@@ -22,11 +22,11 @@ globalThis.platform = {
 };
 
 import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli, SOCKS5_PROXY, urlFromArgs } from './runner-in-electron/process-args';
-import { app, dialog, powerMonitor } from 'electron';
+import { app, dialog, net, powerMonitor } from 'electron';
 import { InitProc } from './runner-in-electron/init-proc';
 import { registerAllProtocolShemas } from "./runner-in-electron/electron/protocols";
 import { fromEvent, lastValueFrom } from 'rxjs';
-import { appDir, logError, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './runner-in-electron/confs';
+import { appDir, dohURLs, logError, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './runner-in-electron/confs';
 import { take } from 'rxjs/operators';
 import { makeCoreDriver } from './platform/core';
 import { clearDefaultWindowMenu } from './runner-in-electron/window-utils/window-menu';
@@ -34,7 +34,7 @@ import { mkdirSync } from 'fs';
 import { sleep } from './platform/lib-common/processes/sleep';
 import { EventEmitter } from 'events';
 import { processOfUtilityArgsIfGiven } from './runner-in-electron/main-for-util-invocations';
-import { appUrlSchema, web3nUrlSchema, ensure3NWebProtocolsAreSetInOS } from './runner-in-electron/electron/app-url-protocol';
+import { ensure3NWebProtocolsAreSetInOS } from './runner-in-electron/electron/custom-url-schemas';
 import { makePlatformResources } from './runner-in-electron/platform-resources';
 
 // XXX make it so that OS secure thingy isn't triggered, if there is no autologin file
@@ -53,7 +53,7 @@ if (utilityInvocation) {
 
 } else {
 
-	const { appCallViaURL, signupParams } = urlFromArgs(process.argv);
+	const { signupParams, appCallViaURL, systemCmd } = urlFromArgs(process.argv);
 
 	EventEmitter.defaultMaxListeners = 100;
 
@@ -90,6 +90,12 @@ if (utilityInvocation) {
 		lastValueFrom(fromEvent(app, 'ready').pipe(take(1)))
 		.then(async () => {
 
+			app.configureHostResolver({
+				enableBuiltInResolver: true,
+				secureDnsServers: dohURLs,
+				secureDnsMode: 'automatic'
+			});
+
 			powerMonitor.on('shutdown', () => init.exit());
 
 			ensure3NWebProtocolsAreSetInOS();
@@ -101,6 +107,19 @@ if (utilityInvocation) {
 
 			try {
 				await init.boot(signupParams);
+
+				// XXX testing bits
+				// (async function checkOfResolutionFromHereAndDebugLogout() {
+				// 	for (const d of [ 't1.3nweb.net' ]) {
+				// 		try {
+				// 			const info = await net.resolveHost(d);
+				// 			console.log(`\n${d} resolved to`, info);
+				// 		} catch (err) {
+				// 			console.error(`\nDebug check of resolving ${d} from electron's main process fails with`, err);
+				// 		}
+				// 	}
+				// })();
+
 			} catch (err) {
 				await logError(err);
 				if (!SKIP_APP_ERR_DIALOG_FLAG) {
@@ -118,6 +137,8 @@ if (utilityInvocation) {
 
 			if (appCallViaURL) {
 				init.handleAppUrlCallFromOS(appCallViaURL);
+			} else if (systemCmd) {
+				init.handleSystemCmdCall(systemCmd);
 			}
 
 		});
@@ -137,20 +158,19 @@ if (utilityInvocation) {
 			const isFstInstance = app.requestSingleInstanceLock();
 			if (isFstInstance) {
 				app.on('second-instance', async (event, argv, workDir) => {
-
-					const { appCallViaURL, signupParams } = urlFromArgs(process.argv);
+					const { appCallViaURL, signupParams, systemCmd } = urlFromArgs(argv);
 					if (appCallViaURL) {
 						init.handleAppUrlCallFromOS(appCallViaURL);
-						return;
-					}
-					if (signupParams) {
+					} else if (signupParams) {
 						init.handleSignupURL(signupParams)
-					}
-
-					const cmdToken = cmdTokenFromCli(argv);
-					const cmdRan = (cmdToken && init.runCmd(cmdToken));
-					if (!cmdRan) {
-						await init.openAllLaunchers();
+					} else if (systemCmd) {
+						init.handleSystemCmdCall(systemCmd);
+					} else {
+						const cmdToken = cmdTokenFromCli(argv);
+						const cmdRan = (cmdToken && init.runCmd(cmdToken));
+						if (!cmdRan) {
+							await init.openAllLaunchers();
+						}
 					}
 				});
 				const init = setupAndStartMainInstance();

@@ -15,16 +15,17 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { getAllGUIComponents, getComponentForCommand, getComponentForService, getWebGUIComponent, isCallerAllowed, isMultiInstanceComponent, makeRPCException, makeShellCmdException, getComponentsForSystemStartup, getExposedFSResource, makeAppFSResourceException, getComponent, getLaunchersForUser, MAIN_GUI_ENTRYPOINT } from "../lib-common/manifest-utils";
+import { getAllGUIComponents, getComponentForCommand, getComponentForService, getWebGUIComponent, isCallerAllowed, isMultiInstanceComponent, makeRPCException, makeShellCmdException, getComponentsForSystemStartup, getExposedFSResource, makeAppFSResourceException, getComponent, getLaunchersForUser, MAIN_GUI_ENTRYPOINT, getComponentForServiceProvidingCAP, getProvidedCAPs } from "../lib-common/manifest-utils";
 import { NamedProcs } from "../lib-common/processes/named-procs";
 import { assert } from "../lib-common/assert";
 import { wrapWithTimeout } from "../lib-common/processes/timeouts";
 import { AppCAPsAndSetup, Component, GUIComponent, Service } from "../inject-defs/apps";
 import { makeAppInitExc } from "../caps/shell";
-import type { GetAppStorage, WrapAppCAPsAndSetup } from "./live-apps";
+import type { GetAppStorage } from "./live-apps";
 import type { CoreDriver } from "../core";
 import { Logging } from "../inject-defs/confs";
 import { PostponedValuesFixedKeysMap } from "../lib-common/postponed-values-map";
+import type { WrapAppCAPsAndSetup } from "../inject-defs/test-stand";
 
 
 type ReadonlyFS = web3n.files.ReadonlyFS;
@@ -37,6 +38,8 @@ type CmdParams = web3n.shell.commands.CmdParams;
 type GUIComponentDef = web3n.caps.GUIComponent;
 type SrvDef = web3n.caps.ServiceComponent;
 type GUISrvDef = web3n.caps.GUIServiceComponent;
+type CAPsImplDef = web3n.caps.CAPsImplementingComponent;
+type GUICAPsImplDef = web3n.caps.CAPsImplementingGUIComponent;
 type FileException = web3n.files.FileException;
 type GetFSResource = web3n.shell.GetFSResource;
 type OpenConnectionInfo = web3n.system.monitor.OpenConnectionInfo;
@@ -60,6 +63,7 @@ export abstract class App {
 	protected constructor(
 		protected readonly manifest: AppManifest,
 		protected readonly appRoot: AppFolder,
+		protected readonly getUIFF: () => FormFactor,
 		protected readonly makeAppCAPs: CoreDriver['makeCAPsForAppComponent'],
 		private readonly getAppStorage: GetAppStorage,
 		private readonly removeThisFromLiveApps: () => void,
@@ -72,9 +76,7 @@ export abstract class App {
 		}
 	}
 
-	async handleCmd(
-		cmd: CmdParams, callerApp: string, callerComponent: string
-	): Promise<void> {
+	async handleCmd(cmd: CmdParams, callerApp: string, callerComponent: string): Promise<void> {
 		const { entrypoint, component } = this.componentForCmd(cmd.cmd);
 		this.ensureCmdCallerIsAllowed(
 			component, cmd.cmd, callerApp, callerComponent
@@ -83,26 +85,19 @@ export abstract class App {
 		const existing = this.instances.get(entrypoint) as GUIComponent;
 		if (existing && !isMultiInstanceComponent(component)) {
 			this.ensureCmdHandlePresence(existing, cmd.cmd);
-			existing.cmdsHandler!.handle(
-				cmd, callerApp, callerComponent
-			);
+			existing.cmdsHandler!.handle(cmd, callerApp, callerComponent);
 			existing.focusWindow();
 			return;
 		}
-		await this.syncStartProc(
-			entrypoint,
-			this.makeAndStartGUIComponentInstance(
-				entrypoint, component, cmd, undefined
-			)
-		);
+		await this.syncStartProc(entrypoint, this.makeAndStartGUIComponentInstance(
+			entrypoint, component, cmd, undefined
+		));
 	}
-
-	protected abstract get uiFF(): FormFactor;
 
 	private componentForCmd(cmd: string): {
 		component: GUIComponentDef; entrypoint: string;
 	} {
-		const c = getComponentForCommand(this.manifest, cmd, this.uiFF);
+		const c = getComponentForCommand(this.manifest, cmd, this.getUIFF());
 		if (c) {
 			return c;
 		} else {
@@ -113,22 +108,17 @@ export abstract class App {
 	}
 
 	private ensureCmdCallerIsAllowed(
-		component: GUIComponentDef, cmd: string,
-		callerApp: string, callerComponent: string
+		component: GUIComponentDef, cmd: string, callerApp: string, callerComponent: string
 	): void {
 		const appDomain = this.manifest.appDomain;
-		if (!isCallerAllowed(
-			appDomain, component.startCmds![cmd], callerApp, callerComponent
-		)) {
+		if (!isCallerAllowed(appDomain, component.startCmds![cmd], callerApp, callerComponent)) {
 			throw makeShellCmdException(appDomain, cmd, {
 				callerNotAllowed: true
 			});
 		}
 	}
 
-	private ensureCmdHandlePresence(
-		existing: GUIComponent, cmd: string
-	): void {
+	private ensureCmdHandlePresence(existing: GUIComponent, cmd: string): void {
 		if (!existing.cmdsHandler!.canHandleCmd(cmd)) {
 			throw makeShellCmdException(this.manifest.appDomain, cmd, {
 				cause: `Command handler is not found on implementation`
@@ -136,9 +126,7 @@ export abstract class App {
 		}
 	}	
 
-	private async syncStartProc<T>(
-		entrypoint: string, proc: Promise<T>
-	): Promise<T> {
+	private async syncStartProc<T>(entrypoint: string, proc: Promise<T>): Promise<T> {
 		proc = proc.catch(err => {
 			this.logging.logError(err, `Error thrown when starting component ${entrypoint} of app ${this.appId}`);
 			throw err;
@@ -168,9 +156,7 @@ export abstract class App {
 	): ReturnType<CoreDriver['makeCAPsForAppComponent']> {
 		this.ensureCanStartComponent();
 		const { appDomain, version } = this.manifest;
-		let caps = this.makeAppCAPs(
-			appDomain, version, entrypoint, component, startCmd
-		);
+		let caps = this.makeAppCAPs(appDomain, version, entrypoint, component, startCmd);
 		if (this.devCAPsWrapper) {
 			caps = this.devCAPsWrapper(entrypoint, caps, focusThisWindow);
 		}
@@ -204,7 +190,7 @@ export abstract class App {
 	}
 
 	async launchFormFactorAppropriateWebGUI(devTools: boolean): Promise<void> {
-		const launchers = getLaunchersForUser(this.manifest, this.uiFF);
+		const launchers = getLaunchersForUser(this.manifest, this.getUIFF());
 		if (launchers) {
 			const { component, startCmd } = launchers[0];
 			if (component) {
@@ -216,9 +202,7 @@ export abstract class App {
 		await this.launchWebGUI(MAIN_GUI_ENTRYPOINT, devTools);
 	}
 
-	private async launchComponent(
-		entrypoint: string, component: AppComponentDef
-	): Promise<void> {
+	private async launchComponent(entrypoint: string, component: AppComponentDef): Promise<void> {
 		await this.whenNoStartProc(entrypoint);
 		const existing = this.instances.get(entrypoint);
 		if (existing && !isMultiInstanceComponent(component)) {
@@ -226,18 +210,11 @@ export abstract class App {
 			return;
 		}
 		if (component.runtime === 'web-gui') {
-			await this.syncStartProc(
-				entrypoint,
-				this.makeAndStartGUIComponentInstance(
-					entrypoint, component as GUIComponentDef, undefined, undefined,
-					this.devTools
-				)
-			);
+			await this.syncStartProc(entrypoint, this.makeAndStartGUIComponentInstance(
+				entrypoint, component as GUIComponentDef, undefined, undefined, this.devTools
+			));
 		} else if (component.runtime === 'deno') {
-			await this.syncStartProc(
-				entrypoint,
-				this.makeAndStartDenoComponentInstance(entrypoint, component)
-			);
+			await this.syncStartProc(entrypoint, this.makeAndStartDenoComponentInstance(entrypoint, component));
 
 		}
 	}
@@ -254,7 +231,7 @@ export abstract class App {
 	}
 
 	protected abstract makeAndStartGUIComponentInstance(
-		entrypoint: string, component: GUIComponentDef|GUISrvDef,
+		entrypoint: string, component: GUIComponentDef|GUISrvDef|GUICAPsImplDef,
 		startCmd: CmdParams|undefined, guiParent: GUIComponent|undefined,
 		devTools?: boolean
 	): Promise<GUIComponent>;
@@ -294,11 +271,19 @@ export abstract class App {
 		}
 	}
 
-	async getServiceToHandleCall(
-		caller: Component, service: string
-	): Promise<Service> {
+	async getProvidedCAPServiceToHandleCall(caller: Component, capName: string): Promise<Service> {
 		const appDomain = this.manifest.appDomain;
-		const c = getComponentForService(this.manifest, service, this.uiFF);
+		const c = getComponentForServiceProvidingCAP(this.manifest, capName, this.getUIFF());
+		if (!c) {
+			throw makeRPCException(appDomain, capName, { capImplementingServiceNotFound: true });
+		}
+		const { entrypoint, component } = c;
+		return await this.getOrMakeServiceInstaceForCall(caller, component, entrypoint, capName);
+	}
+
+	async getServiceToHandleCall(caller: Component, service: string): Promise<Service> {
+		const appDomain = this.manifest.appDomain;
+		const c = getComponentForService(this.manifest, service, this.getUIFF());
 		if (!c) {
 			throw makeRPCException(appDomain, service, { serviceNotFound: true });
 		}
@@ -312,7 +297,13 @@ export abstract class App {
 				{ callerNotAllowed: true },
 				{ callerApp: caller.domain, callerComponent: caller.entrypoint }
 			);
-		}	
+		}
+		return await this.getOrMakeServiceInstaceForCall(caller, component, entrypoint, service);
+	}
+
+	private async getOrMakeServiceInstaceForCall(
+		caller: Component, component: SrvDef|CAPsImplDef, entrypoint: string, service: string
+	): Promise<Service> {
 		await this.whenNoStartProc(entrypoint);
 		const existing = this.instances.get(entrypoint);
 		if (existing && !isMultiInstanceComponent(component)) {
@@ -328,8 +319,7 @@ export abstract class App {
 	}
 
 	private async makeAndStartServiceComponentInstance(
-		caller: Component, service: string,
-		component: SrvDef, entrypoint: string
+		caller: Component, service: string, component: SrvDef|CAPsImplDef, entrypoint: string
 	): Promise<GUIComponent|Component> {
 		this.ensureCanStartComponent();
 		const appDomain = this.manifest.appDomain;
@@ -339,9 +329,7 @@ export abstract class App {
 				(component as GUISrvDef).childOfGUICaller) ?
 				caller as GUIComponent : undefined
 			);
-			return this.makeAndStartGUIComponentInstance(
-				entrypoint, component as GUISrvDef, undefined, parent
-			);
+			return this.makeAndStartGUIComponentInstance(entrypoint, component as GUISrvDef, undefined, parent);
 		} else if (component.runtime === 'deno') {
 			return this.makeAndStartDenoComponentInstance(entrypoint, component);
 		} else if (component.runtime === 'wasm,mp1') {
@@ -357,7 +345,7 @@ export abstract class App {
 	}
 
 	protected abstract makeAndStartDenoComponentInstance(
-		entrypoint: string, component: SrvDef
+		entrypoint: string, component: SrvDef|CAPsImplDef
 	): Promise<Component>;
 
 	get version(): string {
@@ -399,9 +387,7 @@ export abstract class App {
 	): ReturnType<GetFSResource> {
 		const {
 			appStorage, itemType, path, initValueSrc
-		} = getExposedFSResource(
-			this.manifest, resourceName, requestingApp, requestingComponent
-		);
+		} = getExposedFSResource(this.manifest, resourceName, requestingApp, requestingComponent);
 		const fs = await this.getAppStorage(appStorage);
 		if (itemType === 'file') {
 			return await fs.readonlyFile(path)
@@ -429,10 +415,8 @@ export abstract class App {
 					throw exc;
 				} else if (!initValueSrc) {
 					throw makeAppFSResourceException(
-						this.manifest.appDomain, resourceName,
-						requestingApp, requestingComponent, {
-							resourceNotInitialized: true
-						}
+						this.manifest.appDomain, resourceName, requestingApp, requestingComponent,
+						{ resourceNotInitialized: true }
 					);
 				}
 				await this.syncFsInitProc(
@@ -446,9 +430,7 @@ export abstract class App {
 		}
 	}
 
-	private syncFsInitProc(
-		resourceName: string, action: () => Promise<void>
-	): Promise<void> {
+	private syncFsInitProc(resourceName: string, action: () => Promise<void>): Promise<void> {
 		const procId = `init-fs-resource:${resourceName}`;
 		const proc = this.startProcs.getP(procId) as Promise<void>|undefined;
 		return (proc ? proc : this.startProcs.startOrChain(procId, action));
@@ -541,7 +523,6 @@ async function copyFolder(
 
 
 export abstract class AppComponentBase implements Component {
-
 
 	protected constructor(
 		public readonly runtime: CommonDef['runtime'],

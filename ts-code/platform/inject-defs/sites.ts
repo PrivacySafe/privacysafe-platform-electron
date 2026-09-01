@@ -15,7 +15,8 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { DevSiteParamsGetter } from "./test-stand";
+import { DevApps } from "./test-stand";
+
 
 export interface Sites {
 
@@ -23,6 +24,6 @@ export interface Sites {
 
 	openSiteComponent(siteDomain: string, entrypoint: string): Promise<void>;
 
-	devOpenSiteComponent(dev: NonNullable<ReturnType<DevSiteParamsGetter>>, entrypoint: string): Promise<void>;
+	devOpenSiteComponent(dev: NonNullable<ReturnType<DevApps['getSiteParams']>>, entrypoint: string): Promise<void>;
 
 }

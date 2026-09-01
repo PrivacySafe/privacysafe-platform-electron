@@ -21,19 +21,21 @@ import type { CoreDriver, makeCoreDriver, MakeUserMount } from './core';
 import { Subject } from 'rxjs';
 import { sleep } from './lib-common/processes/sleep';
 import { NamedProcs } from './lib-common/processes/named-procs';
-import { MAIN_GUI_ENTRYPOINT } from './lib-common/manifest-utils';
+import { getProvidedCAPs, MAIN_GUI_ENTRYPOINT, makeRPCException } from './lib-common/manifest-utils';
 import { defer } from './lib-common/processes/deferred';
 import { stringifyErr } from './lib-common/exceptions/error';
-import { DevSiteParamsGetter, DevToolsAppAllowance } from './inject-defs/test-stand';
+import { DevApps, DevToolsAppAllowance } from './inject-defs/test-stand';
 import type { Component, Service } from './inject-defs/apps';
 import { Sites } from './inject-defs/sites';
-import { DevAppParamsGetter, GetAppStorage, LiveApps } from './apps/live-apps';
+import { GetAppStorage, LiveApps } from './apps/live-apps';
 import type { SystemPlaces } from './caps/system/system-places';
 import type { AppDownloader } from './caps/system/apps-downloader';
+import { systemCAPsDomain } from './caps/rpc';
+import { OtherUsersFns } from './caps/system';
 
 type UserAppsEvents = 'start-closing' | {
 	type: 'closed';
-	canClosePlatform: boolean;
+	closePlatform: boolean;
 } | {
 	type: 'app-installed' | 'app-downloaded';
 	app: UserAppInfo;
@@ -48,6 +50,7 @@ type Platform = web3n.system.platform.Platform;
 type UserLoginSettings = web3n.system.UserLoginSettings;
 type CmdParams = web3n.shell.commands.CmdParams;
 type WritableFS = web3n.files.WritableFS;
+type AppManifest = web3n.caps.AppManifest;
 
 const platformComponentName = {
 	guiPlacement: 'gui.placement'
@@ -58,7 +61,7 @@ export type MakeAppsAndSites = (
 	appAndManifestOnDev: SystemPlaces['appAndManifestOnDev'],
 	makeAppCAPs: CoreDriver['makeCAPsForAppComponent'],
 	getAppStorage: (appDomain: string) => GetAppStorage,
-	devApps: DevAppParamsGetter|undefined,
+	devApps: DevApps['getAppParams']|undefined,
 	makeSiteCAPs: CoreDriver['makeCAPsForSiteComponent'],
 	guiPlacementFS: Promise<WritableFS>,
 	userId: () => string
@@ -82,6 +85,7 @@ export class UserApps {
 
 	private startupApp: StartupApp|undefined = undefined;
 	private readonly apps: LiveApps;
+	private readonly capImplProviders: CAPImplementationProviders;
 
 	// XXX sites should get similar treatment to app, but we can comment out them for now
 	private readonly siteStartingProcs = new NamedProcs();
@@ -94,9 +98,9 @@ export class UserApps {
 		makeDriver: typeof makeCoreDriver,
 		conf: CoreConf,
 		makeAppsAndSites: MakeAppsAndSites,
-		devApps: DevAppParamsGetter|undefined,
-		private readonly devSites: DevSiteParamsGetter|undefined,
+		private readonly devApps: DevApps|undefined,
 		private readonly devToolsAllowance: DevToolsAppAllowance,
+		otherUsersFns: ((currentUser: string) => OtherUsersFns)|undefined,
 		getPlatform: () => Platform,
 		makeUserMounts: MakeUserMount|undefined,
 		private readonly r: PlatformResources
@@ -119,7 +123,12 @@ export class UserApps {
 			conf, makeSystemCapFns,
 			this.startAppWithCmd.bind(this),
 			this.openAppLauncher.bind(this),
-			this.logout.bind(this),
+			{
+				closeCurrentUserApps: () => this.closeAllApps(),
+				logout: () => this.exit(),
+				exitPlatform: () => this.exit(true)
+			},
+			otherUsersFns,
 			this.getServiceToHandleCall.bind(this),
 			this.getAppFSResourceFor.bind(this),
 			makeUserMounts,
@@ -129,12 +138,16 @@ export class UserApps {
 		.then(() => this.sysPlaces.getPlatformComponentFS(
 			'local', platformComponentName.guiPlacement
 		));
+		this.capImplProviders = new CAPImplementationProviders(
+			this.sysPlaces.listManifestsDataOfInstalledApps.bind(this.sysPlaces),
+			this.r.getSytemFormFactor, this.devApps
+		);
 		const { apps, sites } = makeAppsAndSites(
 			this.sysPlaces.findInstalledApp.bind(this.sysPlaces),
 			this.sysPlaces.appAndManifestOnDev.bind(this.sysPlaces),
 			this.core.makeCAPsForAppComponent.bind(this.core),
 			this.getAppStorage.bind(this),
-			devApps,
+			devApps?.getAppParams,
 			this.core.makeCAPsForSiteComponent.bind(this.core),
 			guiPlacementFS,
 			() => this.userId
@@ -178,9 +191,7 @@ export class UserApps {
 
 	async setStartupAppProcess(
 		instantiate: (startCore: CoreDriver['start']) => {
-			startupApp: StartupApp;
-			startProc: Promise<void>;
-			coreInit: Promise<void>;
+			startupApp: StartupApp; startProc: Promise<void>; coreInit: Promise<void>;
 		}
 	): Promise<{ init: Promise<boolean>; }> {
 		if (this.core.isStarted() || this.startupApp) {
@@ -211,22 +222,21 @@ export class UserApps {
 		}
 	}
 
-	async openApp(
-		appDomain: string, entrypoint = MAIN_GUI_ENTRYPOINT, devTools = false
-	): Promise<void> {
+	async openApp(appDomain: string, entrypoint = MAIN_GUI_ENTRYPOINT, devTools = false): Promise<void> {
 		try {
 			devTools = devTools || this.devToolsAllowance(appDomain);
 			const app = await this.apps.get(appDomain, devTools);
 			await app.launchWebGUI(entrypoint, devTools);
 		} catch (err) {
-			this.r.showSystemErrorBox(`Fail to open App`, `Opening 3NWeb app ${appDomain} threw an error:${'\n'}${stringifyErr(err)}`);
+			this.r.showSystemErrorBox(
+				`Fail to open App`,
+				`Opening 3NWeb app ${appDomain} threw an error:${'\n'}${stringifyErr(err)}`
+			);
 			throw err;
 		}
 	}
 
-	private async executeCommand(
-		appDomain: string, cmd: CmdParams, devTools?: boolean
-	): Promise<void> {
+	async executeCommand(appDomain: string, cmd: CmdParams, devTools?: boolean): Promise<void> {
 		devTools = devTools || this.devToolsAllowance(appDomain);
 		const app = await this.apps.get(appDomain, devTools);
 		await app.handleCmdFromUser(cmd);
@@ -270,9 +280,7 @@ export class UserApps {
 		callerApp: string, callerComponent: string,
 		appDomain: string, cmd: string, ...params: any[]
 	): Promise<void> {
-		const app = await this.apps.get(
-			appDomain, this.devToolsAllowance(appDomain)
-		);
+		const app = await this.apps.get(appDomain, this.devToolsAllowance(appDomain));
 		await app.handleCmd({ cmd, params }, callerApp, callerComponent);
 	}
 
@@ -287,9 +295,7 @@ export class UserApps {
 			return startedProc;
 		}
 
-		const devParams = (this.devSites ?
-			this.devSites(siteDomain, entrypoint) : undefined
-		);
+		const devParams = this.devApps?.getSiteParams(siteDomain, entrypoint);
 		startedProc = (devParams ?
 			this.sites.devOpenSiteComponent(devParams, entrypoint) :
 			this.sites.openSiteComponent(siteDomain, entrypoint)
@@ -297,13 +303,29 @@ export class UserApps {
 		return this.siteStartingProcs.addStarted(siteDomain, startedProc);
 	}
 
-	private async getServiceToHandleCall(
-		caller: Component, appDomain: string, service: string
-	): Promise<Service> {
-		const app = await this.apps.get(
-			appDomain, this.devToolsAllowance(appDomain)
-		);
-		return await app.getServiceToHandleCall(caller, service);
+	private async getServiceToHandleCall(caller: Component, appDomain: string, service: string): Promise<Service> {
+		if (appDomain === systemCAPsDomain) {
+			return await this.getServiceToHandleCallToCAP(caller, service)
+		} else {
+			const app = await this.apps.get(appDomain, this.devToolsAllowance(appDomain));
+			return await app.getServiceToHandleCall(caller, service);			
+		}
+	}
+
+	private async getServiceToHandleCallToCAP(caller: Component, capName: string): Promise<Service> {
+		const appForCAP = await this.capImplProviders.getForCAP(capName);
+		if (appForCAP) {
+			const app = await this.apps.get(appForCAP, this.devToolsAllowance(appForCAP));
+			return await app.getProvidedCAPServiceToHandleCall(caller, capName);
+		} else if (this.r.getServiceForCAP && capName.startsWith('w3n.shell.fileDialogs.')) {
+			return await this.r.getServiceForCAP(caller, capName);
+		} else {
+			throw makeRPCException(
+				systemCAPsDomain, capName,
+				{ capImplementingServiceNotFound: true },
+				{ callerApp: caller.domain, callerComponent: caller.entrypoint }
+			);
+		}
 	}
 
 	async closeAllApps(): Promise<void> {
@@ -315,15 +337,11 @@ export class UserApps {
 		await this.closeAllApps();
 		await this.core.close().catch(this.r.logging.logError);
 		this.broadcast.next({
-			type: 'closed', canClosePlatform: closePlatform
+			type: 'closed', closePlatform
 		});
 		await sleep(1);
 		this.broadcast.complete();
 	}
-
-	private async logout(closePlatform: boolean): Promise<void> {
-		this.exit(closePlatform);	// we don't wait for this to end
-	};
 
 	private async getAppFSResourceFor(
 		resourceAppDomain: string|null|undefined, resourceName: string,
@@ -332,9 +350,7 @@ export class UserApps {
 		if (!resourceAppDomain) {
 			resourceAppDomain = requestingApp;
 		}
-		const app = await this.apps.get(
-			resourceAppDomain, this.devToolsAllowance(resourceAppDomain)
-		);
+		const app = await this.apps.get(resourceAppDomain, this.devToolsAllowance(resourceAppDomain));
 		return await app.exposedFSResource(
 			resourceName, requestingApp, requestingComponent
 		);
@@ -374,6 +390,65 @@ export class UserApps {
 }
 Object.freeze(UserApps.prototype);
 Object.freeze(UserApps);
+
+
+class CAPImplementationProviders {
+
+	private lazyCAPtoAppMap: Map<string, string|string[]>|undefined = undefined;
+
+	constructor(
+		private readonly listManifestsDataOfInstalledApps: SystemPlaces['listManifestsDataOfInstalledApps'],
+		private readonly getSytemFormFactor: PlatformResources['getSytemFormFactor'],
+		private readonly devApps: DevApps|undefined
+	) {
+		Object.seal(this);
+	}
+
+	add(appId: string, caps: string[]): void {
+		if (this.lazyCAPtoAppMap) {
+			for (const capName of caps) {
+				this.addToMap(appId, capName);
+			}
+		}
+	}
+
+	private addToMap(appId: string, capName: string): void {
+		const existing = this.lazyCAPtoAppMap!.get(appId);
+		if (!existing) {
+			this.lazyCAPtoAppMap!.set(capName, appId);
+		} else if (Array.isArray(existing)) {
+			existing.push(appId);
+		} else {
+			this.lazyCAPtoAppMap!.set(capName, [ existing, appId ]);
+		}
+	}
+
+	async initMap(): Promise<void> {
+		this.lazyCAPtoAppMap = new Map();
+		this.devApps?.listAllApps().forEach(params => {
+			const { manifest: m, formFactor } = params;
+			getProvidedCAPs(m, formFactor || this.getSytemFormFactor())?.forEach(
+				capName => this.addToMap(m.appDomain, capName)
+			);
+		});
+		await this.listManifestsDataOfInstalledApps(m => {
+			if (!this.devApps?.getAppParams(m.appDomain)) {
+				getProvidedCAPs(m, this.getSytemFormFactor())?.forEach(capName => this.addToMap(m.appDomain, capName));
+			}
+		});
+	}
+
+	async getForCAP(capName: string): Promise<string|undefined> {
+		if (!this.lazyCAPtoAppMap) {
+			await this.initMap();
+		}
+		const app = this.lazyCAPtoAppMap!.get(capName);
+		return (Array.isArray(app) ? app[0] : app);
+	}
+
+}
+Object.freeze(CAPImplementationProviders.prototype);
+Object.freeze(CAPImplementationProviders);
 
 
 function systemCAPsFrom(

@@ -131,7 +131,8 @@ export class DesktopUI {
 	private async updateDesktopElements(): Promise<void> {
 		try {
 			this.tray?.updateMenu(this.users);
-			await this.mainMenu?.updateItems(this.extCmds.getAll());
+			// XXX commenting out adding FreeDesktop main menu entries files, till we clean them on exit
+			// await this.mainMenu?.updateItems(this.extCmds.getAll());
 		} catch (err) {
 			logError(err);
 		}

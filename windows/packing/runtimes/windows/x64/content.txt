@@ -1,3 +1,0 @@
-deno version 2.7.12 comes from zip at https://github.com/denoland/deno/releases/download/v2.7.12/deno-x86_64-pc-windows-msvc.zip
-Sha512 hashes are
-0fa073175429018aaa8ae363122a4ab897b5e48733871852e2bdc06f5f87f9dce3cd60109076dceec5a8573b9e212803358a86c13ce789680983aae590276622  deno.exe

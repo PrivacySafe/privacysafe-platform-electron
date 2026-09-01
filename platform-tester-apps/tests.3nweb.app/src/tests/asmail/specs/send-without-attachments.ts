@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2018, 2020 - 2021 3NSoft Inc.
+ Copyright (C) 2016 - 2018, 2020 - 2021, 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -17,8 +17,9 @@
 
 import { SpecDescribe } from '../../libs-for-tests/spec-module.js';
 import { SpecIt, throwDeliveryErrorFrom } from '../test-utils.js';
-import { listenForOneMsgEchoFromSecondUser } from '../second-user.js';
+import { type EchoMsgSignal, listenForOneMsgEchoFromSecondUser } from '../second-user.js';
 import { deepEqual } from '../../libs-for-tests/json-equal.js';
+import { getMsgsFromProcess } from '../../libs-for-tests/proc-messaging.js';
 
 export const specs: SpecDescribe = {
 	description: '.sendMsg',
@@ -27,10 +28,11 @@ export const specs: SpecDescribe = {
 
 type DeliveryProgress = web3n.asmail.DeliveryProgress;
 type OutgoingMessage = web3n.asmail.OutgoingMessage;
+type IncomingMessage = web3n.asmail.IncomingMessage;
 
-const it: SpecIt = {
+let it: SpecIt = {
 	expectation: 'send message to existing address and get it',
-	timeout: 15000
+	timeout: 30000
 };
 it.func = async function(s) {
 	const recipient = s.secondUser;
@@ -58,8 +60,7 @@ it.func = async function(s) {
 			next: (p: DeliveryProgress) => { notifs.push(p); },
 			complete: resolve as () => void, error: reject
 		};
-		const cbDetach = w3n.mail!.delivery.observeDelivery(
-			idForSending, observer);
+		const cbDetach = w3n.mail!.delivery.observeDelivery(idForSending, observer);
 		expect(typeof cbDetach).toBe('function');
 	});
 	expect(notifs.length).toBeGreaterThan(0);
@@ -84,6 +85,65 @@ it.func = async function(s) {
 	expect(inMsg.plainTxtBody).toBe(txtBody);
 	expect(inMsg.htmlTxtBody).toBe(htmlBody);
 	expect(deepEqual(inMsg.jsonBody, jsonBody)).toBe(true);
+
+};
+specs.its.push(it);
+
+
+it = {
+	expectation: 'send lots of messages with sendImmediately flag set true',
+	timeout: 30000
+};
+it.func = async function(s) {
+	const recipient = s.secondUser;
+	const totalNumOfTestMsgs = 30;
+	const receivedMsgs: (IncomingMessage|undefined)[] = new Array(totalNumOfTestMsgs);
+	const echosFromRecipient = getMsgsFromProcess<EchoMsgSignal>(2, undefined, undefined, 30);
+	const echoing = (async function() {
+		for await (const { msg } of echosFromRecipient) {
+			const i = msg.jsonBody!.testMsgNum;
+			receivedMsgs[i] = msg;
+		}
+	})();
+
+	const idForSendingPrefix = `${Date.now()}`;
+	const notifs: DeliveryProgress[][] = [];
+	const deliveryProcesses: Promise<void>[] = [];
+	for (let i=0; i<totalNumOfTestMsgs; i+=1) {
+		const idForSending = `${idForSendingPrefix}-${i}`;
+		const msgNotifs: DeliveryProgress[] = [];
+		notifs.push(msgNotifs);
+		const outMsg: OutgoingMessage = {
+			msgType: 'mail',
+			jsonBody: {
+				testMsgNum: i
+			}
+		};
+		await w3n.mail!.delivery.addMsg([ recipient ], outMsg, idForSending, { sendImmediately: false });
+		const msgDeliveryProc = new Promise<void>((resolve, reject) => {
+			const observer: web3n.Observer<DeliveryProgress> = {
+				next: (p: DeliveryProgress) => msgNotifs.push(p),
+				complete: resolve as () => void,
+				error: reject
+			};
+			w3n.mail!.delivery.observeDelivery(idForSending, observer);
+		});
+		deliveryProcesses.push(msgDeliveryProc);
+
+	}
+
+	await Promise.allSettled(deliveryProcesses);
+	await echoing;
+
+	for (let i=0; i<totalNumOfTestMsgs; i+=1) {
+		const msgDeliveryNotifs = notifs[i];
+		expect(msgDeliveryNotifs.length).toBeGreaterThan(0);
+		const last = msgDeliveryNotifs[msgDeliveryNotifs.length - 1];
+		expect(last.allDone).withContext(`message ${i} should've been sent without errors`).toBe('all-ok');
+
+		const msg = receivedMsgs[i];
+		expect(msg!.jsonBody!.testMsgNum).withContext(`message ${i} should've been received`).toBe(i);
+	}
 
 };
 specs.its.push(it);
