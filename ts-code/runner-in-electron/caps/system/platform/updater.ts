@@ -18,7 +18,7 @@
 import { NsisUpdater, AppImageUpdater, MacUpdater, AppUpdater } from "electron-updater";
 import { Subject } from "rxjs";
 import { toRxObserver } from "../../../../platform/lib-common/utils-for-observables";
-import { PLATFORM_BUNDLE_URL } from "../../../bundle-confs";
+import { BUNDLE_BASE_URL } from "../../../bundle-confs";
 import { findPackInfo } from "../../../confs";
 import { platform } from "os";
 
@@ -59,8 +59,7 @@ export class Updater {
 		Object.seal(this);
 	}
 
-	static make(newBundleVersion: string): Updater|undefined {
-		const versionUrl = `${PLATFORM_BUNDLE_URL}/bundles/${newBundleVersion}`;
+	static make(newBundleVersion: string, osLabelBeforeVersion: string|undefined): Updater|undefined {
 		const packInfo = findPackInfo();
 		if (!packInfo) {
 			return;
@@ -69,18 +68,18 @@ export class Updater {
 		if (variant === 'AppImage') {
 			return new Updater(newBundleVersion, new AppImageUpdater({
 				provider: 'generic',
-				url: `${versionUrl}/linux/${arch}/`
+				url: updateUrlFor(newBundleVersion, osLabelBeforeVersion, arch, 'linux')
 			}));			
 		} else if (variant === 'nsis') {
 			return new Updater(newBundleVersion, new NsisUpdater({
 				provider: 'generic',
-				url: `${versionUrl}/windows/${arch}/`
+				url: updateUrlFor(newBundleVersion, osLabelBeforeVersion, arch, 'windows')
 			}));			
 		} else if ((variant === 'dmg')
 		|| ((platform() === 'darwin') && (variant === 'zip'))) {
 			return new Updater(newBundleVersion, new MacUpdater({
 				provider: 'generic',
-				url: `${versionUrl}/mac/${arch}/`
+				url: updateUrlFor(newBundleVersion, osLabelBeforeVersion, arch, 'mac')
 			}));			
 		} else {
 			return;
@@ -98,6 +97,16 @@ export class Updater {
 }
 Object.freeze(Updater.prototype);
 Object.freeze(Updater);
+
+
+function updateUrlFor(
+	newBundleVersion: string, osLabelBeforeVersion: string|undefined, arch: string, fallbackOsLabel: string
+): string {
+	return (osLabelBeforeVersion ?
+		`${BUNDLE_BASE_URL}/bundles/${osLabelBeforeVersion}/${newBundleVersion}/${arch}/` :
+		`${BUNDLE_BASE_URL}/bundles/${newBundleVersion}/${fallbackOsLabel}/${arch}/`
+	);
+}
 
 
 Object.freeze(exports);

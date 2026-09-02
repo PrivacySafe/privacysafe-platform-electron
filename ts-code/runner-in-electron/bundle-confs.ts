@@ -102,7 +102,7 @@ export const DATA_DIR_NAME = (() => {
 	return dirName;
 })();
 
-export const PLATFORM_BUNDLE_URL = getConfStringConst('bundle-base-url');
+export const BUNDLE_BASE_URL = getConfStringConst('bundle-base-url');
 
 export function isBundledApp(appDomain: string): boolean {
 	return (

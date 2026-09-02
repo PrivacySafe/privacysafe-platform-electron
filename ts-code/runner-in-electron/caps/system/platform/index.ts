@@ -21,7 +21,7 @@ import { assert } from "../../../../platform/lib-common/assert";
 import { Updater } from "./updater";
 import { PackInfo, findPackInfo } from "../../../confs";
 import { platform } from "os";
-import { PLATFORM_BUNDLE_URL } from "../../../bundle-confs";
+import { BUNDLE_BASE_URL } from "../../../bundle-confs";
 import { bundleVersion } from "../../../bundle-version";
 import { listBundledAppPacks, listInstalledBundledApps } from "../system-places";
 
@@ -80,7 +80,7 @@ export class PlatformDownloader implements PlatformDownloaderCAP {
 		if (this.type === 'electron-builder-update') {
 			if (!this.updater
 			|| (this.updater.newBundleVersion !== newBundleVersion)) {
-				this.updater = Updater.make(newBundleVersion);
+				this.updater = Updater.make(newBundleVersion, osLabelBeforeVersion);
 			}
 			if (this.updater) {
 				return this.updater.watchUpdaterEvents(observer);
@@ -153,27 +153,58 @@ async function getJson<T>(url: string): Promise<T|undefined> {
 }
 
 async function platfChannels(): Promise<DistChannels> {
-	const channels = await getJson<DistChannels>(
-		`${PLATFORM_BUNDLE_URL}/platform/channels`
-	);
-	if (channels && (typeof channels.channels === 'object')) {
-		return channels;
-	} else {
-		throw makeDownloadExc({ noChannels: true });
+	for (const platfUrls of [
+		`${BUNDLE_BASE_URL}/platform/desktops/channels`,
+		`${BUNDLE_BASE_URL}/platform/channels`
+	]) {
+		const channels = await getJson<DistChannels>(platfUrls);
+		if (channels && (typeof channels.channels === 'object')) {
+			return channels;
+		}
 	}
+	throw makeDownloadExc({ noChannels: true });
 }
 
+// singleton of info url that worked
+let osLabelBeforeVersion: string|undefined = undefined;
+
 async function channelLatestVersion(channel: string): Promise<BundleVersions> {
-	assert((typeof channel === 'string') && (channel.length > 0),
-		`Invalid channel: ${channel}`);
-	const latest = await getJson<BundleVersions>(
-		`${PLATFORM_BUNDLE_URL}/${channel}/${bundleInfoFName}`
-	);
-	if (latest) {
-		return latest;
-	} else {
-		throw makeDownloadExc({ noVersions: true });
+	assert((typeof channel === 'string') && (channel.length > 0), `Invalid channel: ${channel}`);
+	const olderUrl = `${BUNDLE_BASE_URL}/${channel}/${bundleInfoFName}`;
+	for (const bundleInfoUrl of bundleInfoUrlCandidates(channel).concat(olderUrl)) {
+		const latest = await getJson<BundleVersions>(bundleInfoUrl);
+		if (latest) {
+			if (bundleInfoUrl === olderUrl) {
+				osLabelBeforeVersion = undefined;
+				// DEBUG log
+				console.log(`Using older url addres for platform update`);
+			} else {
+				let startInd = bundleInfoUrl.indexOf(`/${channel}/`) + 2 + channel.length;
+				const endInd = bundleInfoUrl.length - bundleInfoFName.length - 1;
+				osLabelBeforeVersion = bundleInfoUrl.slice(startInd, endInd);
+				// DEBUG log
+				console.log(`Using newer url addres for platform update:`, { url: bundleInfoUrl, osLabel: osLabelBeforeVersion });
+			}
+			return latest;
+		}
 	}
+	throw makeDownloadExc({ noVersions: true });
+}
+
+function bundleInfoUrlCandidates(channel: string): string[] {
+	let os = platform();
+	let urlCandidates: string[];
+	if (os === 'darwin') {
+		urlCandidates = [ `${BUNDLE_BASE_URL}/${channel}/mac/${bundleInfoFName}` ];
+	} else if (os === 'win32') {
+		urlCandidates = [ `${BUNDLE_BASE_URL}/${channel}/windows/${bundleInfoFName}` ];
+	} else {
+		urlCandidates = [
+			`${BUNDLE_BASE_URL}/${channel}/gnulinux/${bundleInfoFName}`,
+			`${BUNDLE_BASE_URL}/${channel}/linux/${bundleInfoFName}`
+		];
+	}
+	return urlCandidates;
 }
 
 export interface PlatformDownloadException extends web3n.RuntimeException {
