@@ -2,12 +2,13 @@
 
 tester_dir="$(dirname ${BASH_SOURCE[0]})"
 data_dir="$tester_dir/../test-data_$(date +%Y-%m-%d_%H-%M)"
+# signup_url="webconference.kwlug.org:7070/signup/"
 signup_url="3nweb.net/signup/"
 deno_bin="$(which deno)"
 
 if [ -z "$deno_bin" ]
 then
-	echo "deno binary is not found. Chaeck 'which deno'."
+	echo "deno binary is not found. Check 'which deno'."
 	exit -2
 fi
 
