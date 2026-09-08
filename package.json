@@ -1,6 +1,6 @@
 {
   "name": "3nweb",
-  "version": "0.31.15",
+  "version": "0.31.16",
   "private": true,
   "description": "3NWeb platform client for desktop environments",
   "main": "build/all/main.js",
