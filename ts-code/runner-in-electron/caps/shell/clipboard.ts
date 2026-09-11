@@ -15,7 +15,7 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { clipboard } from "electron";
+import { clipboard, ClipboardItem } from "electron";
 
 type Clipboard = NonNullable<web3n.shell.ShellCAPs['clipboard']>;
 
@@ -34,22 +34,43 @@ export function makeClipboardCAP(capsReq: web3n.caps.ShellCAPsSetting['clipboard
 	}
 }
 
+const htmlMime = 'text/html';
+const rtfMime = 'text/rtf';
+
 function addWriteMethodsTo(cap: Clipboard): Clipboard {
-	cap.writeText = async (text, type) => {
-		clipboard.writeText(text, type);
+	cap.writeText = async (text) => {
+		clipboard.writeText(text);
 	};
-	cap.writeHTML = async (markup, type) => {
-		clipboard.writeHTML(markup, type);
+	cap.writeHTML = async (markup) => {
+		clipboard.write([
+			new ClipboardItem({ htmlMime: markup })
+		]);
 	};
-	cap.writeRTF = async (text, type) => {
-		clipboard.writeRTF(text, type);
+	cap.writeRTF = async (text) => {
+		clipboard.write([
+			new ClipboardItem({ 'text/rtf': text })
+		]);
 	};
 	return cap;
 }
 
 function addReadMethodsTo(cap: Clipboard): Clipboard {
-	cap.readText = async (type) => clipboard.readText(type);
-	cap.readHTML = async (type) => clipboard.readHTML(type);
-	cap.readRTF = async (type) => clipboard.readRTF(type);
+	cap.readText = async () => clipboard.readText();
+	cap.readHTML = async () => {
+		const items = await clipboard.read()
+		for (const item of items) {
+			const blob = await item.getType(htmlMime);
+			return (blob as Blob).text();
+		}
+		return '';
+	};
+	cap.readRTF = async () => {
+		const items = await clipboard.read()
+		for (const item of items) {
+			const blob = await item.getType(rtfMime);
+			return (blob as Blob).text();
+		}
+		return '';
+	};
 	return cap;
 }
