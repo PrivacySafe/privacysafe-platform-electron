@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021, 2024 - 2025 3NSoft Inc.
+ Copyright (C) 2021, 2024 - 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -22,7 +22,7 @@ import { Updater } from "./updater";
 import { PackInfo, findPackInfo } from "../../../confs";
 import { platform } from "os";
 import { BUNDLE_BASE_URL } from "../../../bundle-confs";
-import { bundleVersion } from "../../../bundle-version";
+import { bundleVersion, platformVersion } from "../../../bundle-version";
 import { listBundledAppPacks, listInstalledBundledApps } from "../system-places";
 
 type PlatformDownloaderCAP = web3n.system.platform.PlatformDownloader;
@@ -80,7 +80,7 @@ export class PlatformDownloader implements PlatformDownloaderCAP {
 		if (this.type === 'electron-builder-update') {
 			if (!this.updater
 			|| (this.updater.newBundleVersion !== newBundleVersion)) {
-				this.updater = Updater.make(newBundleVersion, osLabelBeforeVersion);
+				this.updater = Updater.make(newBundleVersion);
 			}
 			if (this.updater) {
 				return this.updater.watchUpdaterEvents(observer);
@@ -126,7 +126,7 @@ export async function getPlatformCurrentVersion(): Promise<BundleVersions> {
 		apps: bundledApps,
 		"app-packs": bundledAppPacks,
 		bundle: bundleVersion,
-		platform: bundleVersion.substring(0, bundleVersion.indexOf('+')),
+		platform: platformVersion,
 		runtimes: {}
 	};
 }
@@ -153,58 +153,42 @@ async function getJson<T>(url: string): Promise<T|undefined> {
 }
 
 async function platfChannels(): Promise<DistChannels> {
-	for (const platfUrls of [
-		`${BUNDLE_BASE_URL}/platform/desktops/channels`,
-		`${BUNDLE_BASE_URL}/platform/channels`
-	]) {
-		const channels = await getJson<DistChannels>(platfUrls);
-		if (channels && (typeof channels.channels === 'object')) {
-			return channels;
-		}
+	const channels = await getJson<DistChannels>(`${BUNDLE_BASE_URL}/platform/desktops/channels`);
+	if (channels && (typeof channels.channels === 'object')) {
+		return channels;
+	} else {
+		throw makeDownloadExc({ noChannels: true });
 	}
-	throw makeDownloadExc({ noChannels: true });
 }
 
-// singleton of info url that worked
-let osLabelBeforeVersion: string|undefined = undefined;
+type BundleVersionsOnServer = Omit<BundleVersions, 'bundle'> & { bundleId: string; };
 
 async function channelLatestVersion(channel: string): Promise<BundleVersions> {
 	assert((typeof channel === 'string') && (channel.length > 0), `Invalid channel: ${channel}`);
-	const olderUrl = `${BUNDLE_BASE_URL}/${channel}/${bundleInfoFName}`;
-	for (const bundleInfoUrl of bundleInfoUrlCandidates(channel).concat(olderUrl)) {
-		const latest = await getJson<BundleVersions>(bundleInfoUrl);
-		if (latest) {
-			if (bundleInfoUrl === olderUrl) {
-				osLabelBeforeVersion = undefined;
-				// DEBUG log
-				console.log(`Using older url addres for platform update`);
-			} else {
-				let startInd = bundleInfoUrl.indexOf(`/${channel}/`) + 2 + channel.length;
-				const endInd = bundleInfoUrl.length - bundleInfoFName.length - 1;
-				osLabelBeforeVersion = bundleInfoUrl.slice(startInd, endInd);
-				// DEBUG log
-				console.log(`Using newer url addres for platform update:`, { url: bundleInfoUrl, osLabel: osLabelBeforeVersion });
-			}
-			return latest;
-		}
+	const latestFromServer = await getJson<BundleVersionsOnServer>(bundleInfoUrl(channel));
+	if (latestFromServer) {
+		const { bundleId, platform, runtimes, apps } = latestFromServer;
+		return {
+			bundle: bundleId,
+			platform,
+			runtimes,
+			apps,
+			"app-packs": latestFromServer['app-packs']
+		};
+	} else {
+		throw makeDownloadExc({ noVersions: true });
 	}
-	throw makeDownloadExc({ noVersions: true });
 }
 
-function bundleInfoUrlCandidates(channel: string): string[] {
+function bundleInfoUrl(channel: string): string {
 	let os = platform();
-	let urlCandidates: string[];
 	if (os === 'darwin') {
-		urlCandidates = [ `${BUNDLE_BASE_URL}/${channel}/mac/${bundleInfoFName}` ];
+		return `${BUNDLE_BASE_URL}/${channel}/mac/${bundleInfoFName}`;
 	} else if (os === 'win32') {
-		urlCandidates = [ `${BUNDLE_BASE_URL}/${channel}/windows/${bundleInfoFName}` ];
+		return `${BUNDLE_BASE_URL}/${channel}/windows/${bundleInfoFName}`;
 	} else {
-		urlCandidates = [
-			`${BUNDLE_BASE_URL}/${channel}/gnulinux/${bundleInfoFName}`,
-			`${BUNDLE_BASE_URL}/${channel}/linux/${bundleInfoFName}`
-		];
+		return `${BUNDLE_BASE_URL}/${channel}/gnulinux/${bundleInfoFName}`;
 	}
-	return urlCandidates;
 }
 
 export interface PlatformDownloadException extends web3n.RuntimeException {

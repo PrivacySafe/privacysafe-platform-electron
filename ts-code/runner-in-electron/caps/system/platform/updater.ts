@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 - 2024 3NSoft Inc.
+ Copyright (C) 2021 - 2024, 2026 3NSoft Inc.
  
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -19,7 +19,7 @@ import { NsisUpdater, AppImageUpdater, MacUpdater, AppUpdater } from "electron-u
 import { Subject } from "rxjs";
 import { toRxObserver } from "../../../../platform/lib-common/utils-for-observables";
 import { BUNDLE_BASE_URL } from "../../../bundle-confs";
-import { findPackInfo } from "../../../confs";
+import { findPackInfo, PackInfo } from "../../../confs";
 import { platform } from "os";
 
 type PlatformUpdateEvents = web3n.system.platform.PlatformUpdateEvents;
@@ -59,7 +59,7 @@ export class Updater {
 		Object.seal(this);
 	}
 
-	static make(newBundleVersion: string, osLabelBeforeVersion: string|undefined): Updater|undefined {
+	static make(newBundleVersion: string): Updater|undefined {
 		const packInfo = findPackInfo();
 		if (!packInfo) {
 			return;
@@ -68,18 +68,18 @@ export class Updater {
 		if (variant === 'AppImage') {
 			return new Updater(newBundleVersion, new AppImageUpdater({
 				provider: 'generic',
-				url: updateUrlFor(newBundleVersion, osLabelBeforeVersion, arch, 'linux')
+				url: updateUrlFor(newBundleVersion, 'linux', arch)
 			}));			
 		} else if (variant === 'nsis') {
 			return new Updater(newBundleVersion, new NsisUpdater({
 				provider: 'generic',
-				url: updateUrlFor(newBundleVersion, osLabelBeforeVersion, arch, 'windows')
+				url: updateUrlFor(newBundleVersion, 'windows', arch)
 			}));			
 		} else if ((variant === 'dmg')
 		|| ((platform() === 'darwin') && (variant === 'zip'))) {
 			return new Updater(newBundleVersion, new MacUpdater({
 				provider: 'generic',
-				url: updateUrlFor(newBundleVersion, osLabelBeforeVersion, arch, 'mac')
+				url: updateUrlFor(newBundleVersion, 'mac', arch)
 			}));			
 		} else {
 			return;
@@ -100,12 +100,9 @@ Object.freeze(Updater);
 
 
 function updateUrlFor(
-	newBundleVersion: string, osLabelBeforeVersion: string|undefined, arch: string, fallbackOsLabel: string
+	bundleVersion: string, os: 'linux'|'mac'|'windows', arch: PackInfo['arch']
 ): string {
-	return (osLabelBeforeVersion ?
-		`${BUNDLE_BASE_URL}/bundles/${osLabelBeforeVersion}/${newBundleVersion}/${arch}/` :
-		`${BUNDLE_BASE_URL}/bundles/${newBundleVersion}/${fallbackOsLabel}/${arch}/`
-	);
+	return `${BUNDLE_BASE_URL}/desktop-updates/${bundleVersion}/${os}/${arch}/`;
 }
 
 

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2024 3NSoft Inc.
+ Copyright (C) 2024, 2026 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -18,10 +18,14 @@
 import { app } from 'electron';
 import { parse as parseSemVer } from 'semver';
 
-export const bundleVersion = (() => {
+export const {
+	bundleVersion,
+	platformVersion
+} = (() => {
 	const v = parseSemVer(app.getVersion());
-	const platformVer = `${v!.major}.${v!.minor}.${Math.floor(v!.patch/1000)}`;
+	const platformVersion = `${v!.major}.${v!.minor}.${Math.floor(v!.patch/1000)}`;
 	const bundleNum = v!.patch%1000;
-	return `${platformVer}+${bundleNum}`;
+	const bundleVersion = `${platformVersion}.${bundleNum}`;
+	return { bundleVersion, platformVersion };
 })();
 

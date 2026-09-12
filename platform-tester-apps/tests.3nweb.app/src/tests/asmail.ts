@@ -54,11 +54,19 @@ describe('ASMail', () => {
 		expect(typeof w3n.mail!.inbox).toBe('object');
 		expect(typeof w3n.mail!.config).toBe('object');
 		expect(typeof w3n.mail!.getUserId).toBe('function');
+		expect(typeof w3n.mail!.getReportAddressForDomain).toBe('function');
 	}, undefined, s);
 
 	itCond('gets current user id', async () => {
 		const userId = await w3n.mail!.getUserId();
 		expect(areAddressesEqual(userId, s.thisUser)).toBeTrue();
+	}, undefined, s);
+
+	itCond('hosts report address getting', async () => {
+		const domain = 'privacysafe.xyz';
+		const domainReportAddr = await w3n.mail!.getReportAddressForDomain(domain);
+		console.log(` --> `, domainReportAddr);
+		expect(typeof domainReportAddr).toBe('string');
 	}, undefined, s);
 
 	describe(`config`, () => {
