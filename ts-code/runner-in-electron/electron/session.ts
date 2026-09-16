@@ -367,27 +367,32 @@ function makeFetchUrlChecker(
 	if (!whitelist) {
 		return;
 	}
-	const urlPrefixies = whitelist
+	const urlPrefixChecks: ((url: string) => boolean)[] = whitelist
 	.filter(isWhitelistEntryOK)
 	.map(({ schema, domain, pathPrefix }) => {
-		const url = `${schema}://${domain}`;
+		let prefix: string;
 		if (pathPrefix === undefined) {
-			return url;
-		} else if (pathPrefix.startsWith('/')) {
-			return `${url}${pathPrefix}`;
+			prefix = `${schema}://${domain}`;
 		} else {
-			return `${url}/${pathPrefix}`;
+			prefix = (pathPrefix.startsWith('/') ?
+				`${schema}://${domain}${pathPrefix}` : 
+				`${schema}://${domain}/${pathPrefix}`
+			);
 		}
+		return url => {
+			if (url.length > prefix.length) {
+				return url.startsWith(`${prefix}/`) || url.startsWith(`${prefix}?`);
+			} else {
+				return (prefix === url);
+			}
+		};
 	});
-	if (urlPrefixies.length === 0) {
+	if (urlPrefixChecks.length === 0) {
 		return;
-	} else if (urlPrefixies.length === 1) {
-		const urlStart = urlPrefixies[0];
-		return url => url.startsWith(urlStart);
 	} else {
 		return url => {
-			for (const urlStart of urlPrefixies) {
-				if (url.startsWith(urlStart)) {
+			for (const urlMatches of urlPrefixChecks) {
+				if (urlMatches(url)) {
 					return true;
 				}
 			}
