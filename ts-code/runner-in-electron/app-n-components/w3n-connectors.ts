@@ -411,8 +411,7 @@ class CAPsSocket {
 	private async sendToClient(msg: Envelope): Promise<void> {
 		try {
 			for (const chunk of toChunksForSending(msg, this.maxWriteMsgSize)) {
-				await this.writeBackpressure?.feel();
-				this.writeBackpressure!.addNumOfWrittenBytes(chunk.length);
+				await this.writeBackpressure?.feelAndWaitBeforeQueueingToSend(chunk.length);
 				await this.orderlySendChunk(chunk);
 			}
 		} catch (err) {

@@ -143,6 +143,7 @@ export class ClientSocketIPC {
 
 	private async sendToCore(msg: Envelope): Promise<void> {
 		for (const chunk of toChunksForSending(msg, this.maxWriteMsg)) {
+			await this.writeBackpressure?.feelAndWaitBeforeQueueingToSend(chunk.length);
 			await this.orderlySendChunk(chunk);
 		}
 	}
@@ -150,8 +151,6 @@ export class ClientSocketIPC {
 	private orderlySendChunk(chunk: Uint8Array): Promise<void> {
 		return this.sendingProc.startOrChain(async () => {
 			const conn = await this.connection();
-			await this.writeBackpressure?.feel();
-			this.writeBackpressure!.addNumOfWrittenBytes(chunk.length);
 			await conn.write(chunk);
 		});
 	}

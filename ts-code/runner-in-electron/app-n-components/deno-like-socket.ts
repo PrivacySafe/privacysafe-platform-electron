@@ -250,11 +250,14 @@ export class WriteBackPressure {
 		Object.seal(this);
 	}
 
-	feel(): Promise<void>|undefined {
-		return this.pressure?.promise;
+	async feelAndWaitBeforeQueueingToSend(delta: number): Promise<void> {
+		while (this.pressure) {
+			await this.pressure.promise;
+		}
+		this.addNumOfBytesApplyingPressureIfNeeded(delta);
 	}
 
-	addNumOfWrittenBytes(delta: number): void {
+	private addNumOfBytesApplyingPressureIfNeeded(delta: number): void {
 		this.numOfUnAckedBytes += delta;
 		if (!this.pressure && (this.numOfUnAckedBytes >= this.numOfUnAckedBytesToApplyPressure)) {
 			this.pressure = defer();
