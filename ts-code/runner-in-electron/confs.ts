@@ -52,7 +52,7 @@ export const utilDir = appDirs(appDir).getUtilFS();
 export const volumeMountDir = join(appDir, 'volumes', PLATFORM_NAME);
 
 export const {
-	appLog, logError, logWarning, recordUnhandledRejectionsInProcess
+	appLog, logError, logWarning, recordUnhandledRejectionsInProcess, removeOlderLogs
 } = makeLogger(utilDir);
 
 export const dohURLs = [

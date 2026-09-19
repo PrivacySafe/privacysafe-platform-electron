@@ -16,7 +16,7 @@
 */
 
 import type { PlatformResources } from '../platform/inject-defs/platform';
-import{ appLog, dohURLs, logError, logWarning, recordUnhandledRejectionsInProcess } from './confs';
+import{ appLog, dohURLs, logError, logWarning, recordUnhandledRejectionsInProcess, removeOlderLogs } from './confs';
 import { makeAutoStartupCAP } from './init-proc/auto-startup';
 import { AppDownloader } from '../platform/caps/system/apps-downloader';
 import { makeClipboardCAP } from './caps/shell/clipboard';
@@ -50,7 +50,7 @@ export const dnsResolvers: DnsResolver[] = [
 	...dohURLs.map(url => dohAt(requestFromNode, url))
 ];
 
-const logging: Logging = { appLog, logError, logWarning, recordUnhandledRejectionsInProcess };
+const logging: Logging = { appLog, logError, logWarning, recordUnhandledRejectionsInProcess, removeOlderLogs };
 
 async function sha512(bytes: Buffer): Promise<string> {
 	const h = createHash('sha512');

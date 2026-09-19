@@ -22,11 +22,11 @@ globalThis.platform = {
 };
 
 import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli, SOCKS5_PROXY, urlFromArgs } from './runner-in-electron/process-args';
-import { app, dialog, net, powerMonitor } from 'electron';
+import { app, dialog, powerMonitor } from 'electron';
 import { InitProc } from './runner-in-electron/init-proc';
 import { registerAllProtocolShemas } from "./runner-in-electron/electron/protocols";
 import { fromEvent, lastValueFrom } from 'rxjs';
-import { appDir, dohURLs, logError, recordUnhandledRejectionsInProcess, SIGNUP_URL, utilDir } from './runner-in-electron/confs';
+import { appDir, dohURLs, logError, recordUnhandledRejectionsInProcess, removeOlderLogs, SIGNUP_URL, utilDir } from './runner-in-electron/confs';
 import { take } from 'rxjs/operators';
 import { makeCoreDriver } from './platform/core';
 import { clearDefaultWindowMenu } from './runner-in-electron/window-utils/window-menu';
@@ -63,6 +63,12 @@ if (utilityInvocation) {
 	// in our own data and use relative paths whenever it is necessary.
 	mkdirSync(utilDir, { recursive: true });
 	process.chdir(utilDir);
+
+	function clearLogsDirAndScheduleNextCleanup() {
+		removeOlderLogs();
+		setTimeout(clearLogsDirAndScheduleNextCleanup, 3*60*60*1000).unref();
+	}
+	clearLogsDirAndScheduleNextCleanup();
 
 	if (SOCKS5_PROXY) {
 		app.commandLine.appendSwitch('proxy-server', `socks5://${SOCKS5_PROXY}`);

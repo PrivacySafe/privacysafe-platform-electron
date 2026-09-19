@@ -48,14 +48,16 @@ describe(`system.platform`, () => {
 		expect(typeof platform.wipeFromThisDevice).toBe('function');
 	});
 
-	(w3n.system?.platform?.downloader ? it : xit)(`.downloader has all methods`, () => {
-		const platformDownloader = w3n.system!.platform!.downloader!;
-		expect(typeof platformDownloader.getChannels).toBe('function');
-		expect(typeof platformDownloader.getLatestVersion).toBe('function');
-		expect(typeof platformDownloader.setupUpdater).toBe('function');
-		expect(typeof platformDownloader.downloadUpdate).toBe('function');
-		expect(typeof platformDownloader.quitAndInstall).toBe('function');
-	});
+	if (w3n.system?.platform?.downloader) {
+		it(`.downloader has all methods`, () => {
+			const platformDownloader = w3n.system!.platform!.downloader!;
+			expect(typeof platformDownloader.getChannels).toBe('function');
+			expect(typeof platformDownloader.getLatestVersion).toBe('function');
+			expect(typeof platformDownloader.setupUpdater).toBe('function');
+			expect(typeof platformDownloader.downloadUpdate).toBe('function');
+			expect(typeof platformDownloader.quitAndInstall).toBe('function');
+		});
+	}
 
 	it('can get platform version', async () => {
 		const bundledVersions = await w3n.system!.platform!.getCurrentVersion();
