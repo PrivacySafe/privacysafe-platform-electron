@@ -68,7 +68,8 @@ if (utilityInvocation) {
 		removeOlderLogs();
 		setTimeout(clearLogsDirAndScheduleNextCleanup, 3*60*60*1000).unref();
 	}
-	clearLogsDirAndScheduleNextCleanup();
+	// there is something racy in setup, cause with sleep it worked, and without it didn't
+	sleep(3000).then(clearLogsDirAndScheduleNextCleanup);
 
 	if (SOCKS5_PROXY) {
 		app.commandLine.appendSwitch('proxy-server', `socks5://${SOCKS5_PROXY}`);
