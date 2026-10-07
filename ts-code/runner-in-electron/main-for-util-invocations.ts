@@ -15,15 +15,14 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { checkServicesStartingFromSignup, makeNetClient, makeServiceLocator } from "core-3nweb-client-lib";
-import { openServiceEventsSrcFromNode } from "core-3nweb-client-lib/build/lib-common-on-node/websocket-from-node";
+import { checkServicesStartingFromSignup } from "core-3nweb-client-lib";
 import { PLATFORM_NAME } from "./bundle-confs";
 import { bundleVersion } from "./bundle-version";
 import { parse3NWebURL } from "./electron/custom-url-schemas";
 import { UTIL_INVOCATION_ARGS, cliUsageTxt } from "./process-args";
 import { listInstalledBundledApps } from "./caps/system/system-places";
 import { CheckResult, CheckStart } from "core-3nweb-client-lib/build/lib-client/service-checks";
-import { dnsResolvers, requestFromNode } from "./platform-resources";
+import { makeNetClient, makeServiceLocator } from "./networks-confs";
 
 
 export function processOfUtilityArgsIfGiven(): Promise<void>|undefined {
@@ -68,8 +67,8 @@ async function checkSignupAndServicesFrom(signupUrl: string): Promise<void> {
 	const { signupUrl: url, token } = signupParams;
 
 	await checkServicesStartingFromSignup(
-		makeServiceLocator(...dnsResolvers),
-		makeNetClient(requestFromNode, openServiceEventsSrcFromNode),
+		makeServiceLocator,
+		makeNetClient(),
 		url, token,
 		check => {
 			if ((check as CheckStart).start) {

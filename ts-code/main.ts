@@ -26,7 +26,7 @@ import { app, dialog, powerMonitor } from 'electron';
 import { InitProc } from './runner-in-electron/init-proc';
 import { registerAllProtocolShemas } from "./runner-in-electron/electron/protocols";
 import { fromEvent, lastValueFrom } from 'rxjs';
-import { appDir, dohURLs, logError, recordUnhandledRejectionsInProcess, removeOlderLogs, SIGNUP_URL, utilDir } from './runner-in-electron/confs';
+import { appDir, logError, recordUnhandledRejectionsInProcess, removeOlderLogs, SIGNUP_URL, utilDir } from './runner-in-electron/confs';
 import { take } from 'rxjs/operators';
 import { makeCoreDriver } from './platform/core';
 import { clearDefaultWindowMenu } from './runner-in-electron/window-utils/window-menu';
@@ -72,6 +72,8 @@ if (utilityInvocation) {
 	sleep(3000).then(clearLogsDirAndScheduleNextCleanup);
 
 	if (SOCKS5_PROXY) {
+		// XXX this only works for electron's libary, while node is probably untouched, hence,
+		//     we need to use socks proxy module
 		app.commandLine.appendSwitch('proxy-server', `socks5://${SOCKS5_PROXY}`);
 	}
 
@@ -96,12 +98,6 @@ if (utilityInvocation) {
 		// Opening process
 		lastValueFrom(fromEvent(app, 'ready').pipe(take(1)))
 		.then(async () => {
-
-			app.configureHostResolver({
-				enableBuiltInResolver: true,
-				secureDnsServers: dohURLs,
-				secureDnsMode: 'automatic'
-			});
 
 			powerMonitor.on('shutdown', () => init.exit());
 

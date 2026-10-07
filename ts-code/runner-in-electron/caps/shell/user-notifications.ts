@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022, 2025 3NSoft Inc.
+ Copyright (C) 2022, 2025 - 2026 3NSoft Inc.
 
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software
@@ -176,7 +176,10 @@ class AppNotifications {
 
 	private async removeNotification(id: number): Promise<void> {
 		const notif = this.notifs.get(id);
-		if (!notif) { return; }
+		if (notif) {
+			this.notifs.delete(id);
+			notif.close();
+		}
 	}
 
 	private watch(obs: Observer<UserNotificationEvent>): () => void {

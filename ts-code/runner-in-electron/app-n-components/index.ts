@@ -208,6 +208,10 @@ class AppInElectron extends App {
 				appDomain}${entrypoint} pid ${pidStr} exited (code: ${
 				code}, signal: ${signal})
 			`));
+		} else {
+			// XXX should go to some system monitor?
+			deno.stdOut.on('data', _chunk => {});
+			deno.stdErr.on('data', _chunk => {});
 		}
 		this.addToInstances(entrypoint, component, deno);
 		return deno;
