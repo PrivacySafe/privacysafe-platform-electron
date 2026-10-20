@@ -597,7 +597,7 @@ abstract class INodeWithChildren<H, P, C> extends INode<H, P> {
 		const children = Array.from(this.children.values());
 		this.children.clear();
 		for (const node of children) {
-			(node as INodeWithChildren<unknown, unknown, unknown>)?.removeChildren();
+			(node as INodeWithChildren<unknown, unknown, unknown>).removeChildren?.();
 		}
 	}
 }

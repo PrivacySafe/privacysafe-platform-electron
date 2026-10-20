@@ -55,9 +55,11 @@ export const {
 	appLog, logError, logWarning, recordUnhandledRejectionsInProcess, removeOlderLogs
 } = makeLogger(utilDir);
 
-export const dohURLs = [
-	`https://cloudflare-dns.com/dns-query`,
-	`https://dns.google/resolve`
+export const dohURLs: { url: string; type: 'legacy'|'json' }[] = [
+	{ url: `https://doh.libredns.gr/dns-query`, type: 'legacy'},
+	{ url: `https://doh.tiarap.org/dns-query`, type: 'legacy'},
+	{ url: `https://doh.ffmuc.net/dns-query`, type: 'legacy'},
+	{ url: `https://doh.42l.fr/dns-query`, type: 'legacy'},
 ];
 
 export interface PackInfo {

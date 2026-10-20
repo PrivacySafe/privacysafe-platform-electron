@@ -48,7 +48,7 @@ export const { makeNet: makeNetClient, makeLocator: makeServiceLocator } = wrapN
 		openServiceEventsSource: makeServiceEventsSourceFromNode(getAgent),
 		naming: [
 			{ resolveTxt: dns.resolveTxt },
-			...dohURLs.map(url => dohAt(makeRequestFromNode(), url))
+			...dohURLs.map(({ url, type }) => dohAt(makeRequestFromNode(), url, type))
 		]
 	},
 	onion: {
