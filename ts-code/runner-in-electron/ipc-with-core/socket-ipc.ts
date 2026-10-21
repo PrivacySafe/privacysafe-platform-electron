@@ -242,12 +242,16 @@ async function readExpectedBytes(
 ): Promise<Uint8Array> {
 	if (len < 1) { throw malformedExc(`Zero length on-socket message body`); }
 	const bytes = new Uint8Array(len);
-	let bytesRead = await connection.read(bytes);
-	if (!bytesRead) {
-		throw makeSocketIPCException({
-			unexpectedEOF: true,
-			message: `Fail to read on-socket message`
-		});
+	let ofsInBytes = 0;
+	while (ofsInBytes < bytes.length) {
+		let bytesRead = await connection.read(bytes.subarray(ofsInBytes));
+		if (!bytesRead) {
+			throw makeSocketIPCException({
+				unexpectedEOF: true,
+				message: `Fail to read on-socket message`
+			});
+		}
+		ofsInBytes += bytesRead;
 	}
 	return bytes;
 }

@@ -76,8 +76,7 @@ export class DenoLikeSocket implements Reader, Writer, Closer {
 		this.socket = socket
 		.on('data', bytes => this.fromSocket.absorbFromSocket(bytes))
 		.on('end', () => this.onEnd())
-		.on('error', err => this.onEnd(err))
-		.on('drain', () => this.onDrain());
+		.on('error', err => this.onEnd(err));
 		Object.seal(this);
 	}
 
@@ -109,13 +108,6 @@ export class DenoLikeSocket implements Reader, Writer, Closer {
 		} finally {
 			this.writeInProgress = false;
 		}
-	}
-
-	private onDrain(): void {
-		if (this.drainWait) {
-			this.drainWait.resolve();
-			this.drainWait = undefined;
-		} 
 	}
 
 	read(p: Uint8Array): Promise<number | null> {

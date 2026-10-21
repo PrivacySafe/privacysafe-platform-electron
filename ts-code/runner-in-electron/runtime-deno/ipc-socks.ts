@@ -42,6 +42,7 @@ export class ClientSocketIPC {
 	private readonly sendingProc = new SingleProc();
 	private sendingToCoreProc: Unsubscribable|undefined;
 	private readonly clientSide: ClientSide;
+	private readonly orderedMsgSendingToCore = new SingleProc();
 
 	private listRequests = new Map<string, Deferred<string[]>>();
 	private readonly envelopeParts = new EnvelopesBuffer();
@@ -123,7 +124,7 @@ export class ClientSocketIPC {
 
 	private async authenticate(connection: Deno.Conn): Promise<void> {
 		const authReqChunk = toAuthRequestChunk(this.sockParam.token);
-		await connection.write(authReqChunk);
+		await writeAllBytes(connection, authReqChunk);
 		const { msg: { msgType, authMaxMsgSize } } = await readMsgOnClientSide(connection);
 		if (msgType !== 'fst-auth') {
 			throw makeSocketIPCException({
@@ -142,16 +143,18 @@ export class ClientSocketIPC {
 	}
 
 	private async sendToCore(msg: Envelope): Promise<void> {
-		for (const chunk of toChunksForSending(msg, this.maxWriteMsg)) {
-			await this.writeBackpressure?.feelAndWaitBeforeQueueingToSend(chunk.length);
-			await this.orderlySendChunk(chunk);
-		}
+		await this.orderedMsgSendingToCore.startOrChain(async () => {
+			for (const chunk of toChunksForSending(msg, this.maxWriteMsg)) {
+				await this.writeBackpressure?.feelAndWaitBeforeQueueingToSend(chunk.length);
+				await this.orderlySendChunk(chunk);
+			}
+		});
 	}
 
 	private orderlySendChunk(chunk: Uint8Array): Promise<void> {
 		return this.sendingProc.startOrChain(async () => {
 			const conn = await this.connection();
-			await conn.write(chunk);
+			await writeAllBytes(conn, chunk);
 		});
 	}
 
@@ -243,6 +246,13 @@ export class ClientSocketIPC {
 }
 Object.freeze(ClientSocketIPC.prototype);
 
+
+async function writeAllBytes(connection: Deno.Conn, bytes: Uint8Array) {
+	let ofsInBytes = 0;
+	while (ofsInBytes < bytes.length) {
+		ofsInBytes += await connection.write(bytes.subarray(ofsInBytes));
+	}
+}
 
 function noop() {}
 

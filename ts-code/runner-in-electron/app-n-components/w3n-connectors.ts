@@ -334,6 +334,7 @@ class CAPsSocket {
 	private maxWriteMsgSize = MAX_MSG_SIZE;
 	private writeBackpressure: WriteBackPressure|undefined = undefined;
 	private numOfBytesToAck = 0;
+	private readonly orderedMsgSendingToClient = new SingleProc();
 
 	constructor(
 		private readonly token: Uint8Array,
@@ -409,14 +410,16 @@ class CAPsSocket {
 	}
 
 	private async sendToClient(msg: Envelope): Promise<void> {
-		try {
-			for (const chunk of toChunksForSending(msg, this.maxWriteMsgSize)) {
-				await this.writeBackpressure?.feelAndWaitBeforeQueueingToSend(chunk.length);
-				await this.orderlySendChunk(chunk);
+		await this.orderedMsgSendingToClient.startOrChain(async () => {
+			try {
+				for (const chunk of toChunksForSending(msg, this.maxWriteMsgSize)) {
+					await this.writeBackpressure?.feelAndWaitBeforeQueueingToSend(chunk.length);
+					await this.orderlySendChunk(chunk);
+				}
+			} catch (err) {
+				this.coreSide.close(err);
 			}
-		} catch (err) {
-			this.coreSide.close(err);
-		}
+		});
 	}
 
 	private orderlySendChunk(chunk: Uint8Array): Promise<void> {
