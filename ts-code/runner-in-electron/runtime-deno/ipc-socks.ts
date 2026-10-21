@@ -94,7 +94,9 @@ export class ClientSocketIPC {
 		this.openningConnection = defer();
 		if (!(await this.connDebounce.canConnect())) {
 			sleep(500).then(() => globalThis.close?.());
-			throw makeIPCException({ ipcNotConnected: true });
+			const exc = makeIPCException({ ipcNotConnected: true });
+			this.openningConnection.reject(exc);
+			throw exc;
 		}
 		try {
 			let connection: Deno.Conn;
