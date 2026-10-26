@@ -21,7 +21,7 @@ globalThis.platform = {
 	device_fs: makePlatformDeviceFS()
 };
 
-import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli, SOCKS5_PROXY, urlFromArgs } from './runner-in-electron/process-args';
+import { SKIP_APP_ERR_DIALOG_FLAG, MULTI_INSTANCE_FLAG, TEST_STAND_CONF, devToolsFromARGs, cmdTokenFromCli, urlFromArgs } from './runner-in-electron/process-args';
 import { app, dialog, powerMonitor } from 'electron';
 import { InitProc } from './runner-in-electron/init-proc';
 import { registerAllProtocolShemas } from "./runner-in-electron/electron/protocols";
@@ -70,12 +70,6 @@ if (utilityInvocation) {
 	}
 	// there is something racy in setup, cause with sleep it worked, and without it didn't
 	sleep(3000).then(clearLogsDirAndScheduleNextCleanup);
-
-	if (SOCKS5_PROXY) {
-		// XXX this only works for electron's libary, while node is probably untouched, hence,
-		//     we need to use socks proxy module
-		app.commandLine.appendSwitch('proxy-server', `socks5://${SOCKS5_PROXY}`);
-	}
 
 	function setupAndStartMainInstance(): InitProc {
 

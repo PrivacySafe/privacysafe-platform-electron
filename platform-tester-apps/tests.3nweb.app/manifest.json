@@ -67,7 +67,8 @@
 					"monitor": "all",
 					"logout": true,
 					"otherOpenUsers": "all",
-          "userLogin": "all"
+          "userLogin": "all",
+					"networks": "all"
 				},
 				"connectToExternal": {
 					"fetch": [

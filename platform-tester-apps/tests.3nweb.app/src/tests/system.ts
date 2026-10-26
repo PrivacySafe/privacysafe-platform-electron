@@ -67,6 +67,27 @@ describe(`system.platform`, () => {
 
 });
 
+describe(`system.networks`, () => {
+
+	it(`.dnsAndIP has all methods`, () => {
+		const dnsAndIP = w3n.system!.networks!.dnsAndIP;
+		expect(dnsAndIP).toBeDefined();
+		expect(typeof dnsAndIP.currentProxy).toBe('function');
+		expect(typeof dnsAndIP.setCurrentProxy).toBe('function');
+		expect(typeof dnsAndIP.testProxySetup).toBe('function');
+	});
+
+	if (w3n.system?.networks?.onion) {
+		it(`.onion has all methods`, () => {
+			const onion = w3n.system!.networks!.onion!;
+			expect(typeof onion.currentSetup).toBe('function');
+			expect(typeof onion.setTorProxy).toBe('function');
+			expect(typeof onion.testConnection).toBe('function');
+		});
+	}
+
+});
+
 describe(`system.apps`, () => {
 
 	it(`has all methods`, () => {

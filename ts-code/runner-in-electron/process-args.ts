@@ -210,8 +210,6 @@ export const UTIL_INVOCATION_ARGS = {
 	"check-signup": parsedCliArgs['check-signup-url'] as string|undefined
 };
 
-export const HTTP_LOG_TO_CONSOLE_FLAG = !!parsedCliArgs['console-log-http'];
-
 export const MULTI_INSTANCE_FLAG = !!parsedCliArgs['allow-multi-instances'];
 
 export const CUSTOM_DATA_DIR = parsedCliArgs['data-dir'] as ReturnType<typeof checkedFolderArgType>|undefined;

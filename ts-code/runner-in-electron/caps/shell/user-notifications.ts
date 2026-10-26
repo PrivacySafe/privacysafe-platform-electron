@@ -99,22 +99,6 @@ Object.freeze(Notifications.prototype);
 Object.freeze(Notifications);
 
 
-async function toNativeImage(icon: NotificationOpts['icon']): Promise<NativeImage|undefined> {
-	if (!icon) {
-		return;
-	} else if ((icon as Uint8Array).BYTES_PER_ELEMENT) {
-		return nativeImage.createFromBuffer(toBuffer(icon as Uint8Array));
-	} else {
-		const bytes = await (icon as ReadonlyFile).readBytes();
-		if (bytes) {
-			throw new Error(`File is empty`);
-		}
-		return nativeImage.createFromBuffer(toBuffer(icon as Uint8Array));
-	}
-
-}
-
-
 class AppNotifications {
 
 	private readonly notifs = new Map<number, Notification>();
@@ -143,7 +127,7 @@ class AppNotifications {
 
 	private async addNotification({ title, body, cmd, silent, icon }: NotificationOpts): Promise<number> {
 		const { notificationId, notif } = this.makeElectronNotif({
-			title, body, silent, icon: await toNativeImage(icon)
+			title, body, silent, icon: await this.toNativeImage(icon)
 		});
 		notif.on('show', () => this.eventSink.next({
 			notificationId, type: 'shown'
@@ -202,6 +186,24 @@ class AppNotifications {
 	closeByCore(): void {
 		this.eventSink.complete();
 		this.closeAllNotifications();
+	}
+
+	private async toNativeImage(icon: NotificationOpts['icon']): Promise<NativeImage|undefined> {
+		if (!icon) {
+
+			// XXX get app's icon, and use it. May cache app icon for some time.
+
+
+			return;
+		} else if ((icon as Uint8Array).BYTES_PER_ELEMENT) {
+			return nativeImage.createFromBuffer(toBuffer(icon as Uint8Array));
+		} else {
+			const bytes = await (icon as ReadonlyFile).readBytes();
+			if (bytes) {
+				throw new Error(`File is empty`);
+			}
+			return nativeImage.createFromBuffer(toBuffer(icon as Uint8Array));
+		}
 	}
 
 }

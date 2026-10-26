@@ -36,7 +36,7 @@ import { createHash } from "crypto";
 import { bytes as random } from './lib-common/random-node';
 import { getServiceForCAP } from './caps/cap-over-rpc-from-platform';
 import { sysFilesOnDevice } from 'core-3nweb-client-lib/build/lib-common-on-node/device-fs-places';
-import { makeNetClient, makeServiceLocator } from './networks-confs';
+import { makeNetClient, makeServiceLocator, networks } from './networks';
 
 const logging: Logging = { appLog, logError, logWarning, recordUnhandledRejectionsInProcess, removeOlderLogs };
 
@@ -57,6 +57,7 @@ export function makePlatformResources(): PlatformResources {
 			makeUICap,
 			makeMediaDevicesCAP,
 			makeConnectivity,
+			makeNetworks: () => networks,
 			shell: {
 				makeClipboardCAP,
 				makeOpenFileCAP,

@@ -23,8 +23,6 @@ import { parse as parseUrl } from 'url';
 import { firstValueFrom, fromEvent, merge } from 'rxjs';
 import { toBuffer, utf8 } from '../../platform/lib-common/buffer-utils';
 import { defer } from '../../platform/lib-common/processes/deferred';
-import { stringifyErr } from '../../platform/lib-common/exceptions/error';
-import { HTTP_LOG_TO_CONSOLE_FLAG } from '../process-args';
 import { take, map, takeUntil, mergeMap } from 'rxjs/operators';
 
 export const SESSION_ID_HEADER = "X-Session-Id";
@@ -77,40 +75,22 @@ export async function processRequest<T>(
 	requester: NetRequester, httpsOpts: https.RequestOptions, opts: RequestOpts,
 	reqBody: Uint8Array|undefined, attempt = 0
 ): Promise<Reply<T>> {
-	
-	if (HTTP_LOG_TO_CONSOLE_FLAG) {
-		console.log(` - ${httpsOpts.method} @ ${urlIn(httpsOpts)} ...\n`);
-	}
-	
 	try {
 		const req = requester(httpsOpts);
 		const resPromise = attachRequestReaders(req, opts);
 		req.end(reqBody ? toBuffer(reqBody) : undefined);
 		const { res, resBody } = await resPromise;
 		const rep = formReply<T>(res, resBody, opts);
-
-		if (HTTP_LOG_TO_CONSOLE_FLAG) {
-			console.log(` > ${rep.status} reply to ${rep.method} @ ${rep.url}\n > ${(opts.responseType === 'arraybuffer') ? (rep.data as any as ArrayBuffer).byteLength+' bytes' : JSON.stringify(rep.data) }\n`);
-		}
-
 		return rep;
 	} catch (err) {
-		const { isTimeout, canRetry } = isTimeoutErr(err, opts, attempt);
-		
+		const { isTimeout, canRetry } = isTimeoutErr(err, opts, attempt);		
 		if (isTimeout) {
-			if (HTTP_LOG_TO_CONSOLE_FLAG) {
-				console.log(` * timeout of request to ${httpsOpts.method} @ ${urlIn(httpsOpts)}\n${stringifyErr(err)}\n`);
-			}
 			if (canRetry) {
 				return processRequest<T>(
 					requester, httpsOpts, opts, reqBody, attempt + 1);
 			} else {
 				throw err;
 			}
-		}
-		
-		if (HTTP_LOG_TO_CONSOLE_FLAG) {
-			console.log(` * error occured when making request to ${httpsOpts.method} @ ${urlIn(httpsOpts)}\n${stringifyErr(err)}\n`);
 		}
 		throw err;
 	}

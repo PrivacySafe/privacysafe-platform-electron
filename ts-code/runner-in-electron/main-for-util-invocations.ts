@@ -22,7 +22,7 @@ import { parse3NWebURL } from "./electron/custom-url-schemas";
 import { UTIL_INVOCATION_ARGS, cliUsageTxt } from "./process-args";
 import { listInstalledBundledApps } from "./caps/system/system-places";
 import { CheckResult, CheckStart } from "core-3nweb-client-lib/build/lib-client/service-checks";
-import { makeNetClient, makeServiceLocator } from "./networks-confs";
+import { makeNetClient, makeServiceLocator } from "./networks";
 
 
 export function processOfUtilityArgsIfGiven(): Promise<void>|undefined {

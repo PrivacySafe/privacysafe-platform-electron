@@ -20,6 +20,7 @@ import { shell } from "electron";
 import { URL } from "url";
 import { makeMountException, type Mounter } from "./mounts/user-mounts";
 import { join } from "path";
+import { OpenURLWhitelistEntry, urlFitsFilter } from "../../../platform/libs-common-for-impls/url-filtering";
 
 export function makeOpenFileCAP(
 	capsReq: web3n.caps.ShellCAPsSetting['openFile'], getPathInOS: Mounter['getPathInOS']|undefined
@@ -111,32 +112,6 @@ async function openInMounted(
 		throw makeMountException({ notMounted: true });
 	}
 	await openInShell(join(pathOnDevice, ...pathInFS));
-}
-
-type OpenURLWhitelistEntry = web3n.caps.OpenURLWhitelistEntry;
-
-function urlFitsFilter({
-	schema, anyDomain, domain, subdomains
-}: OpenURLWhitelistEntry, url: URL): boolean {
-	if (url.protocol !== `${schema}:`) { return false; }
-	if (anyDomain) { return true; }
-	if (domain) {
-		if (subdomains) {
-			for (const subd of subdomains) {
-				const sections = subd.split('.');
-				if (sections[0] === '*') {
-					return url.hostname.endsWith(`${
-						(sections.length === 1) ? '' : `.${sections.slice(1).join('.')}`
-					}.${domain}`);
-				} else {
-					return (url.hostname === `${subd}.${domain}`);
-				}
-			}
-		} else {
-			return (domain === url.hostname);
-		}
-	}
-	return false;
 }
 
 async function openURL(whitelist: OpenURLWhitelistEntry[], url: string): Promise<void> {
