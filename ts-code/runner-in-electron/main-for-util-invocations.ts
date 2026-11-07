@@ -22,7 +22,7 @@ import { parse3NWebURL } from "./electron/custom-url-schemas";
 import { UTIL_INVOCATION_ARGS, cliUsageTxt } from "./process-args";
 import { listInstalledBundledApps } from "./caps/system/system-places";
 import { CheckResult, CheckStart } from "core-3nweb-client-lib/build/lib-client/service-checks";
-import { makeNetClient, makeServiceLocator } from "./networks";
+import { makeNetworksParts } from "./networks";
 
 
 export function processOfUtilityArgsIfGiven(): Promise<void>|undefined {
@@ -60,6 +60,8 @@ ${
 }
 
 async function checkSignupAndServicesFrom(signupUrl: string): Promise<void> {
+	const { makeNetClient, makeServiceLocator } = makeNetworksParts();
+
 	const { signupParams } = parse3NWebURL(signupUrl);
 	if (!signupParams) {
 		throw `signupUrl is not a valid 3nweb signup url`;

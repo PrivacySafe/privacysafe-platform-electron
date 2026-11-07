@@ -202,25 +202,31 @@ function getSocksFromCLI(): { agent: Agent; proxySetup: Socks5ProxySetup }|undef
 	};
 }
 
-const onionNet = new OnionNet();
-const dnsAndIPNet = new DnsAndIPNet(onionNet.requests, onionNet.openServiceEventsSource, getSocksFromCLI());
 
-export const networks: Networks = {
-	dnsAndIP: dnsAndIPNet.wrapCAP(),
-	onion: onionNet.wrapCAP()
-};
+export function makeNetworksParts() {
 
-export const { makeNet: makeNetClient, makeLocator: makeServiceLocator } = wrapNetworkFns({
-	regular: {
-		requests: dnsAndIPNet.requests,
-		openServiceEventsSource: dnsAndIPNet.openServiceEventsSource,
-		naming: dnsAndIPNet.namingFns
-	},
-	onion: {
-		requests: onionNet.requests,
-		openServiceEventsSource: onionNet.openServiceEventsSource,
-	}
-});
+	const onionNet = new OnionNet();
+	const dnsAndIPNet = new DnsAndIPNet(onionNet.requests, onionNet.openServiceEventsSource, getSocksFromCLI());
+
+	const networks: Networks = {
+		dnsAndIP: dnsAndIPNet.wrapCAP(),
+		onion: onionNet.wrapCAP()
+	};
+
+	const { makeNet: makeNetClient, makeLocator: makeServiceLocator } = wrapNetworkFns({
+		regular: {
+			requests: dnsAndIPNet.requests,
+			openServiceEventsSource: dnsAndIPNet.openServiceEventsSource,
+			naming: dnsAndIPNet.namingFns
+		},
+		onion: {
+			requests: onionNet.requests,
+			openServiceEventsSource: onionNet.openServiceEventsSource,
+		}
+	});
+
+	return { makeNetClient, makeServiceLocator, networks };
+}
 
 
 Object.freeze(exports);

@@ -36,7 +36,7 @@ import { createHash } from "crypto";
 import { bytes as random } from './lib-common/random-node';
 import { getServiceForCAP } from './caps/cap-over-rpc-from-platform';
 import { sysFilesOnDevice } from 'core-3nweb-client-lib/build/lib-common-on-node/device-fs-places';
-import { makeNetClient, makeServiceLocator, networks } from './networks';
+import { makeNetworksParts } from './networks';
 
 const logging: Logging = { appLog, logError, logWarning, recordUnhandledRejectionsInProcess, removeOlderLogs };
 
@@ -47,6 +47,7 @@ async function sha512(bytes: Buffer): Promise<string> {
 }
 
 export function makePlatformResources(): PlatformResources {
+	const { makeNetClient, makeServiceLocator, networks } = makeNetworksParts();
 	return {
 		caps: {
 			makeAppDownloader: sysPlaces => new AppDownloader(
