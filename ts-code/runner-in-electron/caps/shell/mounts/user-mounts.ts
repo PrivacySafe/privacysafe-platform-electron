@@ -47,8 +47,8 @@ export class Mounter {
 	private getParentAndNameForMount(path: string[]): {
 		parentNode: Node; mountName: string; pathInOS: string;
 	} {
-		const pathInOS = join(this.rootNodePathInOS, ...path);
 		path = sanitizePath(path);
+		const pathInOS = join(this.rootNodePathInOS, ...path);
 		const mountName = path.pop()!;
 		let parentNode = this.rootNode;
 		while (path.length > 0) {

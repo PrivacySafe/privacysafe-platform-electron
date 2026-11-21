@@ -200,9 +200,10 @@ class AppNotifications {
 		} else {
 			const bytes = await (icon as ReadonlyFile).readBytes();
 			if (bytes) {
+				return nativeImage.createFromBuffer(toBuffer(bytes));
+			} else {
 				throw new Error(`File is empty`);
 			}
-			return nativeImage.createFromBuffer(toBuffer(icon as Uint8Array));
 		}
 	}
 

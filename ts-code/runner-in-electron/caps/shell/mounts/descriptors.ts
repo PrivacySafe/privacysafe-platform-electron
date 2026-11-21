@@ -59,9 +59,8 @@ export function makeMounting(rootMountpointPath: string): {
 		const uId = toCanonicalAddress(userId);
 		let mounts = userMounts.get(uId);
 		if (!mounts) {
-			mounts = new Mounter(
-				userId, await descriptors.makeNodeInRoot(userId), join(rootMountpointPath, userId)
-			);
+			const rootNodePath = join(rootMountpointPath, userId.replace(sep, '_'));
+			mounts = new Mounter(userId, await descriptors.makeNodeInRoot(userId), rootNodePath);
 			userMounts.set(uId, mounts);
 		}
 		return mounts;
@@ -421,7 +420,7 @@ class Descriptors {
 			await this.deferredInit!.promise;
 		}
 		if (topName.includes(sep)) {
-			topName = topName.split(sep).join(' ');
+			topName = topName.split(sep).join('_');
 		}
 		return this.rootNode!.makeNewChildNode(topName);
 	}

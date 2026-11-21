@@ -124,6 +124,10 @@ Object.freeze(DnsAndIPNet.prototype);
 Object.freeze(DnsAndIPNet);
 
 
+// Matching value on Android's platform. And, yes, Tor may need time to warm up connections.
+const CONNECT_TIMEOUT_FOR_ONION = 80 * 1000;
+
+
 class OnionNet implements Onion {
 
 	private proxySetup: TorProxySetup;
@@ -144,8 +148,8 @@ class OnionNet implements Onion {
 		}
 		this.proxySetup = setup;
 		const agent = new SocksProxyAgent(`socks://127.0.0.1:${this.proxySetup.localhostPort}`);
-		this.currentRequestFn = makeRequestFromNode(() => agent);
-		this.currentEventsSourceFn = makeServiceEventsSourceFromNode(() => agent);
+		this.currentRequestFn = makeRequestFromNode(() => agent, CONNECT_TIMEOUT_FOR_ONION);
+		this.currentEventsSourceFn = makeServiceEventsSourceFromNode(() => agent, CONNECT_TIMEOUT_FOR_ONION);
 	}
 
 	wrapCAP(): NonNullable<Networks['onion']> {
