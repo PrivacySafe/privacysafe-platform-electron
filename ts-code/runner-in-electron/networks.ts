@@ -75,7 +75,10 @@ class DnsAndIPNet implements DnsAndIP {
 			this.currentEventsSourceFn = this.onionEventsSourceFn;
 			this.setDnsResolvers(false);
 		} else if (opts.type === 'socks5') {
-			const agent = new SocksProxyAgent(`socks://${opts.hostname}:${opts.port}`);
+			const agent = new SocksProxyAgent(
+				`socks://${opts.hostname}:${opts.port}`,
+				{ timeout: ((opts.port === 9050) ? CONNECT_TIMEOUT_FOR_ONION : CONNECT_TIMEOUT_FOR_PROXIES) }
+			);
 
 			// XXX testing should happen here
 
@@ -124,6 +127,8 @@ Object.freeze(DnsAndIPNet.prototype);
 Object.freeze(DnsAndIPNet);
 
 
+const CONNECT_TIMEOUT_FOR_PROXIES = 10 * 1000;
+
 // Matching value on Android's platform. And, yes, Tor may need time to warm up connections.
 const CONNECT_TIMEOUT_FOR_ONION = 80 * 1000;
 
@@ -147,7 +152,10 @@ class OnionNet implements Onion {
 			};
 		}
 		this.proxySetup = setup;
-		const agent = new SocksProxyAgent(`socks://127.0.0.1:${this.proxySetup.localhostPort}`);
+		const agent = new SocksProxyAgent(
+			`socks://127.0.0.1:${this.proxySetup.localhostPort}`,
+			{ timeout: CONNECT_TIMEOUT_FOR_ONION }
+		);
 		this.currentRequestFn = makeRequestFromNode(() => agent, CONNECT_TIMEOUT_FOR_ONION);
 		this.currentEventsSourceFn = makeServiceEventsSourceFromNode(() => agent, CONNECT_TIMEOUT_FOR_ONION);
 	}
@@ -197,7 +205,10 @@ function getSocksFromCLI(): { agent: Agent; proxySetup: Socks5ProxySetup }|undef
 	}
 	const { hostname, port } = new URL(`socks://${SOCKS5_PROXY}`);
 	return {
-		agent: new SocksProxyAgent(`socks://${SOCKS5_PROXY}`),
+		agent: new SocksProxyAgent(
+			`socks://${SOCKS5_PROXY}`,
+			{ timeout: CONNECT_TIMEOUT_FOR_PROXIES }
+		),
 		proxySetup: {
 			type: 'socks5',
 			hostname,
