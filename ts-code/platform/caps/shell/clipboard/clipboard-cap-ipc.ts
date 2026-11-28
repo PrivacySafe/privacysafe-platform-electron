@@ -41,5 +41,5 @@ export function makeClipboard(
 function shellClipboardCall<M extends keyof Clipboard>(
 	caller: Caller, objPath: string[], method: M
 ): Clipboard[M] {
-	return jsonCall.makeReqRepObjCaller<Clipboard, M>(caller, objPath.concat('clipboard'), method);
+	return jsonCall.makeReqRepObjCaller<Clipboard, M>(caller, objPath, method);
 }
